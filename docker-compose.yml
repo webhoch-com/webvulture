@@ -1,0 +1,39 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_DB: webhoch_vorschau
+      POSTGRES_USER: webhoch
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-webhoch_secret_2024}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U webhoch -d webhoch_vorschau"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://webhoch:${DB_PASSWORD:-webhoch_secret_2024}@postgres:5432/webhoch_vorschau
+      JWT_SECRET: ${JWT_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      TEASER_DOMAIN: webseiten-werkstatt.at
+      TEASER_FILES_PATH: /var/www/teasers
+    volumes:
+      - /var/www/teasers:/var/www/teasers
+    ports:
+      - "127.0.0.1:3001:3001"
+
+volumes:
+  pgdata:
