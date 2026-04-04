@@ -5,7 +5,7 @@ import { authenticate, requireAdmin } from '../middleware/auth.js';
 const router = Router();
 router.use(authenticate, requireAdmin);
 
-const ENCRYPTED_KEYS = ['anthropic_api_key', 'google_places_api_key'];
+const ENCRYPTED_KEYS = ['anthropic_api_key', 'google_places_api_key', 'openai_api_key'];
 
 router.get('/', async (req, res, next) => {
   try {

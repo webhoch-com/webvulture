@@ -50,7 +50,7 @@ export default function UserManagementPage() {
   };
 
   const deleteUser = async (id) => {
-    if (!confirm('Benutzer wirklich loeschen?')) return;
+    if (!confirm('Benutzer wirklich löschen?')) return;
     try {
       await api.delete(`/users/${id}`);
       await fetchUsers();

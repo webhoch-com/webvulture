@@ -45,7 +45,7 @@ router.put('/password', authenticate, async (req, res, next) => {
     }
     const passwordHash = await bcrypt.hash(newPassword, 12);
     await update(req.user.id, { passwordHash });
-    res.json({ message: 'Passwort geaendert' });
+    res.json({ message: 'Passwort geändert' });
   } catch (err) { next(err); }
 });
 

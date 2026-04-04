@@ -1,0 +1,10 @@
+{
+  "name": "webhoch-teaser",
+  "type": "module",
+  "scripts": {
+    "build": "astro build"
+  },
+  "dependencies": {
+    "astro": "^5.7.10"
+  }
+}

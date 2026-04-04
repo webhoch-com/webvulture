@@ -2,13 +2,28 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../services/api';
 import StatusBadge from '../components/StatusBadge';
-import { Search, ChevronLeft, ChevronRight, Shield, Smartphone, Gauge, Star, ExternalLink } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Shield, Smartphone, Gauge, Star, ExternalLink, Cpu, HardDrive, MemoryStick, Clock, Euro } from 'lucide-react';
 
 const RATING_COLORS = { 1: 'text-green-400', 2: 'text-yellow-400', 3: 'text-red-400' };
+
+function formatBytes(bytes) {
+  if (!bytes) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return (bytes / Math.pow(k, i)).toFixed(1) + ' ' + sizes[i];
+}
+
+function formatUptime(seconds) {
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  return d > 0 ? `${d}d ${h}h` : `${h}h`;
+}
 
 export default function DashboardPage() {
   const [data, setData] = useState({ leads: [], total: 0, pages: 0 });
   const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState(null);
   const [selected, setSelected] = useState(new Set());
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -37,6 +52,14 @@ export default function DashboardPage() {
   }, [page, status, rating, branche, search]);
 
   useEffect(() => { fetchLeads(); }, [fetchLeads]);
+
+  useEffect(() => {
+    api.get('/stats/server').then(res => setStats(res.data)).catch(() => {});
+    const interval = setInterval(() => {
+      api.get('/stats/server').then(res => setStats(res.data)).catch(() => {});
+    }, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const updateFilter = (key, value) => {
     const params = new URLSearchParams(searchParams);
@@ -81,6 +104,37 @@ export default function DashboardPage() {
         </button>
       </div>
 
+      {/* Server Stats */}
+      {stats && (
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+          <div className="bg-gray-800 border border-gray-700 rounded-xl p-3">
+            <div className="flex items-center gap-1.5 text-gray-400 text-xs mb-1"><Cpu className="w-3.5 h-3.5" /> CPU</div>
+            <div className="text-white text-lg font-bold">{stats.cpu.usage}%</div>
+            <div className="h-1.5 bg-gray-700 rounded-full mt-1"><div className={`h-full rounded-full ${stats.cpu.usage > 80 ? 'bg-red-500' : stats.cpu.usage > 50 ? 'bg-yellow-500' : 'bg-green-500'}`} style={{width: `${stats.cpu.usage}%`}} /></div>
+          </div>
+          <div className="bg-gray-800 border border-gray-700 rounded-xl p-3">
+            <div className="flex items-center gap-1.5 text-gray-400 text-xs mb-1"><MemoryStick className="w-3.5 h-3.5" /> RAM</div>
+            <div className="text-white text-lg font-bold">{stats.memory.percent}%</div>
+            <div className="text-gray-500 text-xs">{formatBytes(stats.memory.used)} / {formatBytes(stats.memory.total)}</div>
+          </div>
+          <div className="bg-gray-800 border border-gray-700 rounded-xl p-3">
+            <div className="flex items-center gap-1.5 text-gray-400 text-xs mb-1"><HardDrive className="w-3.5 h-3.5" /> Disk</div>
+            <div className="text-white text-lg font-bold">{stats.disk.percent}%</div>
+            <div className="text-gray-500 text-xs">{formatBytes(stats.disk.used)} / {formatBytes(stats.disk.total)}</div>
+          </div>
+          <div className="bg-gray-800 border border-gray-700 rounded-xl p-3">
+            <div className="flex items-center gap-1.5 text-gray-400 text-xs mb-1"><Clock className="w-3.5 h-3.5" /> Uptime</div>
+            <div className="text-white text-lg font-bold">{formatUptime(stats.uptime)}</div>
+            <div className="text-gray-500 text-xs">{stats.leads.total} Leads</div>
+          </div>
+          <div className="bg-gray-800 border border-gray-700 rounded-xl p-3">
+            <div className="flex items-center gap-1.5 text-gray-400 text-xs mb-1"><Euro className="w-3.5 h-3.5" /> Kosten</div>
+            <div className="text-white text-lg font-bold">{stats.leads.totalCosts.toFixed(2)} €</div>
+            <div className="text-gray-500 text-xs">Gesamt API-Kosten</div>
+          </div>
+        </div>
+      )}
+
       {/* Filters */}
       <div className="flex flex-wrap gap-3 mb-4">
         <div className="relative">
@@ -100,6 +154,11 @@ export default function DashboardPage() {
           <option value="teaser_generated">Teaser erstellt</option>
           <option value="email_generated">Email erstellt</option>
           <option value="contacted">Kontaktiert</option>
+          <option value="follow_up">Follow-up</option>
+          <option value="responded">Gemeldet</option>
+          <option value="no_interest">Kein Interesse</option>
+          <option value="meeting">Termin</option>
+          <option value="won">Gewonnen</option>
           <option value="archived">Archiviert</option>
         </select>
         <select value={rating} onChange={(e) => updateFilter('rating', e.target.value)}
@@ -121,7 +180,7 @@ export default function DashboardPage() {
       {/* Bulk Actions */}
       {selected.size > 0 && (
         <div className="flex items-center gap-3 mb-4 bg-blue-500/10 border border-blue-500/30 rounded-lg px-4 py-2">
-          <span className="text-blue-400 text-sm">{selected.size} ausgewaehlt</span>
+          <span className="text-blue-400 text-sm">{selected.size} ausgewählt</span>
           <button onClick={() => handleBulkAction('approved')} className="text-yellow-400 text-sm hover:underline">Freigeben</button>
           <button onClick={() => handleBulkAction('contacted')} className="text-teal-400 text-sm hover:underline">Als kontaktiert markieren</button>
           <button onClick={() => handleBulkAction('archived')} className="text-gray-400 text-sm hover:underline">Archivieren</button>
@@ -147,13 +206,14 @@ export default function DashboardPage() {
                 <th className="p-3 text-center text-gray-400 font-medium"><Star className="w-3.5 h-3.5 inline" /></th>
                 <th className="p-3 text-left text-gray-400 font-medium">Status</th>
                 <th className="p-3 text-right text-gray-400 font-medium">Kosten</th>
+                <th className="p-3 text-right text-gray-400 font-medium">Erstellt</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={10} className="p-8 text-center text-gray-500">Laden...</td></tr>
+                <tr><td colSpan={11} className="p-8 text-center text-gray-500">Laden...</td></tr>
               ) : data.leads.length === 0 ? (
-                <tr><td colSpan={10} className="p-8 text-center text-gray-500">Keine Leads gefunden</td></tr>
+                <tr><td colSpan={11} className="p-8 text-center text-gray-500">Keine Leads gefunden</td></tr>
               ) : data.leads.map(lead => (
                 <tr key={lead.id} onClick={() => navigate(`/leads/${lead.id}`)}
                   className="border-b border-gray-700/50 hover:bg-gray-700/30 cursor-pointer transition-colors">
@@ -175,6 +235,7 @@ export default function DashboardPage() {
                   <td className="p-3 text-center"><span className={RATING_COLORS[lead.rating] || 'text-gray-400'}>{lead.rating || '-'}</span></td>
                   <td className="p-3"><StatusBadge status={lead.status} /></td>
                   <td className="p-3 text-right text-gray-300">{parseFloat(lead.total_cost || 0).toFixed(2)} EUR</td>
+                  <td className="p-3 text-right text-gray-500 text-xs">{new Date(lead.created_at).toLocaleDateString('de-AT')}</td>
                 </tr>
               ))}
             </tbody>

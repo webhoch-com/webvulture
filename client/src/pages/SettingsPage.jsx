@@ -4,8 +4,9 @@ import { Save, Loader, Key, Bot, Globe } from 'lucide-react';
 
 const SETTINGS_CONFIG = [
   { key: 'anthropic_api_key', label: 'Anthropic API Key', icon: Key, type: 'password', encrypted: true },
+  { key: 'openai_api_key', label: 'OpenAI API Key (GPT-5)', icon: Key, type: 'password', encrypted: true },
   { key: 'google_places_api_key', label: 'Google Places API Key', icon: Key, type: 'password', encrypted: true },
-  { key: 'default_ai_model', label: 'AI Modell', icon: Bot, type: 'text', encrypted: false },
+  { key: 'default_ai_model', label: 'AI Modell (Anthropic)', icon: Bot, type: 'text', encrypted: false },
   { key: 'teaser_domain', label: 'Teaser Domain', icon: Globe, type: 'text', encrypted: false },
 ];
 

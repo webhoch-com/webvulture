@@ -1,0 +1,103 @@
+---
+interface Props {
+  title: string;
+  description?: string;
+}
+const { title, description = '' } = Astro.props;
+---
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content={description}>
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="icon" href="https://webhoch.com/favicon.ico">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <title>{title}</title>
+  <style is:global>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body { font-family: 'Inter', system-ui, sans-serif; color: #1e293b; line-height: 1.75; -webkit-font-smoothing: antialiased; }
+    img { max-width: 100%; height: auto; display: block; }
+    a { color: inherit; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <!-- Disclaimer Banner — webhoch.com Design -->
+  <div class="webhoch-banner">
+    <div class="webhoch-banner-inner">
+      <span class="webhoch-banner-text">
+        Dies ist ein unverbindlicher Entwurf von
+        <a href="https://webhoch.com" class="webhoch-banner-link" target="_blank">
+          <span class="webhoch-banner-logo">webhoch</span>.com
+        </a>
+      </span>
+      <a href="https://webhoch.com" class="webhoch-banner-btn" target="_blank">Mehr erfahren</a>
+    </div>
+  </div>
+  <div style="padding-top:3rem;">
+    <slot />
+  </div>
+
+  <style is:global>
+    .webhoch-banner {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 9999;
+      background: linear-gradient(135deg, #fd71ba, #87d0ec);
+      padding: 0.5rem 1rem;
+    }
+    .webhoch-banner-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    .webhoch-banner-text {
+      color: white;
+      font-size: 0.85rem;
+      font-weight: 500;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.15);
+    }
+    .webhoch-banner-link {
+      color: white !important;
+      font-weight: 700;
+      text-decoration: none !important;
+      transition: opacity 0.2s;
+    }
+    .webhoch-banner-link:hover {
+      opacity: 0.85;
+    }
+    .webhoch-banner-logo {
+      font-weight: 800;
+    }
+    .webhoch-banner-btn {
+      display: inline-block;
+      background: rgba(255,255,255,0.95);
+      color: #1a1a2e !important;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.3rem 0.9rem;
+      border-radius: 9999px;
+      text-decoration: none !important;
+      transition: all 0.2s;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .webhoch-banner-btn:hover {
+      background: white;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    @media (max-width: 480px) {
+      .webhoch-banner-text { font-size: 0.75rem; }
+      .webhoch-banner-btn { font-size: 0.7rem; padding: 0.25rem 0.7rem; }
+    }
+  </style>
+</body>
+</html>

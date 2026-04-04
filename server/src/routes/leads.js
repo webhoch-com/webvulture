@@ -22,7 +22,7 @@ router.get('/:id', async (req, res, next) => {
 
 router.put('/:id', async (req, res, next) => {
   try {
-    const allowedFields = ['name', 'email', 'phone', 'design_wishes', 'status', 'branche'];
+    const allowedFields = ['name', 'email', 'phone', 'design_wishes', 'status', 'branche', 'notes', 'contacted_at', 'follow_up_at', 'follow_up_count'];
     const fields = {};
     for (const key of allowedFields) {
       if (req.body[key] !== undefined) fields[key] = req.body[key];

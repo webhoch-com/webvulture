@@ -2,7 +2,7 @@ import axios from 'axios';
 
 const api = axios.create({
   baseURL: '/api',
-  timeout: 30000,
+  timeout: 300000, // 5 Minuten — Teaser-Generierung braucht Zeit (Claude + Astro Build)
 });
 
 api.interceptors.request.use((config) => {

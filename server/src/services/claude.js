@@ -6,6 +6,7 @@ import { WEBSITE_ANALYSIS_PROMPT } from '../prompts/websiteAnalysis.js';
 import { TEASER_GENERATION_PROMPT } from '../prompts/teaserGeneration.js';
 import { TEASER_MODIFICATION_PROMPT } from '../prompts/teaserModification.js';
 import { EMAIL_GENERATION_PROMPT } from '../prompts/emailGeneration.js';
+import { FOLLOW_UP_EMAIL_PROMPT } from '../prompts/followUpEmail.js';
 
 async function getClient() {
   const apiKey = await getSetting('anthropic_api_key');
@@ -14,7 +15,7 @@ async function getClient() {
 }
 
 async function getModel() {
-  return (await getSetting('default_ai_model')) || 'claude-opus-4-20250514';
+  return (await getSetting('default_ai_model')) || 'claude-opus-4-6';
 }
 
 async function callClaude(systemPrompt, userMessage, maxTokens = 4096) {
@@ -55,11 +56,16 @@ Technische Daten:
 HTML-Auszug (erste 3000 Zeichen):
 ${htmlSnippet.slice(0, 3000)}`;
 
-  const { text, cost, usage } = await callClaude(WEBSITE_ANALYSIS_PROMPT, userMsg, 2048);
+  const { text, cost, usage } = await callClaude(WEBSITE_ANALYSIS_PROMPT, userMsg, 3000);
   try {
-    const analysis = JSON.parse(text);
+    // JSON aus Markdown-Codeblock extrahieren falls nötig
+    let jsonStr = text;
+    const codeBlockMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)```/);
+    if (codeBlockMatch) jsonStr = codeBlockMatch[1];
+    const analysis = JSON.parse(jsonStr.trim());
     return { analysis, cost, usage };
-  } catch {
+  } catch (parseErr) {
+    console.error('JSON Parse Fehler bei Analyse:', parseErr.message, text.slice(0, 200));
     return {
       analysis: { rating: 2, suggestions: text, name: '', email: '', summary: text },
       cost,
@@ -70,21 +76,36 @@ ${htmlSnippet.slice(0, 3000)}`;
 
 export async function generateTeaser(leadData, originalHtml, designWishes) {
   const prompt = TEASER_GENERATION_PROMPT(leadData, designWishes);
-  const userMsg = `Originalwebsite HTML:\n${originalHtml.slice(0, 15000)}`;
-  const { text, cost } = await callClaude(prompt, userMsg, 8000);
-  const htmlMatch = text.match(/<!DOCTYPE[\s\S]*<\/html>/i) || text.match(/<html[\s\S]*<\/html>/i);
-  return { html: htmlMatch ? htmlMatch[0] : text, cost };
+  const userMsg = `Originalwebsite HTML:\n${originalHtml.slice(0, 18000)}`;
+  const { text, cost } = await callClaude(prompt, userMsg, 12000);
+  // Astro-Content extrahieren (beginnt mit --- oder enthält Layout import)
+  let astroContent = text;
+  // Falls in Markdown-Codeblock verpackt
+  const codeBlockMatch = text.match(/```astro\n([\s\S]*?)```/) || text.match(/```\n([\s\S]*?)```/);
+  if (codeBlockMatch) {
+    astroContent = codeBlockMatch[1];
+  }
+  // Falls ein HTML-Dokument zurückkommt statt Astro, trotzdem verwenden (Fallback)
+  return { astroContent, cost };
 }
 
 export async function modifyTeaser(currentHtml, changeRequest) {
-  const userMsg = `Aktueller Teaser HTML:\n${currentHtml}\n\nAenderungswunsch:\n${changeRequest}`;
-  const { text, cost } = await callClaude(TEASER_MODIFICATION_PROMPT, userMsg, 8000);
-  const htmlMatch = text.match(/<!DOCTYPE[\s\S]*<\/html>/i) || text.match(/<html[\s\S]*<\/html>/i);
-  return { html: htmlMatch ? htmlMatch[0] : text, cost };
+  const userMsg = `Aktuelle Astro-Datei:\n${currentHtml}\n\nÄnderungswunsch:\n${changeRequest}`;
+  const { text, cost } = await callClaude(TEASER_MODIFICATION_PROMPT, userMsg, 12000);
+  let astroContent = text;
+  const codeBlockMatch = text.match(/```astro\n([\s\S]*?)```/) || text.match(/```\n([\s\S]*?)```/);
+  if (codeBlockMatch) astroContent = codeBlockMatch[1];
+  return { html: astroContent, cost };
 }
 
 export async function generateEmail(leadData, teaserUrl) {
   const prompt = EMAIL_GENERATION_PROMPT(leadData, teaserUrl);
-  const { text, cost } = await callClaude(prompt, '', 2048);
+  const { text, cost } = await callClaude(prompt, 'Erstelle die Email.', 2048);
+  return { emailText: text, cost };
+}
+
+export async function generateFollowUpEmail(leadData, teaserUrl, followUpNumber, daysSinceContact) {
+  const prompt = FOLLOW_UP_EMAIL_PROMPT(leadData, teaserUrl, followUpNumber, daysSinceContact);
+  const { text, cost } = await callClaude(prompt, 'Erstelle die Follow-up Email.', 2048);
   return { emailText: text, cost };
 }

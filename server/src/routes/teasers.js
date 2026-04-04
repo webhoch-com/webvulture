@@ -16,21 +16,11 @@ router.post('/:id/teaser', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.get('/:id/teaser/preview', async (req, res, next) => {
-  try {
-    const lead = await Leads.findById(req.params.id);
-    if (!lead || !lead.teaser_html) {
-      return res.status(404).json({ error: true, message: 'Kein Teaser vorhanden' });
-    }
-    res.type('html').send(lead.teaser_html);
-  } catch (err) { next(err); }
-});
-
 router.post('/:id/teaser/change', async (req, res, next) => {
   try {
     const { changeRequest } = req.body;
     if (!changeRequest) {
-      return res.status(400).json({ error: true, message: 'Aenderungswunsch erforderlich' });
+      return res.status(400).json({ error: true, message: 'Änderungswunsch erforderlich' });
     }
     const result = await TeaserService.modify(parseInt(req.params.id), changeRequest, req.user.id);
     res.json(result);
@@ -96,6 +86,54 @@ router.post('/:id/restore', async (req, res, next) => {
   try {
     const result = await restoreLead(parseInt(req.params.id));
     res.json(result);
+  } catch (err) { next(err); }
+});
+
+// Follow-up Email generieren
+router.post('/:id/follow-up', async (req, res, next) => {
+  try {
+    const lead = await Leads.findById(req.params.id);
+    if (!lead) return res.status(404).json({ error: true, message: 'Lead nicht gefunden' });
+
+    const domain = process.env.TEASER_DOMAIN || 'webseiten-werkstatt.at';
+    const teaserUrl = lead.teaser_subdomain ? `https://${lead.teaser_subdomain}.${domain}` : '';
+
+    const followUpCount = (lead.follow_up_count || 0) + 1;
+    const daysSinceContact = lead.contacted_at
+      ? Math.floor((Date.now() - new Date(lead.contacted_at).getTime()) / (1000 * 60 * 60 * 24))
+      : 0;
+
+    const { emailText, cost } = await Claude.generateFollowUpEmail(lead, teaserUrl, followUpCount, daysSinceContact);
+
+    const totalCost = parseFloat(lead.total_cost || 0) + cost;
+    await Leads.update(lead.id, {
+      follow_up_count: followUpCount,
+      follow_up_at: new Date().toISOString(),
+      total_cost: totalCost,
+      status: 'follow_up',
+    });
+
+    res.json({ emailText, cost, followUpNumber: followUpCount });
+  } catch (err) { next(err); }
+});
+
+// Notizen speichern
+router.put('/:id/notes', async (req, res, next) => {
+  try {
+    const { notes } = req.body;
+    const lead = await Leads.update(parseInt(req.params.id), { notes });
+    res.json(lead);
+  } catch (err) { next(err); }
+});
+
+// Als kontaktiert markieren
+router.post('/:id/mark-contacted', async (req, res, next) => {
+  try {
+    const lead = await Leads.update(parseInt(req.params.id), {
+      status: 'contacted',
+      contacted_at: new Date().toISOString(),
+    });
+    res.json(lead);
   } catch (err) { next(err); }
 });
 

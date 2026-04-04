@@ -1,11 +1,15 @@
 const MODEL_PRICING = {
   'claude-opus-4-20250514': { inputPerMillion: 15, outputPerMillion: 75 },
+  'claude-opus-4-6': { inputPerMillion: 15, outputPerMillion: 75 },
   'claude-sonnet-4-20250514': { inputPerMillion: 3, outputPerMillion: 15 },
+  'claude-sonnet-4-6': { inputPerMillion: 3, outputPerMillion: 15 },
   'claude-haiku-4-5-20251001': { inputPerMillion: 0.80, outputPerMillion: 4 },
 };
 
-export function calculateCost(usage, model = 'claude-opus-4-20250514') {
-  const pricing = MODEL_PRICING[model] || MODEL_PRICING['claude-opus-4-20250514'];
+const DEFAULT_MODEL = 'claude-opus-4-6';
+
+export function calculateCost(usage, model = DEFAULT_MODEL) {
+  const pricing = MODEL_PRICING[model] || MODEL_PRICING[DEFAULT_MODEL];
   const inputCost = (usage.input_tokens / 1_000_000) * pricing.inputPerMillion;
   const outputCost = (usage.output_tokens / 1_000_000) * pricing.outputPerMillion;
   const totalUsd = inputCost + outputCost;

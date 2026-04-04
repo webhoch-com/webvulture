@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { Search, CheckCircle, XCircle, Loader, ArrowRight } from 'lucide-react';
 
 export default function SearchPage() {
@@ -56,7 +57,10 @@ export default function SearchPage() {
                 setProgress({ current: data.progress, total: data.total });
               }
               if (data.type === 'job_created') setJobId(data.jobId);
-              if (data.type === 'completed') setJobId(data.jobId);
+              if (data.type === 'completed') {
+                setJobId(data.jobId);
+                toast.success(`Suche abgeschlossen: ${data.total} Website(s) analysiert`);
+              }
             } catch {}
           }
         }
@@ -82,13 +86,13 @@ export default function SearchPage() {
           <div>
             <label className="block text-gray-300 text-sm mb-1.5">Zielgruppe</label>
             <input type="text" value={form.targetGroup} onChange={e => setForm({ ...form, targetGroup: e.target.value })}
-              placeholder="z.B. Gasthaeuser, Handwerker..."
+              placeholder="z.B. Gasthäuser, Handwerker..."
               className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500" />
           </div>
           <div>
             <label className="block text-gray-300 text-sm mb-1.5">Region</label>
             <input type="text" value={form.region} onChange={e => setForm({ ...form, region: e.target.value })}
-              placeholder="z.B. Bezirk Voecklabruck..."
+              placeholder="z.B. Bezirk Vöcklabruck..."
               className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500" />
           </div>
           <div>
@@ -107,52 +111,101 @@ export default function SearchPage() {
 
         <button type="submit" disabled={running || (!form.targetGroup && !form.manualUrls.trim())}
           className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-6 py-2.5 rounded-lg flex items-center gap-2 transition-colors">
-          {running ? <><Loader className="w-4 h-4 animate-spin" /> Suche laeuft...</> : <><Search className="w-4 h-4" /> Suche starten</>}
+          {running ? <><Loader className="w-4 h-4 animate-spin" /> Suche läuft...</> : <><Search className="w-4 h-4" /> Suche starten</>}
         </button>
       </form>
 
-      {/* Progress */}
+      {/* Suchfortschritt */}
       {events.length > 0 && (
-        <div className="bg-gray-800 border border-gray-700 rounded-xl p-6">
-          {progress.total > 0 && (
-            <div className="mb-4">
-              <div className="flex justify-between text-sm text-gray-400 mb-1">
-                <span>{progress.current} von {progress.total}</span>
-                <span>{Math.round((progress.current / progress.total) * 100)}%</span>
+        <div className="space-y-4">
+          {/* Fortschrittsbalken */}
+          <div className="bg-gray-800 border border-gray-700 rounded-xl p-5">
+            {/* Schritte-Anzeige */}
+            <div className="flex items-center gap-2 mb-4">
+              {[
+                { key: 'terms', label: 'Suchbegriffe', done: events.some(e => e.type === 'search_terms' || e.type === 'status' && e.message?.includes('manuelle')) },
+                { key: 'places', label: 'Websites finden', done: events.some(e => e.type === 'places_found' || e.type === 'progress') },
+                { key: 'analyze', label: 'Analysieren', done: progress.current > 0 },
+                { key: 'done', label: 'Fertig', done: !!completed },
+              ].map((step, i) => (
+                <div key={step.key} className="flex items-center gap-2 flex-1">
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition-colors ${
+                    step.done ? 'bg-green-500 text-white' : running ? 'bg-blue-500/30 text-blue-400 animate-pulse' : 'bg-gray-700 text-gray-500'
+                  }`}>
+                    {step.done ? '✓' : i + 1}
+                  </div>
+                  <span className={`text-xs hidden md:block ${step.done ? 'text-green-400' : 'text-gray-500'}`}>{step.label}</span>
+                  {i < 3 && <div className={`flex-1 h-0.5 ${step.done ? 'bg-green-500' : 'bg-gray-700'}`} />}
+                </div>
+              ))}
+            </div>
+
+            {/* Balken */}
+            {progress.total > 0 && (
+              <div className="mb-3">
+                <div className="flex justify-between text-sm mb-1.5">
+                  <span className="text-white font-medium">
+                    {completed ? 'Analyse abgeschlossen' : `Analysiere Website ${progress.current} von ${progress.total}...`}
+                  </span>
+                  <span className="text-blue-400 font-bold">{Math.round((progress.current / progress.total) * 100)}%</span>
+                </div>
+                <div className="h-3 bg-gray-700 rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full transition-all duration-500 ${completed ? 'bg-green-500' : 'bg-blue-500'}`}
+                    style={{ width: `${(progress.current / progress.total) * 100}%` }} />
+                </div>
               </div>
-              <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
-                <div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${(progress.current / progress.total) * 100}%` }} />
+            )}
+
+            {/* Aktueller Schritt */}
+            {running && !completed && (
+              <div className="flex items-center gap-2 text-sm text-gray-400">
+                <Loader className="w-3.5 h-3.5 animate-spin text-blue-400" />
+                {events[events.length - 1]?.type === 'progress'
+                  ? `${events[events.length - 1].step === 'fetching' ? 'Lade' : 'Analysiere'}: ${events[events.length - 1].current}`
+                  : events[events.length - 1]?.message || 'Bitte warten...'}
+              </div>
+            )}
+          </div>
+
+          {/* Ergebnisse */}
+          {leadsCreated.length > 0 && (
+            <div className="bg-gray-800 border border-gray-700 rounded-xl p-5">
+              <h3 className="text-white font-medium mb-3">Gefundene Websites ({leadsCreated.length})</h3>
+              <div className="space-y-2">
+                {leadsCreated.map((event, i) => (
+                  <div key={i} className="flex items-center justify-between bg-gray-700/40 rounded-lg px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />
+                      <span className="text-white text-sm">{event.lead.name}</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs">
+                      <span className={event.lead.ssl ? 'text-green-400' : 'text-red-400'}>{event.lead.ssl ? 'SSL ✓' : 'Kein SSL'}</span>
+                      <span className={`font-bold ${event.lead.rating === 3 ? 'text-red-400' : event.lead.rating === 2 ? 'text-yellow-400' : 'text-green-400'}`}>
+                        Rating {event.lead.rating}/3
+                      </span>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}
 
-          <div className="space-y-2 max-h-96 overflow-y-auto">
-            {events.map((event, i) => (
-              <div key={i} className="text-sm flex items-start gap-2">
-                {event.type === 'status' && <span className="text-blue-400">{event.message}</span>}
-                {event.type === 'lead_created' && (
-                  <span className="text-green-400 flex items-center gap-1">
-                    <CheckCircle className="w-3.5 h-3.5" /> {event.lead.name} — Rating {event.lead.rating}
-                  </span>
-                )}
-                {event.type === 'lead_error' && (
-                  <span className="text-red-400 flex items-center gap-1">
-                    <XCircle className="w-3.5 h-3.5" /> {event.url}: {event.message}
-                  </span>
-                )}
-                {event.type === 'error' && <span className="text-red-400">{event.message}</span>}
-                {event.type === 'search_terms' && <span className="text-gray-400">{event.terms.length} Suchbegriffe generiert</span>}
-                {event.type === 'places_found' && <span className="text-gray-400">{event.count} Websites gefunden</span>}
-                {event.type === 'completed' && (
-                  <span className="text-green-400 font-medium">Suche abgeschlossen: {event.total} Websites analysiert</span>
-                )}
-              </div>
-            ))}
-          </div>
+          {/* Fehler */}
+          {events.filter(e => e.type === 'lead_error' || e.type === 'error').length > 0 && (
+            <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4">
+              {events.filter(e => e.type === 'lead_error' || e.type === 'error').map((event, i) => (
+                <div key={i} className="flex items-center gap-2 text-sm text-red-400">
+                  <XCircle className="w-3.5 h-3.5 shrink-0" />
+                  {event.type === 'lead_error' ? `${event.url}: ${event.message}` : event.message}
+                </div>
+              ))}
+            </div>
+          )}
 
+          {/* Zum Dashboard */}
           {completed && (
             <button onClick={() => navigate('/dashboard')}
-              className="mt-4 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors">
+              className="bg-green-600 hover:bg-green-700 text-white px-5 py-2.5 rounded-lg flex items-center gap-2 transition-colors font-medium">
               Zum Dashboard <ArrowRight className="w-4 h-4" />
             </button>
           )}

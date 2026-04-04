@@ -47,7 +47,7 @@ router.put('/:id', async (req, res, next) => {
 router.delete('/:id', async (req, res, next) => {
   try {
     if (parseInt(req.params.id) === req.user.id) {
-      return res.status(400).json({ error: true, message: 'Eigenen Account nicht loeschbar' });
+      return res.status(400).json({ error: true, message: 'Eigenen Account nicht löschbar' });
     }
     await Users.remove(req.params.id);
     res.json({ message: 'Benutzer geloescht' });
