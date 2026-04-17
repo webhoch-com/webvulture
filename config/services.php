@@ -35,4 +35,34 @@ return [
         ],
     ],
 
+    'google_maps' => [
+        'key' => env('GOOGLE_MAPS_API_KEY'),
+        'places_base' => env('GOOGLE_PLACES_BASE', 'https://places.googleapis.com/v1'),
+    ],
+
+    'google_search' => [
+        'key' => env('GOOGLE_SEARCH_API_KEY'),
+    ],
+
+    'google_oauth' => [
+        'client_id' => env('GOOGLE_OAUTH_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_OAUTH_CLIENT_SECRET'),
+        'redirect' => env('GOOGLE_OAUTH_REDIRECT', '/auth/google/callback'),
+    ],
+
+    'anthropic' => [
+        'key' => env('ANTHROPIC_API_KEY'),
+        'model_default' => env('ANTHROPIC_MODEL', 'claude-sonnet-4-6'),
+        'model_cheap' => env('ANTHROPIC_MODEL_CHEAP', 'claude-haiku-4-5-20251001'),
+    ],
+
+    'generator' => [
+        'url' => env('GENERATOR_URL', 'http://localhost:4000'),
+        'secret' => env('GENERATOR_SECRET'),
+    ],
+
+    'preview_host' => [
+        'root_domain' => env('PREVIEW_ROOT_DOMAIN', 'demo.webvulture.app'),
+    ],
+
 ];
