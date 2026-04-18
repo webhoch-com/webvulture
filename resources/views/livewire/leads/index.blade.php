@@ -1,13 +1,16 @@
 <?php
 
+use App\Jobs\ScrapeSiteJob;
+use App\Jobs\EnrichLeadJob;
 use App\Models\Lead;
 use App\Support\Enums\LeadStatus;
 use Livewire\Attributes\Url;
 use Livewire\Volt\Component;
 use Livewire\WithPagination;
+use Mary\Traits\Toast;
 
 new class extends Component {
-    use WithPagination;
+    use WithPagination, Toast;
 
     #[Url(as: 'q')]
     public string $search = '';
@@ -32,6 +35,29 @@ new class extends Component {
         $this->resetPage();
     }
 
+    public function scrape(int $leadId): void
+    {
+        $lead = Lead::findOrFail($leadId);
+        if (!$lead->website) {
+            $this->error('No website', 'Lead has no website to scrape.');
+            return;
+        }
+        ScrapeSiteJob::dispatch($leadId)->onQueue('scrape');
+        $this->success('Queued', "Scraping {$lead->name}…");
+    }
+
+    public function enrich(int $leadId): void
+    {
+        EnrichLeadJob::dispatch($leadId)->onQueue('enrichment');
+        $this->success('Queued', 'Enrichment job dispatched.');
+    }
+
+    public function delete(int $leadId): void
+    {
+        Lead::findOrFail($leadId)->delete();
+        $this->success('Deleted', 'Lead and all files removed.');
+    }
+
     public function with(): array
     {
         $headers = [
@@ -39,10 +65,10 @@ new class extends Component {
             ['key' => 'category', 'label' => 'Category'],
             ['key' => 'city', 'label' => 'City'],
             ['key' => 'website', 'label' => 'Website'],
-            ['key' => 'rating', 'label' => 'Rating', 'class' => 'w-24'],
-            ['key' => 'review_count', 'label' => 'Reviews', 'class' => 'w-20'],
-            ['key' => 'quality_score', 'label' => 'Score', 'class' => 'w-20'],
+            ['key' => 'rating', 'label' => 'Rating', 'class' => 'w-20'],
+            ['key' => 'quality_score', 'label' => 'Score', 'class' => 'w-16'],
             ['key' => 'status', 'label' => 'Status', 'class' => 'w-28'],
+            ['key' => 'actions', 'label' => '', 'class' => 'w-32'],
         ];
 
         $rows = Lead::query()
@@ -53,7 +79,9 @@ new class extends Component {
             ->latest('id')
             ->paginate($this->perPage);
 
-        $statusOptions = collect(LeadStatus::cases())->map(fn ($s) => ['id' => $s->value, 'name' => $s->label()])->all();
+        $statusOptions = collect(LeadStatus::cases())
+            ->map(fn ($s) => ['id' => $s->value, 'name' => $s->label()])
+            ->all();
 
         return compact('headers', 'rows', 'statusOptions');
     }
@@ -62,7 +90,7 @@ new class extends Component {
 <div class="space-y-6">
     <x-header title="Leads" subtitle="Discovered businesses" separator wire:poll.10s>
         <x-slot:actions>
-            <x-button label="New search" icon="o-plus" link="{{ route('search') }}" class="btn-primary" />
+            <x-button label="New search" icon="o-plus" link="{{ route('search') }}" class="btn-primary btn-sm" />
         </x-slot:actions>
     </x-header>
 
@@ -70,36 +98,59 @@ new class extends Component {
         <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
             <x-input placeholder="Search name…" wire:model.live.debounce="search" icon="o-magnifying-glass" clearable />
             <x-select placeholder="Status" :options="$statusOptions" wire:model.live="status" icon="o-flag" />
-            <x-select placeholder="Website" :options="[['id' => 'yes', 'name' => 'Has website'], ['id' => 'no', 'name' => 'No website']]" wire:model.live="website" icon="o-globe-alt" />
-            <x-button label="Clear filters" icon="o-x-mark" wire:click="clear" class="btn-ghost" />
+            <x-select placeholder="Website" :options="[['id'=>'yes','name'=>'Has website'],['id'=>'no','name'=>'No website']]" wire:model.live="website" icon="o-globe-alt" />
+            <x-button label="Clear" icon="o-x-mark" wire:click="clear" class="btn-ghost btn-sm" />
         </div>
     </x-card>
 
     <x-card shadow>
         <x-table :headers="$headers" :rows="$rows" with-pagination striped>
             @scope('cell_name', $row)
-                <div class="font-medium">{{ $row->name }}</div>
-                <div class="text-xs text-base-content/60 font-mono">{{ $row->place_id }}</div>
+                <a href="{{ route('leads.show', $row) }}" class="font-medium link link-hover">{{ $row->name }}</a>
+                @if(!$row->has_website)
+                    <x-badge value="no site" class="badge-warning badge-xs ml-1" />
+                @endif
             @endscope
 
             @scope('cell_website', $row)
-                @if ($row->website)
-                    <a href="{{ $row->website }}" target="_blank" class="link link-primary text-sm">{{ \Illuminate\Support\Str::of($row->website)->after('://')->limit(28) }}</a>
+                @if($row->website)
+                    <a href="{{ $row->website }}" target="_blank" class="link link-primary text-xs">
+                        {{ \Illuminate\Support\Str::of($row->website)->after('://')->limit(25) }}
+                    </a>
                 @else
-                    <x-badge value="none" class="badge-ghost badge-sm" />
+                    <span class="text-base-content/40 text-xs">—</span>
                 @endif
             @endscope
 
             @scope('cell_rating', $row)
-                {{ $row->rating ? number_format($row->rating, 1) : '—' }}
+                <span class="text-sm">{{ $row->rating ? '★ '.number_format($row->rating,1) : '—' }}</span>
             @endscope
 
             @scope('cell_quality_score', $row)
-                <span class="font-mono text-xs">{{ $row->quality_score }}</span>
+                <span class="font-mono text-xs badge badge-outline">{{ $row->quality_score }}</span>
             @endscope
 
             @scope('cell_status', $row)
                 <x-status :value="$row->status" />
+            @endscope
+
+            @scope('cell_actions', $row)
+                <div class="flex gap-1">
+                    @if($row->has_website && $row->status->value === 'new')
+                        <x-button icon="o-arrow-down-tray" wire:click="scrape({{ $row->id }})" class="btn-ghost btn-xs" tooltip="Scrape" />
+                    @endif
+                    @if(in_array($row->status->value, ['scraped','new']))
+                        <x-button icon="o-sparkles" wire:click="enrich({{ $row->id }})" class="btn-ghost btn-xs" tooltip="Enrich" />
+                    @endif
+                    <x-button icon="o-eye" link="{{ route('leads.show', $row) }}" class="btn-ghost btn-xs" tooltip="View" />
+                    <x-button
+                        icon="o-trash"
+                        wire:click="delete({{ $row->id }})"
+                        wire:confirm="Delete '{{ addslashes($row->name) }}' and all its files?"
+                        class="btn-ghost btn-xs text-error"
+                        tooltip="Delete"
+                    />
+                </div>
             @endscope
         </x-table>
     </x-card>

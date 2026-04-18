@@ -11,10 +11,12 @@
     "require": {
         "php": "^8.3",
         "laravel/framework": "^13.0",
+        "laravel/reverb": "^1.10",
         "laravel/tinker": "^3.0",
         "livewire/livewire": "^4.2",
         "livewire/volt": "^1.10",
         "robsontenorio/mary": "^2.8",
+        "spatie/browsershot": "^5.2",
         "symfony/css-selector": "^8.0",
         "symfony/dom-crawler": "^8.0"
     },
