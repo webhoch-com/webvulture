@@ -5,6 +5,8 @@
  */
 
 import type { SiteSpec } from '../types.js';
+import { renderSeoHead } from './_seo.js';
+import { getGalleryImage } from './_media.js';
 
 function escapeHtml(s: string): string {
   return String(s)
@@ -12,8 +14,8 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-function product(slug: string, idx: number, w = 600, h = 800): string {
-  return `https://picsum.photos/seed/${encodeURIComponent(slug)}-prod-${idx}/${w}/${h}`;
+function product(spec: SiteSpec, slug: string, idx: number, w = 600, h = 800): string {
+  return getGalleryImage(spec, slug, idx, w, h);
 }
 
 export function renderEinzelhandelPage(spec: SiteSpec, slug: string): string {
@@ -40,17 +42,11 @@ export function renderEinzelhandelPage(spec: SiteSpec, slug: string): string {
   const address = spec.contact.address ? escapeHtml(spec.contact.address) : '';
 
   return `---
-const spec = ${JSON.stringify(spec, null, 2)};
 ---
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${businessName} — ${escapeHtml(tagline)}</title>
-  <meta name="description" content="${escapeHtml(tagline)}" />
-  <meta name="robots" content="noindex, nofollow" />
-  <meta name="theme-color" content="#fdf6f3" />
+  ${renderSeoHead(spec, { slug, schemaKind: 'Store' })}
   <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
   <link href="https://fonts.bunny.net/css?family=cormorant-garamond:400,500,600|inter:300,400,500,600&display=swap" rel="stylesheet">
   <style>
@@ -193,7 +189,7 @@ const spec = ${JSON.stringify(spec, null, 2)};
     }
     .btn-link:hover { color: var(--accent); border-color: var(--accent); }
     .hero-image {
-      background-image: url('${product(slug, 0, 1200, 1500)}');
+      background-image: url('${product(spec, slug, 0, 1200, 1500)}');
       background-size: cover; background-position: center;
       min-height: 60vh;
     }
@@ -295,7 +291,7 @@ const spec = ${JSON.stringify(spec, null, 2)};
     .visit-info a { color: #fff; }
     .visit-info a:hover { color: var(--accent); }
     .visit-image {
-      background-image: url('${product(slug, 99, 1000, 1200)}');
+      background-image: url('${product(spec, slug, 99, 1000, 1200)}');
       background-size: cover; background-position: center;
       min-height: 50vh;
     }
@@ -305,8 +301,8 @@ const spec = ${JSON.stringify(spec, null, 2)};
     footer .legal { display: flex; gap: 1.5rem; justify-content: center; margin-top: 1rem; flex-wrap: wrap; }
     footer .legal a:hover { color: var(--accent); }
 
-    .reveal { opacity: 0; transform: translateY(20px); transition: opacity 1s ease, transform 1s ease; }
-    .reveal.is-visible { opacity: 1; transform: translateY(0); }
+    .reveal { opacity: 1; transform: none; }
+    /* visible by default */
     @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1 !important; transform: none !important; } }
   </style>
 </head>
@@ -367,7 +363,7 @@ const spec = ${JSON.stringify(spec, null, 2)};
     <div class="collections-grid">
       ${collections.map((c, i) => `
         <article class="collection reveal">
-          <div class="collection-photo"><img src="${product(slug, i + 10, 700, 900)}" alt="${escapeHtml(c.name)}" loading="lazy"></div>
+          <div class="collection-photo"><img src="${product(spec, slug, i + 10, 700, 900)}" alt="${escapeHtml(c.name)}" loading="lazy"></div>
           <div class="collection-info">
             <span class="collection-name">${escapeHtml(c.name)}</span>
             <span class="collection-tag">${escapeHtml(c.tag)}</span>
@@ -388,7 +384,7 @@ const spec = ${JSON.stringify(spec, null, 2)};
     </div>
     <div class="lookbook-grid">
       ${[20,21,22,23,24,25,26,27].map(i => `
-        <div class="look-tile reveal"><img src="${product(slug, i, 500, 700)}" alt="" loading="lazy"></div>
+        <div class="look-tile reveal"><img src="${product(spec, slug, i, 500, 700)}" alt="" loading="lazy"></div>
       `).join('')}
     </div>
   </div>

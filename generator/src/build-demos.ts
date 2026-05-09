@@ -30,6 +30,10 @@ const ALL: LayoutKind[] = [
   'handwerk',
   'arzt',
   'verein',
+  'verein_musik',
+  'verein_sport',
+  'verein_tradition',
+  'golfclub',
   'kanzlei',
   'hotel',
   'fitness',
@@ -49,6 +53,10 @@ function baseSpec(kind: LayoutKind): SiteSpec {
     handwerk: '#ea580c',
     arzt: '#0ea5e9',
     verein: '#16a34a',
+    verein_musik: '#2d4a32',
+    verein_sport: '#15803d',
+    verein_tradition: '#7c2d12',
+    golfclub: '#23423a',
     kanzlei: '#1e3a8a',
     hotel: '#b45309',
     fitness: '#dc2626',
@@ -73,6 +81,14 @@ function baseSpec(kind: LayoutKind): SiteSpec {
                    head: 'Ihre Hausarztpraxis im Zentrum.', sub: 'Online-Termine, kurze Wartezeiten, vertrauensvolle Beratung. Wir sind für Sie da.' },
     verein:      { name: 'Musterverein Musik',    tagline: 'Blasmusik aus Tradition — gegründet vor über 90 Jahren.',
                    head: 'Musik verbindet Generationen.', sub: 'Konzerte, Frühschoppen, Probelokal-Termine — wir freuen uns auf Sie!' },
+    verein_musik: { name: 'Musikkapelle Beispiel', tagline: 'Sinfonische Blasmusik · Tradition · Klangkultur.',
+                   head: 'Klang, der Generationen verbindet.', sub: 'Konzerte, Marschmusik, Jugendkapelle — wir tragen die Musik unserer Region.' },
+    verein_sport: { name: 'SK Beispiel',           tagline: 'Fußball · Training · Mannschaftsgeist seit 1962.',
+                   head: 'Auf dem Platz. In der Region. Für die Zukunft.', sub: 'Vier Mannschaften, Kampfmannschaft 2. Landesklasse, Nachwuchs U7–U17.' },
+    verein_tradition: { name: 'Trachtenverein Beispiel', tagline: 'Brauchtum · Tracht · Heimat.',
+                   head: 'Tradition, die wir leben.', sub: 'Volkstanz, Goldhauben, Sängerrunde — gepflegtes Brauchtum für die Gemeinde.' },
+    golfclub:    { name: 'Golfclub Beispiel',     tagline: '18-Loch · Championship · Salzburger Voralpen.',
+                   head: 'Spielen, wo der Tag länger wird.', sub: 'Membership, Greenfee, Pro-Stunden, Clubrestaurant — auf höchstem Niveau.' },
     kanzlei:     { name: 'Kanzlei Wagner & Partner', tagline: 'Rechtsanwälte für Wirtschaftsrecht in Salzburg.',
                    head: 'Klarheit in komplexen Fällen.', sub: 'Erstberatung kostenfrei. Spezialisiert auf Vertragsrecht, Arbeitsrecht und M&A.' },
     hotel:       { name: 'Hotel Bergblick',       tagline: '4-Sterne-Hotel mit Aussicht — Salzkammergut.',
@@ -341,7 +357,9 @@ function runAstroBuild(projectDir: string): Promise<void> {
 async function buildOne(kind: LayoutKind): Promise<void> {
   const stamp = Date.now();
   const fakeId = -1 * stamp; // negative so it cannot collide with real prototype_version_id
-  const slug = `demo-${kind}`;
+  // Slug must not contain underscores (subdomain DNS rules) — convert
+  // `verein_musik` → `demo-verein-musik`.
+  const slug = `demo-${String(kind).replace(/_/g, '-')}`;
   // SLUG_RE: ^[a-z0-9][a-z0-9-]{0,99}$ — enforced by build pipeline.
   const spec = baseSpec(kind);
 

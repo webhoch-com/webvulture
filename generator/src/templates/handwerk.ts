@@ -5,6 +5,8 @@
  */
 
 import type { SiteSpec } from '../types.js';
+import { getGalleryImage, getHeroImage } from './_media.js';
+import { renderSeoHead } from './_seo.js';
 
 function escapeHtml(s: string): string {
   return String(s)
@@ -12,8 +14,8 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-function projectPhoto(slug: string, idx: number, w = 800, h = 600): string {
-  return `https://picsum.photos/seed/${encodeURIComponent(slug)}-job-${idx}/${w}/${h}`;
+function projectPhoto(spec: SiteSpec, slug: string, idx: number, w = 800, h = 600): string {
+  return getGalleryImage(spec, slug, idx, w, h);
 }
 
 export function renderHandwerkPage(spec: SiteSpec, slug: string): string {
@@ -37,17 +39,11 @@ export function renderHandwerkPage(spec: SiteSpec, slug: string): string {
   const address = spec.contact.address ? escapeHtml(spec.contact.address) : '';
 
   return `---
-const spec = ${JSON.stringify(spec, null, 2)};
 ---
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${businessName} — ${escapeHtml(tagline)}</title>
-  <meta name="description" content="${escapeHtml(tagline)}" />
-  <meta name="robots" content="noindex, nofollow" />
-  <meta name="theme-color" content="#c2410c" />
+  ${renderSeoHead(spec, { slug, schemaKind: 'LocalBusiness' })}
   <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
   <link href="https://fonts.bunny.net/css?family=oswald:400,500,600,700|inter:400,500,600,700&display=swap" rel="stylesheet">
   <style>
@@ -175,6 +171,7 @@ const spec = ${JSON.stringify(spec, null, 2)};
       transition: background .2s, transform .2s;
     }
     .nav-cta:hover { background: var(--primary-dark); transform: translateY(-1px); }
+    @media (max-width: 879px) { .nav-cta { display: none; } }
 
     /* ─── Hero — split with photo and info-blocks ──────── */
     .hero {
@@ -221,7 +218,7 @@ const spec = ${JSON.stringify(spec, null, 2)};
     .btn-line:hover { background: var(--ink); color: #fff; }
 
     .hero-image {
-      background-image: url('${projectPhoto(slug, 0, 1200, 1400)}');
+      background-image: url('${getHeroImage(spec, slug, 1200, 1400)}');
       background-size: cover; background-position: center;
       min-height: 50vh;
       position: relative;
@@ -323,7 +320,7 @@ const spec = ${JSON.stringify(spec, null, 2)};
 
     /* ─── CTA ────────────────────────────────────────────── */
     .cta-section {
-      background-image: linear-gradient(rgba(28,25,23,0.85), rgba(28,25,23,0.92)), url('${projectPhoto(slug, 90, 1800, 1200)}');
+      background-image: linear-gradient(rgba(28,25,23,0.85), rgba(28,25,23,0.92)), url('${projectPhoto(spec, slug, 90, 1800, 1200)}');
       background-size: cover; background-position: center;
       color: #fff; padding: clamp(5rem, 9vw, 9rem) 1.5rem; text-align: center;
     }
@@ -344,8 +341,8 @@ const spec = ${JSON.stringify(spec, null, 2)};
     footer .legal { display: flex; gap: 1.5rem; justify-content: center; margin-top: 1rem; flex-wrap: wrap; }
     footer .legal a:hover { color: var(--primary); }
 
-    .reveal { opacity: 0; transform: translateY(20px); transition: opacity .8s ease, transform .8s ease; }
-    .reveal.is-visible { opacity: 1; transform: translateY(0); }
+    .reveal { opacity: 1; transform: none; }
+    /* visible by default */
     @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1 !important; transform: none !important; } .notdienst .pulse { animation: none; } }
   </style>
 </head>
@@ -461,22 +458,22 @@ const spec = ${JSON.stringify(spec, null, 2)};
       <p class="section-lead">Eindrücke aus Aufträgen der letzten Monate — von der Sanierung über den kompletten Innenausbau bis zur Notdienst-Reparatur.</p>
     </div>
     <div class="ba-grid">
-      <div class="ba-pair reveal" style="background-image: url('${projectPhoto(slug, 11)}');">
+      <div class="ba-pair reveal" style="background-image: url('${projectPhoto(spec, slug, 11)}');">
         <span class="ba-tag">Wohnung Salzburg</span>
       </div>
-      <div class="ba-pair reveal" style="background-image: url('${projectPhoto(slug, 12)}');">
+      <div class="ba-pair reveal" style="background-image: url('${projectPhoto(spec, slug, 12)}');">
         <span class="ba-tag">Geschäft Linz</span>
       </div>
-      <div class="ba-pair reveal" style="background-image: url('${projectPhoto(slug, 13)}');">
+      <div class="ba-pair reveal" style="background-image: url('${projectPhoto(spec, slug, 13)}');">
         <span class="ba-tag">Sanierung Mondsee</span>
       </div>
-      <div class="ba-pair reveal" style="background-image: url('${projectPhoto(slug, 14)}');">
+      <div class="ba-pair reveal" style="background-image: url('${projectPhoto(spec, slug, 14)}');">
         <span class="ba-tag">Vollwärmeschutz</span>
       </div>
-      <div class="ba-pair reveal" style="background-image: url('${projectPhoto(slug, 15)}');">
+      <div class="ba-pair reveal" style="background-image: url('${projectPhoto(spec, slug, 15)}');">
         <span class="ba-tag">Bodenverlegung</span>
       </div>
-      <div class="ba-pair reveal" style="background-image: url('${projectPhoto(slug, 16)}');">
+      <div class="ba-pair reveal" style="background-image: url('${projectPhoto(spec, slug, 16)}');">
         <span class="ba-tag">Notdienst Wasser</span>
       </div>
     </div>

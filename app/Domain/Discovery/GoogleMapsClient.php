@@ -2,7 +2,9 @@
 
 namespace App\Domain\Discovery;
 
+use App\Exceptions\MapsQuotaExceededException;
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 
 class GoogleMapsClient
@@ -32,13 +34,24 @@ class GoogleMapsClient
             'places.addressComponents',
         ]);
 
-        $response = $this->request()
-            ->withHeaders(['X-Goog-FieldMask' => $fieldMask])
-            ->post($this->base.'/places:searchText', [
-                'textQuery' => $query,
-                'pageSize' => min($limit, 20),
-            ])
-            ->throw();
+        try {
+            $response = $this->request()
+                ->withHeaders(['X-Goog-FieldMask' => $fieldMask])
+                ->post($this->base.'/places:searchText', [
+                    'textQuery' => $query,
+                    'pageSize' => min($limit, 20),
+                ])
+                ->throw();
+        } catch (RequestException $e) {
+            $status = $e->response?->status();
+            if (in_array($status, [403, 429], true)) {
+                $body = (string) $e->response?->body();
+                throw new MapsQuotaExceededException(
+                    "Google Maps API quota/rate-limit hit (HTTP {$status}): ".substr($body, 0, 200)
+                );
+            }
+            throw $e;
+        }
 
         return (array) ($response->json('places') ?? []);
     }

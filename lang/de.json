@@ -1,0 +1,20 @@
+{
+    "Diese Anmeldedaten sind ungültig.": "Diese Anmeldedaten sind ungültig.",
+    "The :attribute field is required.": "Das Feld :attribute ist ein Pflichtfeld.",
+    "The :attribute must be a string.": "Das Feld :attribute muss eine Zeichenkette sein.",
+    "The :attribute must be a valid email address.": "Das Feld :attribute muss eine gültige E-Mail-Adresse sein.",
+    "The :attribute must be at least :min characters.": "Das Feld :attribute muss mindestens :min Zeichen lang sein.",
+    "The :attribute may not be greater than :max characters.": "Das Feld :attribute darf nicht länger als :max Zeichen sein.",
+    "The :attribute must be a number.": "Das Feld :attribute muss eine Zahl sein.",
+    "The :attribute must be at least :min.": "Das Feld :attribute muss mindestens :min sein.",
+    "The :attribute may not be greater than :max.": "Das Feld :attribute darf maximal :max sein.",
+    "The :attribute must be an integer.": "Das Feld :attribute muss eine ganze Zahl sein.",
+    "Too many login attempts. Please try again in :seconds seconds.": "Zu viele Anmeldeversuche. Bitte in :seconds Sekunden erneut versuchen.",
+    "city": "Stadt",
+    "keyword": "Stichwort",
+    "limit": "Limit",
+    "rating_min": "Mindestbewertung",
+    "review_min": "Mindestanzahl Rezensionen",
+    "email": "E-Mail",
+    "password": "Passwort"
+}

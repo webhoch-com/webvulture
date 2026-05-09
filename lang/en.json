@@ -1,0 +1,11 @@
+{
+    "_NOTE": "EN translations placeholder. Currently UI is hardcoded in German (see CLAUDE.md). To enable English: 1) wrap UI strings via __() helper, 2) populate this file, 3) set APP_LOCALE=en. The Validation messages below are fallbacks if APP_FALLBACK_LOCALE=en.",
+    "Diese Anmeldedaten sind ungültig.": "These credentials do not match our records.",
+    "Zu viele Anmeldeversuche. Bitte in :seconds Sekunden erneut versuchen.": "Too many login attempts. Please try again in :seconds seconds.",
+    "Stadt ist ein Pflichtfeld.": "City is required.",
+    "Stadt muss mindestens 2 Zeichen lang sein.": "City must be at least 2 characters.",
+    "Stadt darf maximal 120 Zeichen lang sein.": "City may not be longer than 120 characters.",
+    "Ergebnis-Limit ist erforderlich.": "Result limit is required.",
+    "Limit muss mindestens 1 sein.": "Limit must be at least 1.",
+    "Limit darf maximal 20 sein.": "Limit may be at most 20."
+}

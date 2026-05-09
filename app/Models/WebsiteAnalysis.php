@@ -7,7 +7,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class WebsiteAnalysis extends Model
 {
-    protected $guarded = [];
+    // Defensively guard `id` even though this model is only persisted by trusted
+    // job code today. If a future controller starts feeding `$request-&gt;all()`,
+    // mass assignment of `id` would clobber FKs/relationships.
+    protected $guarded = ['id'];
 
     protected $casts = [
         'contact' => 'array',
@@ -16,6 +19,7 @@ class WebsiteAnalysis extends Model
         'socials' => 'array',
         'brand_colors' => 'array',
         'screenshot_paths' => 'array',
+        'sections' => 'array',
         'crawled_at' => 'datetime',
         'screenshots_taken_at' => 'datetime',
     ];

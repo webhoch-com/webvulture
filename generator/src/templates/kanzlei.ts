@@ -6,6 +6,7 @@
  */
 
 import type { SiteSpec } from '../types.js';
+import { renderSeoHead } from './_seo.js';
 
 function escapeHtml(s: string): string {
   return String(s)
@@ -55,17 +56,11 @@ export function renderKanzleiPage(spec: SiteSpec, slug: string): string {
   const address = spec.contact.address ? escapeHtml(spec.contact.address) : '';
 
   return `---
-const spec = ${JSON.stringify(spec, null, 2)};
 ---
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${businessName} — ${tagline}</title>
-  <meta name="description" content="${tagline}" />
-  <meta name="robots" content="noindex, nofollow" />
-  <meta name="theme-color" content="#0f1729" />
+  ${renderSeoHead(spec, { slug, schemaKind: 'LegalService' })}
   <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
   <link href="https://fonts.bunny.net/css?family=cormorant-garamond:400,500,600,700|inter:400,500,600,700&display=swap" rel="stylesheet">
   <style>
@@ -354,8 +349,8 @@ const spec = ${JSON.stringify(spec, null, 2)};
     footer .legal a:hover { color: var(--gold); }
 
     /* ─── Reveal ─────────────────────────────────────────── */
-    .reveal { opacity: 0; transform: translateY(16px); transition: opacity .9s ease, transform .9s ease; }
-    .reveal.is-visible { opacity: 1; transform: translateY(0); }
+    .reveal { opacity: 1; transform: none; }
+    /* visible by default */
     @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1 !important; transform: none !important; } }
   </style>
 </head>

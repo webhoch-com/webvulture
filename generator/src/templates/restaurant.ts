@@ -8,6 +8,8 @@
  */
 
 import type { SiteSpec } from '../types.js';
+import { getHeroImage, getGalleryImage } from './_media.js';
+import { renderSeoHead } from './_seo.js';
 
 function escapeHtml(s: string): string {
   return String(s)
@@ -18,17 +20,16 @@ function escapeHtml(s: string): string {
     .replace(/'/g, '&#39;');
 }
 
-function heroPhoto(slug: string): string {
-  // Stable seeded photo — food/restaurant atmosphere
-  return `https://picsum.photos/seed/${encodeURIComponent(slug)}-restaurant-hero/1800/1100`;
+function heroPhoto(spec: SiteSpec, slug: string): string {
+  return getHeroImage(spec, slug, 1800, 1100);
 }
 
-function dishPhoto(slug: string, idx: number): string {
-  return `https://picsum.photos/seed/${encodeURIComponent(slug)}-dish-${idx}/600/420`;
+function dishPhoto(spec: SiteSpec, slug: string, idx: number): string {
+  return getGalleryImage(spec, slug, idx, 600, 420);
 }
 
-function galleryPhoto(slug: string, idx: number): string {
-  return `https://picsum.photos/seed/${encodeURIComponent(slug)}-gallery-${idx}/700/520`;
+function galleryPhoto(spec: SiteSpec, slug: string, idx: number): string {
+  return getGalleryImage(spec, slug, idx + 100, 700, 520);
 }
 
 export function renderRestaurantPage(spec: SiteSpec, slug: string): string {
@@ -38,7 +39,7 @@ export function renderRestaurantPage(spec: SiteSpec, slug: string): string {
   const headline = escapeHtml(spec.hero.headline);
   const subhead = escapeHtml(spec.hero.subheadline);
   const ctaText = escapeHtml(spec.hero.cta_text || 'Reservieren');
-  const heroImage = heroPhoto(slug);
+  const heroImage = heroPhoto(spec, slug);
 
   const menu = spec.menu ?? [
     {
@@ -82,17 +83,11 @@ export function renderRestaurantPage(spec: SiteSpec, slug: string): string {
   const dishCount = 4; // 4 first menu-items in the second category get a dish photo
 
   return `---
-const spec = ${JSON.stringify(spec, null, 2)};
 ---
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${businessName} — ${tagline}</title>
-  <meta name="description" content="${tagline}" />
-  <meta name="robots" content="noindex, nofollow" />
-  <meta name="theme-color" content="${escapeHtml(primary)}" />
+  ${renderSeoHead(spec, { slug, schemaKind: 'Restaurant' })}
   <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
   <link href="https://fonts.bunny.net/css?family=playfair-display:400,500,600,700,800,900|inter:400,500,600,700&display=swap" rel="stylesheet">
   <style>
@@ -345,7 +340,7 @@ const spec = ${JSON.stringify(spec, null, 2)};
     .about-img {
       aspect-ratio: 4/5; border-radius: 6px; overflow: hidden;
       box-shadow: var(--shadow);
-      background-image: url('${galleryPhoto(slug, 99)}');
+      background-image: url('${galleryPhoto(spec, slug, 99)}');
       background-size: cover; background-position: center;
     }
     .about-text h2 {
@@ -415,8 +410,8 @@ const spec = ${JSON.stringify(spec, null, 2)};
     footer .legal a:hover { color: #f4d2b6; }
 
     /* ─── Reveal animations ───────────────────────────────── */
-    .reveal { opacity: 0; transform: translateY(20px); transition: opacity .8s ease, transform .8s ease; }
-    .reveal.is-visible { opacity: 1; transform: translateY(0); }
+    .reveal { opacity: 1; transform: none; }
+    /* visible by default */
     @media (prefers-reduced-motion: reduce) {
       .reveal, .hero-text * { opacity: 1 !important; transform: none !important; }
     }
@@ -517,7 +512,7 @@ const spec = ${JSON.stringify(spec, null, 2)};
     <div class="gallery-grid">
       ${Array.from({ length: galleryCount }, (_, i) => `
         <div class="gallery-item reveal" style="transition-delay: ${i * 60}ms">
-          <img src="${galleryPhoto(slug, i + 1)}" alt="Eindruck ${i + 1}" loading="lazy" decoding="async" width="700" height="520" />
+          <img src="${galleryPhoto(spec, slug, i + 1)}" alt="Eindruck ${i + 1}" loading="lazy" decoding="async" width="700" height="520" />
         </div>
       `).join('')}
     </div>

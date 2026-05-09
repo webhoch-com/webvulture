@@ -1,6 +1,6 @@
 import { exec } from 'node:child_process';
-import { mkdir, cp, stat } from 'node:fs/promises';
-import { join, basename } from 'node:path';
+import { mkdir, cp, rm } from 'node:fs/promises';
+import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
@@ -8,7 +8,8 @@ import { readFileSync } from 'node:fs';
 const execAsync = promisify(exec);
 
 const ARTIFACTS_DIR = process.env.ARTIFACTS_DIR ?? '/tmp/wv-artifacts';
-const PREVIEW_BASE_URL = process.env.PREVIEW_BASE_URL ?? 'http://localhost:4001';
+const PREVIEW_ROOT_DOMAIN = process.env.PREVIEW_ROOT_DOMAIN ?? 'webseiten-werkstatt.at';
+const PREVIEW_SCHEME = process.env.PREVIEW_SCHEME ?? 'https';
 
 export interface BuildResult {
   artifactPath: string;
@@ -16,17 +17,22 @@ export interface BuildResult {
   previewUrl: string;
 }
 
+const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,99}$/;
+
 export async function buildAstroProject(
   prototypeVersionId: number,
   astroProjectPath: string,
+  slug: string,
 ): Promise<BuildResult> {
-  // Install deps
+  if (!SLUG_RE.test(slug)) {
+    throw new Error(`Invalid slug "${slug}" — must match ${SLUG_RE}`);
+  }
+
   await execAsync('npm install', {
     cwd: astroProjectPath,
     timeout: 120_000,
   });
 
-  // Build
   await execAsync('npx astro build', {
     cwd: astroProjectPath,
     timeout: 180_000,
@@ -35,16 +41,16 @@ export async function buildAstroProject(
 
   const distPath = join(astroProjectPath, 'dist');
 
-  // Copy artifact to persistent location
-  const artifactDir = join(ARTIFACTS_DIR, String(prototypeVersionId));
+  // Keyed by slug — matches Nginx wildcard vhost {slug}.webseiten-werkstatt.at → /var/www/.../{slug}/
+  const artifactDir = join(ARTIFACTS_DIR, slug);
+  await rm(artifactDir, { recursive: true, force: true });
   await mkdir(artifactDir, { recursive: true });
   await cp(distPath, artifactDir, { recursive: true });
 
-  // Hash the index.html as artifact fingerprint
   const indexHtml = readFileSync(join(distPath, 'index.html'));
   const artifactHash = createHash('sha256').update(indexHtml).digest('hex');
 
-  const previewUrl = `${PREVIEW_BASE_URL}/preview/${prototypeVersionId}/`;
+  const previewUrl = `${PREVIEW_SCHEME}://${slug}.${PREVIEW_ROOT_DOMAIN}/`;
 
   return {
     artifactPath: artifactDir,

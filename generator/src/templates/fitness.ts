@@ -6,6 +6,8 @@
  */
 
 import type { SiteSpec } from '../types.js';
+import { renderSeoHead } from './_seo.js';
+import { getGalleryImage, getHeroImage } from './_media.js';
 import { avatarPlaceholder, SYMBOLIC_TAG_CSS } from './_avatar.js';
 
 function escapeHtml(s: string): string {
@@ -14,8 +16,8 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-function gymPhoto(slug: string, idx: number, w = 1200, h = 800): string {
-  return `https://picsum.photos/seed/${encodeURIComponent(slug)}-gym-${idx}/${w}/${h}`;
+function gymPhoto(spec: SiteSpec, slug: string, idx: number, w = 1200, h = 800): string {
+  return getGalleryImage(spec, slug, idx, w, h);
 }
 
 export function renderFitnessPage(spec: SiteSpec, slug: string): string {
@@ -39,17 +41,11 @@ export function renderFitnessPage(spec: SiteSpec, slug: string): string {
   const address = spec.contact.address ? escapeHtml(spec.contact.address) : '';
 
   return `---
-const spec = ${JSON.stringify(spec, null, 2)};
 ---
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${businessName} — ${escapeHtml(tagline)}</title>
-  <meta name="description" content="${escapeHtml(tagline)}" />
-  <meta name="robots" content="noindex, nofollow" />
-  <meta name="theme-color" content="#0a0a0a" />
+  ${renderSeoHead(spec, { slug, schemaKind: 'HealthAndBeautyBusiness' })}
   <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
   <link href="https://fonts.bunny.net/css?family=barlow-condensed:500,600,700,800,900|inter:400,500,600,700&display=swap" rel="stylesheet">
   <style>
@@ -161,6 +157,7 @@ const spec = ${JSON.stringify(spec, null, 2)};
       transition: background .2s, transform .2s;
     }
     .nav-cta:hover { background: var(--accent-dim); transform: translateY(-1px); }
+    @media (max-width: 879px) { .nav-cta { display: none; } }
 
     /* ─── Hero — full-bleed photo + giant type ──────────── */
     .hero {
@@ -321,8 +318,8 @@ const spec = ${JSON.stringify(spec, null, 2)};
     footer .legal { display: flex; gap: 1.5rem; justify-content: center; margin-top: 1rem; flex-wrap: wrap; }
     footer .legal a:hover { color: var(--accent); }
 
-    .reveal { opacity: 0; transform: translateY(20px); transition: opacity .8s ease, transform .8s ease; }
-    .reveal.is-visible { opacity: 1; transform: translateY(0); }
+    .reveal { opacity: 1; transform: none; }
+    /* visible by default */
     @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1 !important; transform: none !important; } }
   </style>
 </head>
@@ -356,7 +353,7 @@ const spec = ${JSON.stringify(spec, null, 2)};
 </header>
 
 <section class="hero">
-  <div class="hero-img" style="background-image: url('${gymPhoto(slug, 0, 1800, 1200)}');"></div>
+  <div class="hero-img" style="background-image: url('${getHeroImage(spec, slug, 1800, 1200)}');"></div>
   <div class="hero-text">
     <span class="hero-eyebrow">${escapeHtml(tagline.slice(0, 60))}</span>
     <h1>${escapeHtml(headline.replace(/\s*(\S+\.?)$/, '|$1|')).replace(/\|([^|]+)\|/, '<em>$1</em>')}</h1>

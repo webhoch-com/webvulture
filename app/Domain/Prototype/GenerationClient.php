@@ -2,6 +2,9 @@
 
 namespace App\Domain\Prototype;
 
+use App\Exceptions\GeneratorUnavailableException;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -13,6 +16,7 @@ use Illuminate\Support\Facades\Log;
 class GenerationClient
 {
     public function __construct(
+        protected GeneratorHealthProbe $probe,
         protected ?string $baseUrl = null,
         protected ?string $secret = null,
     ) {
@@ -20,66 +24,81 @@ class GenerationClient
         $this->secret ??= (string) config('services.generator.secret', '');
     }
 
-    /**
-     * POST /generate — kick off Claude generation + Astro build.
-     * Returns immediately with 202 + { job_id }.
-     * Node calls back via webhook when done.
-     */
-    public function generate(int $prototypeVersionId, array $rebuildPackage): string
+    public function generate(int $prototypeVersionId, string $slug, array $rebuildPackage): string
     {
+        $this->guard();
+
         $payload = [
             'prototype_version_id' => $prototypeVersionId,
+            'slug' => $slug,
             'rebuild_package' => $rebuildPackage,
             'webhook_url' => route('webhooks.generation.completed'),
         ];
 
-        $response = $this->request()
-            ->post("{$this->baseUrl}/generate", $payload)
-            ->throw();
-
-        return $response->json('job_id', '');
+        return $this->dispatch('/generate', $payload);
     }
 
-    /**
-     * POST /build — request Astro build of an already-generated project.
-     */
-    public function build(int $prototypeVersionId, string $astroProjectPath): string
+    public function build(int $prototypeVersionId, string $slug, string $astroProjectPath): string
     {
+        $this->guard();
+
         $payload = [
             'prototype_version_id' => $prototypeVersionId,
+            'slug' => $slug,
             'astro_project_path' => $astroProjectPath,
             'webhook_url' => route('webhooks.build.completed'),
         ];
 
-        $response = $this->request()
-            ->post("{$this->baseUrl}/build", $payload)
-            ->throw();
-
-        return $response->json('job_id', '');
+        return $this->dispatch('/build', $payload);
     }
 
     public function healthCheck(): bool
     {
-        try {
-            return $this->request()->get("{$this->baseUrl}/health")->successful();
-        } catch (\Throwable $e) {
-            Log::warning("Generator health check failed: {$e->getMessage()}");
-            return false;
+        return $this->probe->isHealthy();
+    }
+
+    protected function guard(): void
+    {
+        if ($this->secret === '') {
+            throw new GeneratorUnavailableException('GENERATOR_SECRET is not configured.');
+        }
+
+        if (! $this->probe->isHealthy()) {
+            throw new GeneratorUnavailableException(
+                $this->probe->isCircuitOpen()
+                    ? 'Generator circuit is open; refusing to call until '.date('H:i:s', $this->probe->circuitOpenUntil()).'.'
+                    : 'Generator service is currently unhealthy.'
+            );
         }
     }
 
-    protected function request(): \Illuminate\Http\Client\PendingRequest
+    protected function dispatch(string $path, array $payload): string
     {
         $timestamp = (string) time();
-        return Http::withHeaders([
-            'Content-Type' => 'application/json',
-            'X-WV-Timestamp' => $timestamp,
-            'X-WV-Signature' => $this->sign($timestamp),
-        ])->timeout(30)->acceptJson();
-    }
+        $body = json_encode($payload, JSON_UNESCAPED_SLASHES);
+        $signature = hash_hmac('sha256', $timestamp.'.'.$body, $this->secret);
 
-    protected function sign(string $timestamp): string
-    {
-        return hash_hmac('sha256', $timestamp, $this->secret);
+        try {
+            $response = Http::withHeaders([
+                'Content-Type' => 'application/json',
+                'X-WV-Timestamp' => $timestamp,
+                'X-WV-Signature' => $signature,
+            ])
+                ->timeout(30)
+                ->acceptJson()
+                ->withBody($body, 'application/json')
+                ->post("{$this->baseUrl}{$path}")
+                ->throw();
+
+            $this->probe->recordSuccess();
+
+            return (string) $response->json('job_id', '');
+        } catch (ConnectionException|RequestException $e) {
+            // Only network/HTTP errors should open the circuit.
+            // Programming bugs (TypeError, JsonException) propagate without poisoning the breaker.
+            $this->probe->recordFailure();
+            Log::error("Generator call to {$path} failed: {$e->getMessage()}");
+            throw $e;
+        }
     }
 }

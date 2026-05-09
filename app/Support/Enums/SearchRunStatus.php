@@ -18,4 +18,14 @@ enum SearchRunStatus: string
             self::Failed => 'badge-error',
         };
     }
+
+    public function label(): string
+    {
+        return match ($this) {
+            self::Queued => 'In Warteschlange',
+            self::Running => 'Läuft',
+            self::Done => 'Erledigt',
+            self::Failed => 'Fehlgeschlagen',
+        };
+    }
 }

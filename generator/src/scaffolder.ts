@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { SiteSpec } from './types.js';
+import { getGalleryImage } from './templates/_media.js';
 
 const PROJECTS_DIR = process.env.PROJECTS_DIR ?? '/tmp/wv-projects';
 
@@ -16,8 +17,17 @@ function escapeHtml(s: string): string {
  * Convert any hex/rgb to OKLCH-like derived shades.
  * We just provide CSS custom properties; the browser handles color-mix.
  */
+/**
+ * Strict hex validation. The previous `startsWith('#')` check let
+ * `#abc; } body { display:none } /*` through and would have allowed CSS
+ * injection if `primary_color` ever bypassed the orchestrator's
+ * `pickPrimaryColor` (e.g. via webhook tampering or future code paths
+ * that set the spec directly). Allow only #RGB and #RRGGBB.
+ */
+const HEX_COLOR_RE = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+
 function brandPalette(primary: string): string {
-  const safe = primary.startsWith('#') ? primary : '#6366f1';
+  const safe = HEX_COLOR_RE.test(primary) ? primary : '#6366f1';
   return `--primary: ${safe};
     --primary-50: color-mix(in oklch, ${safe} 8%, white);
     --primary-100: color-mix(in oklch, ${safe} 16%, white);
@@ -213,17 +223,33 @@ function renderFaqSection(faqs: Array<{ question: string; answer: string }>): st
   </section>`;
 }
 
-function renderVereinGallery(): string {
-  // Seeded stock photos via picsum — stable URLs, light tones for verein.
-  const seeds = ['verein-musik-1', 'verein-event-2', 'verein-team-3', 'verein-konzert-4', 'verein-region-5', 'verein-jugend-6'];
-  return seeds.map((seed, i) => `
+/**
+ * Effectively dead code — `layout_kind === 'verein'` now routes through
+ * `templates/verein.ts` which uses the strict `getGalleryImage()` helper
+ * from `_media.ts`. We keep this stub purely so any orphan `renderAstroPage`
+ * call paths don't crash; gallery rendering is delegated to the safe helper.
+ *
+ * Previously this function inlined `gallery[i]` directly into `<img src>`
+ * with no escape, which would have been stored XSS the moment a future
+ * code path reactivated it with attacker-controlled `gallery` URLs.
+ */
+function renderVereinGallery(spec?: SiteSpec, slug?: string): string {
+  if (!spec || !slug) return '';
+  const count = spec.media?.gallery?.length ?? 0;
+  if (count === 0) return '';
+  const items: string[] = [];
+  for (let i = 0; i < Math.min(count, 6); i++) {
+    const src = getGalleryImage(spec, slug, i, 600, 400);
+    if (!src) continue;
+    items.push(`
     <div class="gallery-item reveal" style="animation-delay: ${i * 60}ms">
-      <img src="https://picsum.photos/seed/${seed}/600/400"
+      <img src="${src}"
            alt="Vereinsleben — Eindruck ${i + 1}"
            loading="lazy" decoding="async"
            width="600" height="400" />
-    </div>
-  `).join('\n');
+    </div>`);
+  }
+  return items.join('\n');
 }
 
 function renderTeamSection(team: Array<{ name: string; role: string; seed?: string }>): string {
@@ -496,7 +522,10 @@ const spec = ${JSON.stringify(spec, null, 2)};
   <meta name="twitter:title" content="${escapeHtml(ogTitle)}" />
   <meta name="twitter:description" content="${escapeHtml(description.slice(0, 200))}" />
 
-  <link rel="icon" href="data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><circle cx='12' cy='12' r='10' fill='${spec.brand.primary_color}'/></svg>`)}" />
+  ${spec.media?.favicon
+    ? `<link rel="icon" href="${escapeHtml(spec.media.favicon)}" /><link rel="apple-touch-icon" href="${escapeHtml(spec.media.favicon)}" />`
+    : `<link rel="icon" href="data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><circle cx='12' cy='12' r='10' fill='${HEX_COLOR_RE.test(spec.brand.primary_color) ? spec.brand.primary_color : '#6366f1'}'/></svg>`)}" />`
+  }
 
   <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
   <link href="https://fonts.bunny.net/css?family=bricolage-grotesque:400,500,600,700,800|inter:400,500,600,700&display=swap" rel="stylesheet">
@@ -1142,7 +1171,7 @@ ${layoutKind === 'verein' ? `
       <h2>Vereinsleben in Bildern</h2>
     </div>
     <div class="gallery-grid">
-      ${renderVereinGallery()}
+      ${renderVereinGallery(spec, slug)}
     </div>
   </div>
 </section>
@@ -1615,6 +1644,18 @@ export async function scaffoldAstroProject(
   } else if (layoutKind === 'tier') {
     const { renderTierPage } = await import('./templates/tier.js');
     indexHtml = renderTierPage(spec, slug);
+  } else if (layoutKind === 'golfclub') {
+    const { renderGolfclubPage } = await import('./templates/golfclub.js');
+    indexHtml = renderGolfclubPage(spec, slug);
+  } else if (layoutKind === 'verein_musik') {
+    const { renderVereinMusikPage } = await import('./templates/verein-musik.js');
+    indexHtml = renderVereinMusikPage(spec, slug);
+  } else if (layoutKind === 'verein_sport') {
+    const { renderVereinSportPage } = await import('./templates/verein-sport.js');
+    indexHtml = renderVereinSportPage(spec, slug);
+  } else if (layoutKind === 'verein_tradition') {
+    const { renderVereinTraditionPage } = await import('./templates/verein-tradition.js');
+    indexHtml = renderVereinTraditionPage(spec, slug);
   } else if (layoutKind === 'verein') {
     const { renderVereinPage } = await import('./templates/verein.js');
     indexHtml = renderVereinPage(spec, slug);

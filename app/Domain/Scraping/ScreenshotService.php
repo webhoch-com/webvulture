@@ -29,20 +29,24 @@ class ScreenshotService
         // ─── Full-page shots ────────────────────────────────────────────────
         $fullPageCaptures = [
             'homepage-desktop' => ['width' => 1440, 'height' => 900,  'fullPage' => true,  'mobile' => false],
-            'homepage-mobile'  => ['width' => 390,  'height' => 844,  'fullPage' => true,  'mobile' => true],
-            'homepage-atf'     => ['width' => 1440, 'height' => 900,  'fullPage' => false, 'mobile' => false],
+            'homepage-mobile' => ['width' => 390,  'height' => 844,  'fullPage' => true,  'mobile' => true],
+            'homepage-atf' => ['width' => 1440, 'height' => 900,  'fullPage' => false, 'mobile' => false],
         ];
 
         foreach ($fullPageCaptures as $name => $opts) {
             try {
-                $path    = $this->store->screenshotPath($leadId, "{$name}.png");
+                $path = $this->store->screenshotPath($leadId, "{$name}.png");
                 $absPath = $this->store->absolutePath($path);
                 @mkdir(dirname($absPath), 0755, true);
 
                 $shot = $this->baseShot($url, $chromePath, $opts['width'], $opts['height']);
 
-                if ($opts['fullPage']) $shot->fullPage();
-                if ($opts['mobile'])   $shot->mobile()->touch();
+                if ($opts['fullPage']) {
+                    $shot->fullPage();
+                }
+                if ($opts['mobile']) {
+                    $shot->mobile()->touch();
+                }
 
                 $shot->save($absPath);
                 $screenshots[$name] = $path;
@@ -98,7 +102,7 @@ class ScreenshotService
             $i = $section['index'];
             $name = 'section-'.$i;
             try {
-                $path    = $this->store->screenshotPath($leadId, "{$name}.png");
+                $path = $this->store->screenshotPath($leadId, "{$name}.png");
                 $absPath = $this->store->absolutePath($path);
                 @mkdir(dirname($absPath), 0755, true);
 
@@ -145,21 +149,23 @@ class ScreenshotService
             return self::$resolvedChromePath;
         }
 
-        if ($envPath = env('CHROME_PATH')) {
-            return self::$resolvedChromePath = $envPath;
+        if ($envPath = config('services.browsershot.chrome_path')) {
+            return self::$resolvedChromePath = (string) $envPath;
         }
 
         try {
-            $nodeBin = env('NODE_BINARY', 'node');
+            $nodeBin = (string) config('services.browsershot.node_binary', 'node');
             $output = shell_exec(
                 "{$nodeBin} -e \"try{console.log(require('puppeteer').executablePath())}catch(e){process.exit(1)}\" 2>/dev/null"
             );
             $path = trim((string) $output);
             if ($path && file_exists($path)) {
                 Log::info("Using puppeteer Chrome: {$path}");
+
                 return self::$resolvedChromePath = $path;
             }
-        } catch (\Throwable) {}
+        } catch (\Throwable) {
+        }
 
         $linuxPaths = [
             '/usr/bin/chromium',

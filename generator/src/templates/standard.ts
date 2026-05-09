@@ -6,6 +6,8 @@
  */
 
 import type { SiteSpec } from '../types.js';
+import { renderSeoHead } from './_seo.js';
+import { getGalleryImage } from './_media.js';
 
 function escapeHtml(s: string): string {
   return String(s)
@@ -13,8 +15,8 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-function workPhoto(slug: string, idx: number, w = 800, h = 600): string {
-  return `https://picsum.photos/seed/${encodeURIComponent(slug)}-std-${idx}/${w}/${h}`;
+function workPhoto(spec: SiteSpec, slug: string, idx: number, w = 800, h = 600): string {
+  return getGalleryImage(spec, slug, idx, w, h);
 }
 
 export function renderStandardPage(spec: SiteSpec, slug: string): string {
@@ -45,20 +47,14 @@ export function renderStandardPage(spec: SiteSpec, slug: string): string {
   ];
 
   return `---
-const spec = ${JSON.stringify(spec, null, 2)};
 ---
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${businessName} — ${escapeHtml(tagline)}</title>
-  <meta name="description" content="${escapeHtml(tagline)}" />
-  <meta name="robots" content="noindex, nofollow" />
-  <meta name="theme-color" content="#4f46e5" />
+  ${renderSeoHead(spec, { slug, schemaKind: 'LocalBusiness' })}
   <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
   <link href="https://fonts.bunny.net/css?family=inter:400,500,600,700,800|jetbrains-mono:400,500&display=swap" rel="stylesheet">
-  <style>
+  <style is:global>
     :root {
       --bg: #fbfbfd;            /* almost-white */
       --bg-2: #f3f4f8;
@@ -153,6 +149,7 @@ const spec = ${JSON.stringify(spec, null, 2)};
     }
     .nav-cta { background: var(--ink); color: #fff; padding: 0.7rem 1.3rem; border-radius: 8px; font-weight: 600; font-size: 0.88rem; transition: background .2s, transform .2s; }
     .nav-cta:hover { background: var(--primary); transform: translateY(-1px); }
+    @media (max-width: 879px) { .nav-cta { display: none; } }
 
     /* ─── Hero — asymmetric grid ─────────────────────────── */
     .hero { padding: clamp(4rem, 8vw, 7rem) 1.5rem clamp(5rem, 9vw, 8rem); position: relative; overflow: hidden; }
@@ -324,14 +321,77 @@ const spec = ${JSON.stringify(spec, null, 2)};
     .contact-row .lbl { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(255,255,255,0.55); margin-bottom: 0.2rem; }
     .contact-row .val { color: #fff; font-weight: 500; font-size: 1rem; line-height: 1.4; }
 
-    footer { background: var(--bg); padding: 3rem 1.5rem; text-align: center; font-size: 0.88rem; color: var(--ink-3); border-top: 1px solid var(--rule); }
-    footer .brand { font-weight: 700; font-size: 1.15rem; color: var(--ink); margin-bottom: 0.5rem; display: inline-flex; align-items: center; gap: 0.55rem; }
-    footer .brand .dot { width: 8px; height: 8px; border-radius: 2px; background: var(--primary); transform: rotate(45deg); }
-    footer .legal { display: flex; gap: 1.5rem; justify-content: center; margin-top: 1rem; flex-wrap: wrap; }
-    footer .legal a:hover { color: var(--primary); }
+    /* ─── Footer — multi-column premium ────────────────────── */
+    footer.site-footer {
+      background: linear-gradient(180deg, var(--ink) 0%, #06080d 100%);
+      color: rgba(255,255,255,0.75);
+      padding: clamp(3rem, 5vw, 4.5rem) 1.5rem 2rem;
+      position: relative; overflow: hidden;
+      isolation: isolate;
+    }
+    .site-footer::before {
+      content: ""; position: absolute; top: -100px; right: -100px;
+      width: 320px; height: 320px; border-radius: 50%;
+      background: radial-gradient(circle, var(--primary) 0%, transparent 70%);
+      opacity: 0.16; pointer-events: none; z-index: -1;
+    }
+    .site-footer::after {
+      content: ""; position: absolute; bottom: -80px; left: -80px;
+      width: 240px; height: 240px; border-radius: 50%;
+      background: radial-gradient(circle, var(--accent) 0%, transparent 70%);
+      opacity: 0.12; pointer-events: none; z-index: -1;
+    }
+    .footer-inner { max-width: 1300px; margin: 0 auto; }
+    .footer-grid {
+      display: grid; gap: 3rem;
+      grid-template-columns: 1fr;
+      padding-bottom: 2.5rem;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    @media (min-width: 720px) { .footer-grid { grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: 2.5rem; } }
+    .footer-col h4 {
+      font-family: var(--mono); font-size: 0.74rem; letter-spacing: 0.16em;
+      text-transform: uppercase; font-weight: 600;
+      color: rgba(255,255,255,0.55);
+      margin: 0 0 1.1rem;
+    }
+    .footer-col ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.6rem; }
+    .footer-col a, .footer-col li { color: rgba(255,255,255,0.78); font-size: 0.94rem; text-decoration: none; transition: color .2s; line-height: 1.5; }
+    .footer-col a:hover { color: var(--primary); }
+    .footer-col .ic { width: 16px; height: 16px; flex-shrink: 0; opacity: 0.6; }
+    .footer-col li { display: inline-flex; align-items: center; gap: 0.55rem; }
+    .footer-brand h3 {
+      font-weight: 700; font-size: 1.6rem; letter-spacing: -0.02em;
+      color: #fff; margin: 0 0 0.65rem;
+      display: inline-flex; align-items: center; gap: 0.6rem;
+    }
+    .footer-brand .dot { width: 10px; height: 10px; border-radius: 3px; background: var(--primary); transform: rotate(45deg); }
+    .footer-brand p { font-size: 0.95rem; color: rgba(255,255,255,0.62); line-height: 1.65; max-width: 36ch; margin: 0 0 1.25rem; }
+    .footer-cta {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      padding: 0.7rem 1.25rem;
+      background: linear-gradient(135deg, var(--primary), #6366f1);
+      color: #fff; border-radius: 999px;
+      font-weight: 600; font-size: 0.9rem;
+      text-decoration: none;
+      transition: transform .25s, box-shadow .25s;
+      box-shadow: 0 8px 22px -10px rgba(99,102,241,0.55);
+    }
+    .footer-cta:hover { transform: translateY(-2px); color: #fff; box-shadow: 0 12px 28px -10px rgba(99,102,241,0.7); }
 
-    .reveal { opacity: 0; transform: translateY(20px); transition: opacity .8s ease, transform .8s ease; }
-    .reveal.is-visible { opacity: 1; transform: translateY(0); }
+    .footer-bottom {
+      display: flex; flex-wrap: wrap; gap: 1rem; justify-content: space-between; align-items: center;
+      padding-top: 2rem;
+      font-size: 0.84rem; color: rgba(255,255,255,0.5);
+    }
+    .footer-credit a { color: rgba(255,255,255,0.65); text-decoration: none; font-weight: 600; border-bottom: 1px solid rgba(255,255,255,0.18); transition: all .2s; }
+    .footer-credit a:hover { color: var(--primary); border-color: var(--primary); }
+    .footer-legal { display: flex; gap: 1.5rem; flex-wrap: wrap; }
+    .footer-legal a { color: rgba(255,255,255,0.55); text-decoration: none; transition: color .2s; }
+    .footer-legal a:hover { color: var(--primary); }
+
+    .reveal { opacity: 1; transform: none; }
+    /* visible by default */
     @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1 !important; transform: none !important; } }
   </style>
 </head>
@@ -428,7 +488,7 @@ const spec = ${JSON.stringify(spec, null, 2)};
       </ul>
     </div>
     <div class="showcase-image reveal">
-      <img src="${workPhoto(slug, 1, 800, 1000)}" alt="" loading="lazy">
+      <img src="${workPhoto(spec, slug, 1, 800, 1000)}" alt="" loading="lazy">
     </div>
   </div>
 </section>
@@ -486,12 +546,62 @@ const spec = ${JSON.stringify(spec, null, 2)};
   </div>
 </section>
 
-<footer>
-  <div class="brand"><span class="dot"></span>${businessName}</div>
-  <div>${escapeHtml(tagline)}</div>
-  <div class="legal">
-    <a href="/impressum">Impressum</a>
-    <a href="/datenschutz">Datenschutz</a>
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="footer-grid">
+      <div class="footer-col footer-brand">
+        <h3><span class="dot"></span>${businessName}</h3>
+        <p>${escapeHtml(tagline)}</p>
+        <a href="#kontakt" class="footer-cta">
+          ${ctaText}
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+        </a>
+      </div>
+
+      <div class="footer-col">
+        <h4>Navigation</h4>
+        <ul>
+          <li><a href="#leistungen">Leistungen</a></li>
+          <li><a href="#ablauf">Ablauf</a></li>
+          <li><a href="#ueber">Über uns</a></li>
+          <li><a href="#kontakt">Kontakt</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h4>Kontakt</h4>
+        <ul>
+          ${phone ? `<li>
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+            <a href="tel:${phone.replace(/\s/g, '')}">${phone}</a>
+          </li>` : ''}
+          ${email ? `<li>
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+            <a href="mailto:${email}">${email}</a>
+          </li>` : ''}
+          ${address ? `<li style="align-items:flex-start">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="margin-top:0.2rem"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            <span>${address}</span>
+          </li>` : ''}
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h4>Rechtliches</h4>
+        <ul>
+          <li><a href="/impressum">Impressum</a></li>
+          <li><a href="/datenschutz">Datenschutz</a></li>
+          ${email ? `<li><a href="mailto:${email}?subject=AGB">AGB anfragen</a></li>` : ''}
+        </ul>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <span>&copy; ${new Date().getFullYear()} ${businessName} · Alle Rechte vorbehalten.</span>
+      <span class="footer-credit">
+        Demo erstellt von <a href="https://webhoch.com" target="_blank" rel="noopener">Webagentur Hochmeir e.U.</a>
+      </span>
+    </div>
   </div>
 </footer>
 

@@ -10,6 +10,7 @@ enum LeadStatus: string
     case Prototyped = 'prototyped';
     case Approved = 'approved';
     case Rejected = 'rejected';
+    case Irrelevant = 'irrelevant';
     case Sent = 'sent';
     case Replied = 'replied';
 
@@ -22,6 +23,7 @@ enum LeadStatus: string
             self::Prototyped => 'badge-primary',
             self::Approved => 'badge-success',
             self::Rejected => 'badge-error',
+            self::Irrelevant => 'badge-neutral',
             self::Sent => 'badge-warning',
             self::Replied => 'badge-success badge-outline',
         };
@@ -29,6 +31,16 @@ enum LeadStatus: string
 
     public function label(): string
     {
-        return ucfirst($this->value);
+        return match ($this) {
+            self::New => 'Neu',
+            self::Scraped => 'Gescraped',
+            self::Enriched => 'Angereichert',
+            self::Prototyped => 'Prototyp ✓',
+            self::Approved => 'Freigegeben',
+            self::Rejected => 'Abgelehnt',
+            self::Irrelevant => 'Irrelevant',
+            self::Sent => 'Versendet',
+            self::Replied => 'Beantwortet',
+        };
     }
 }

@@ -3,17 +3,20 @@
 namespace App\Jobs;
 
 use App\Domain\Scraping\ScreenshotService;
+use App\Events\LeadStatusChanged;
 use App\Models\Lead;
-use App\Models\WebsiteAnalysis;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\Log;
 
 class TakeScreenshotsJob implements ShouldQueue
 {
     use Queueable;
 
     public int $tries = 2;
+
     public array $backoff = [60, 300];
+
     public int $timeout = 120;
 
     public function __construct(public int $leadId) {}
@@ -23,14 +26,13 @@ class TakeScreenshotsJob implements ShouldQueue
         $lead = Lead::findOrFail($this->leadId);
         $analysis = $lead->websiteAnalysis;
 
-        if (!$analysis || !$lead->website) {
+        if (! $analysis || ! $lead->website) {
             return;
         }
 
-        // Skip if fresh screenshots already exist
         if ($analysis->screenshots_taken_at &&
             $analysis->screenshots_taken_at->gt(now()->subDays(7)) &&
-            !empty($analysis->screenshot_paths)) {
+            ! empty($analysis->screenshot_paths)) {
             return;
         }
 
@@ -41,5 +43,13 @@ class TakeScreenshotsJob implements ShouldQueue
             'screenshot_paths' => $screenshots,
             'screenshots_taken_at' => now(),
         ]);
+
+        LeadStatusChanged::dispatch($lead->id, $lead->status->value);
+    }
+
+    public function failed(\Throwable $e): void
+    {
+        $errorId = uniqid('screenshot-fail-', true);
+        Log::error("TakeScreenshotsJob failed [{$errorId}] lead={$this->leadId}: {$e->getMessage()}");
     }
 }

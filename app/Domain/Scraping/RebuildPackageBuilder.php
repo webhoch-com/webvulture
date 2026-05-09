@@ -13,7 +13,7 @@ use App\Models\Lead;
  *   "version": 1,
  *   "generated_at": "ISO8601",
  *   "business": { name, category, city, address, phone, website, rating, review_count },
- *   "extracted": { title, meta_description, contact, services, socials, text_content },
+ *   "extracted": { title, meta_description, contact, services, socials, text_content, images: [{src, alt}] },
  *   "screenshots": [ { name, path, slot } ],
  *   "logo_url": null|string,
  *   "brand_colors": [],
@@ -22,13 +22,24 @@ use App\Models\Lead;
  */
 class RebuildPackageBuilder
 {
-    public function __construct(protected LeadStorageService $store) {}
+    public function __construct(
+        protected LeadStorageService $store,
+        protected AssetMirror $mirror,
+    ) {}
 
     public function build(Lead $lead): array
     {
         $lead->loadMissing(['websiteAnalysis', 'latestEnrichment']);
         $analysis = $lead->websiteAnalysis;
         $enrichment = $lead->latestEnrichment;
+
+        // Mirror remote image URLs into our public storage so the demo doesn't
+        // hot-link to the prospect's domain (per marketing-consistency audit 2A).
+        // URLs that fail to mirror are dropped from the package.
+        $urlMap = $analysis ? $this->mirror->mirror($analysis) : [];
+        $mirroredImages = $analysis ? $this->mirror->rewriteImages($analysis->images ?? [], $urlMap) : [];
+        $mirroredLogo = $this->mirror->rewriteOne($analysis?->logo_url, $urlMap);
+        $mirroredFavicon = $this->mirror->rewriteOne($analysis?->favicon_url, $urlMap);
 
         $screenshots = $analysis?->screenshot_paths
             ? $this->formatScreenshots((array) $analysis->screenshot_paths)
@@ -57,8 +68,11 @@ class RebuildPackageBuilder
                 'text_content' => $analysis?->text_content
                     ? mb_substr($analysis->text_content, 0, 6000)
                     : null,
+                'sections' => $this->cleanSections($analysis?->sections ?? []),
+                'images' => $this->filterImages($mirroredImages),
             ],
-            'logo_url' => $analysis?->logo_url,
+            'logo_url' => $mirroredLogo,       // mirrored URL on our domain (or null)
+            'favicon_url' => $mirroredFavicon, // mirrored URL on our domain (or null)
             'brand_colors' => $analysis?->brand_colors ?? [],
             'screenshots' => $screenshots,
             'generation_params' => [
@@ -80,6 +94,109 @@ class RebuildPackageBuilder
         return $package;
     }
 
+    /**
+     * Reduce raw scraped image list to assets usable in a rebuilt site:
+     * - Strict scheme allowlist (https? or absolute path) — rejects data:,
+     *   javascript:, vbscript:, file://, gopher:// and any case-variant.
+     * - Reject any URL containing characters that could break out of an
+     *   HTML attribute or CSS url() context downstream.
+     * - Drop SVG/GIF (rare for hero/gallery, mostly icons)
+     * - Drop tracking pixels & icons by URL hint
+     * - Cap each URL to 2048 chars and the result list to 12 entries.
+     *
+     * Each entry: { src, alt }.
+     */
+    protected function filterImages(array $images): array
+    {
+        $skipPatterns = [
+            '/\.svg(\?|$)/i',
+            '/\.gif(\?|$)/i',
+            '/sprite/i',
+            '/pixel/i',
+            '/spacer/i',
+            '/transparent/i',
+            '/1x1/i',
+            '/google-analytics/i',
+            '/facebook\.com\/tr/i',
+        ];
+
+        $filtered = [];
+        foreach ($images as $img) {
+            $src = is_array($img) ? ($img['src'] ?? null) : null;
+            if (! is_string($src) || strlen($src) === 0 || strlen($src) > 2048) {
+                continue;
+            }
+            // Strict scheme allowlist (case-insensitive). Rejects data:, DATA:,
+            // JaVaScRiPt:, vbscript:, file://, gopher://, mailto:, etc.
+            if (! preg_match('#^(https?://|/)#i', $src)) {
+                continue;
+            }
+            // Reject any URL containing characters that would break the HTML
+            // attribute or CSS url() context downstream.
+            if (preg_match('/["\'<>\\\\\s`]/', $src)) {
+                continue;
+            }
+            foreach ($skipPatterns as $pattern) {
+                if (preg_match($pattern, $src)) {
+                    continue 2;
+                }
+            }
+            $filtered[] = [
+                'src' => $src,
+                'original_src' => is_array($img) ? (string) ($img['original_src'] ?? '') : '',
+                'alt' => is_array($img) ? mb_substr((string) ($img['alt'] ?? ''), 0, 200) : '',
+            ];
+            if (count($filtered) >= 12) {
+                break;
+            }
+        }
+
+        return $filtered;
+    }
+
+    /**
+     * Sanitize the scraped section list before it leaves PHP.
+     *
+     * Each entry is expected as ['title' => string, 'level' => int, 'body' => string].
+     * Anything malformed or oversized is dropped — these end up rendered into HTML
+     * inside the demo, so any HTML/control chars must be stripped server-side
+     * even though the templates also escape on render. Defence-in-depth.
+     */
+    protected function cleanSections(array $raw): array
+    {
+        $clean = [];
+        foreach ($raw as $entry) {
+            if (! is_array($entry)) {
+                continue;
+            }
+            $title = is_string($entry['title'] ?? null) ? trim($entry['title']) : '';
+            $body = is_string($entry['body'] ?? null) ? trim($entry['body']) : '';
+            // Clamp to the valid HTML heading range. The extractor only emits
+            // 1-3 today, but historic JSON or a future rewrite must not be
+            // able to push out-of-range values that downstream renderers
+            // might trust.
+            $level = is_int($entry['level'] ?? null) ? max(1, min(6, $entry['level'])) : 2;
+
+            if ($title === '' || $body === '') {
+                continue;
+            }
+            // Strip any HTML that survived (the extractor uses textContent,
+            // so this is paranoia — but cheap).
+            $title = strip_tags($title);
+            $body = strip_tags($body);
+
+            $title = mb_substr($title, 0, 120);
+            $body = mb_substr($body, 0, 1600);
+
+            $clean[] = ['title' => $title, 'level' => $level, 'body' => $body];
+            if (count($clean) >= 8) {
+                break;
+            }
+        }
+
+        return $clean;
+    }
+
     protected function formatScreenshots(array $paths): array
     {
         $slots = [
@@ -96,6 +213,7 @@ class RebuildPackageBuilder
                 'slot' => $slots[$name] ?? $name,
             ];
         }
+
         return $result;
     }
 }

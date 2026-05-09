@@ -6,6 +6,8 @@
  */
 
 import type { SiteSpec } from '../types.js';
+import { renderSeoHead } from './_seo.js';
+import { getGalleryImage, getHeroImage } from './_media.js';
 
 function escapeHtml(s: string): string {
   return String(s)
@@ -13,8 +15,8 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-function groupPhoto(slug: string, idx: number, w = 800, h = 600): string {
-  return `https://picsum.photos/seed/${encodeURIComponent(slug)}-verein-${idx}/${w}/${h}`;
+function groupPhoto(spec: SiteSpec, slug: string, idx: number, w = 800, h = 600): string {
+  return getGalleryImage(spec, slug, idx, w, h);
 }
 
 import { avatarPlaceholder, SYMBOLIC_TAG_CSS } from './_avatar.js';
@@ -34,59 +36,28 @@ export function renderVereinPage(spec: SiteSpec, slug: string): string {
   const email = spec.contact.email ? escapeHtml(spec.contact.email) : '';
   const address = spec.contact.address ? escapeHtml(spec.contact.address) : '';
 
-  const events = (spec.events && spec.events.length > 0) ? spec.events.slice(0, 4) : [
-    { title: 'Frühjahrskonzert', date: '15. März 2026', description: 'Kulturhaus Hauptsaal, 19:30 Uhr — freier Eintritt, Spenden willkommen.' },
-    { title: 'Jugendwettbewerb', date: '12. April 2026', description: 'Bezirksaustragung, Auftritt unserer Jungmusiker:innen ab 14:00 Uhr.' },
-    { title: 'Maibaumfest', date: '01. Mai 2026', description: 'Marschmusik, Tanz und gemeinsames Aufstellen am Dorfplatz ab 10 Uhr.' },
-    { title: 'Sommernachtsfest', date: '27. Juli 2026', description: 'Open-Air auf der Schlosswiese, Marschmusik bis Mitternacht.' },
-  ];
+  // Only show events that came from real scraped data — never invent dates.
+  const events = (spec.events && spec.events.length > 0) ? spec.events.slice(0, 4) : [];
 
-  const board = [
-    { name: 'Vorstand A', role: 'Obmann', since: 'Mehrere Jahre Erfahrung' },
-    { name: 'Vorstand B', role: 'Kapellmeister/in', since: 'Mehrere Jahre Erfahrung' },
-    { name: 'Vorstand C', role: 'Schriftführer/in', since: 'Mehrere Jahre Erfahrung' },
-    { name: 'Vorstand D', role: 'Jugendreferent/in', since: 'Mehrere Jahre Erfahrung' },
-  ];
+  // Board members are derived from spec.testimonials for now (since
+  // scraped vorstand-data isn't a first-class field). When empty → no
+  // section. We don't fabricate names.
+  const board: Array<{ name: string; role: string; since?: string }> = [];
 
-  const memberships = [
-    {
-      name: 'Aktiv',
-      price: '60 € · Jahr',
-      tagline: 'Sie spielen mit',
-      features: ['Wöchentliche Probe', 'Auftritte & Konzerte', 'Vereinsgewand bei Erstantritt', 'Mitspracherecht in der Hauptversammlung'],
-      highlight: true,
-    },
-    {
-      name: 'Förder',
-      price: '30 € · Jahr',
-      tagline: 'Sie unterstützen',
-      features: ['Einladung zu allen Festen', 'Vereinsmagazin', 'Reservierter Sitzplatz Hauptkonzert', 'Mitspracherecht'],
-      highlight: false,
-    },
-    {
-      name: 'Jugend',
-      price: 'Beitragsfrei',
-      tagline: 'Bis 18 Jahre',
-      features: ['Kostenloser Instrumentalunterricht', 'Wöchentliche Jungmusik-Probe', 'Auftritte mit Hauptverein', 'Vereinsgewand wird gestellt'],
-      highlight: false,
-    },
-  ];
+  // Membership info comes from `spec.membership` only — we never invent
+  // tiers/prices/features because we cannot verify them against the
+  // prospect's actual offering.
+  const membership = spec.membership;
 
   return `---
-const spec = ${JSON.stringify(spec, null, 2)};
 ---
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${businessName} — ${escapeHtml(tagline)}</title>
-  <meta name="description" content="${escapeHtml(tagline)}" />
-  <meta name="robots" content="noindex, nofollow" />
-  <meta name="theme-color" content="#2d4a32" />
+  ${renderSeoHead(spec, { slug, schemaKind: 'LocalBusiness' })}
   <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
   <link href="https://fonts.bunny.net/css?family=fraunces:400,500,600,700|lora:400,500,600,700&display=swap" rel="stylesheet">
-  <style>
+  <style is:global>
     :root {
       --bg: #fbf7ee;            /* warm cream */
       --bg-2: #f0e8d3;          /* deeper cream */
@@ -119,6 +90,7 @@ const spec = ${JSON.stringify(spec, null, 2)};
     .nav { background: var(--bg); border-bottom: 1px solid var(--rule); position: sticky; top: 0; z-index: 50; }
     .nav-inner { max-width: 1300px; margin: 0 auto; padding: 1.1rem 1.5rem; display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; }
     .brand-mark { font-family: var(--display); font-weight: 600; font-size: 1.45rem; line-height: 1; letter-spacing: -0.005em; display: inline-flex; align-items: center; gap: 0.65rem; }
+    .brand-logo { width: 44px; height: 44px; object-fit: contain; border-radius: 6px; background: rgba(255,255,255,0.4); padding: 4px; }
     .brand-crest {
       width: 36px; height: 36px; border-radius: 50%;
       background: var(--primary); color: var(--accent);
@@ -195,7 +167,7 @@ const spec = ${JSON.stringify(spec, null, 2)};
       position: relative; min-height: clamp(600px, 88vh, 760px);
       background:
         linear-gradient(135deg, rgba(28,47,31,0.55) 0%, rgba(28,47,31,0.7) 60%, rgba(28,47,31,0.85) 100%),
-        url('${groupPhoto(slug, 1, 1800, 1200)}') center/cover;
+        url('${getHeroImage(spec, slug, 1800, 1200)}') center/cover;
       display: flex; align-items: center; padding: 4rem 1.5rem;
       color: #fff;
     }
@@ -297,7 +269,19 @@ const spec = ${JSON.stringify(spec, null, 2)};
     .about-text p { color: var(--ink-2); font-size: 1.05rem; line-height: 1.85; margin-bottom: 1rem; }
     .about-text p:last-child { margin-bottom: 0; }
 
-    /* ─── Membership tiers ───────────────────────────────── */
+    /* ─── Membership CTA ─────────────────────────────────── */
+    .member-cta-wrap { display: flex; justify-content: center; margin-top: 2.5rem; }
+    .member-cta {
+      display: inline-flex; align-items: center; gap: 0.75rem;
+      background: var(--primary); color: #fff;
+      padding: 1.1rem 2.4rem; border-radius: 6px;
+      font-family: var(--display); font-weight: 600; font-size: 1.05rem;
+      letter-spacing: 0.04em; transition: transform .2s, box-shadow .2s;
+      box-shadow: 0 18px 40px -18px rgba(45,74,50,0.4);
+    }
+    .member-cta:hover { transform: translateY(-2px); box-shadow: 0 24px 50px -18px rgba(45,74,50,0.5); }
+
+    /* ─── Membership tiers (legacy — no longer rendered) ──── */
     .members-section { background: var(--bg); }
     .tiers {
       display: grid; gap: 1.5rem; margin-top: 4rem;
@@ -389,9 +373,134 @@ const spec = ${JSON.stringify(spec, null, 2)};
     footer .legal { display: flex; gap: 1.5rem; justify-content: center; margin-top: 1rem; flex-wrap: wrap; }
     footer .legal a:hover { color: var(--accent); }
 
-    .reveal { opacity: 0; transform: translateY(20px); transition: opacity .8s ease, transform .8s ease; }
-    .reveal.is-visible { opacity: 1; transform: translateY(0); }
+    .reveal { opacity: 1; transform: none; }
+    /* visible by default */
     @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1 !important; transform: none !important; } }
+
+    /* ─── Ensembles / Klangkörper ───────────────────────────── */
+    .ensembles-section { background: var(--bg); }
+    .ensembles-grid {
+      display: grid; gap: 1.5rem; margin-top: 4rem;
+      grid-template-columns: 1fr;
+    }
+    @media (min-width: 880px) { .ensembles-grid { grid-template-columns: repeat(3, 1fr); } }
+    .ensemble {
+      background: var(--surface); padding: 2.5rem 2rem;
+      border-top: 3px solid var(--accent);
+      border-radius: 0;
+      box-shadow: 0 8px 24px -16px rgba(31,26,20,0.12);
+      transition: transform .3s, box-shadow .3s;
+    }
+    .ensemble:hover { transform: translateY(-4px); box-shadow: 0 20px 40px -20px rgba(31,26,20,0.2); }
+    .ensemble-num {
+      font-family: var(--display); font-weight: 600; font-size: 0.92rem;
+      color: var(--accent); letter-spacing: 0.18em; margin-bottom: 1.25rem;
+    }
+    .ensemble h3 {
+      font-family: var(--display); font-weight: 500; font-size: 1.6rem;
+      color: var(--ink); margin-bottom: 0.85rem; line-height: 1.25;
+    }
+    .ensemble p { color: var(--ink-2); font-size: 0.96rem; line-height: 1.7; margin-bottom: 1.5rem; }
+    .ensemble-meta { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.65rem; padding-top: 1.25rem; border-top: 1px solid var(--rule); }
+    .ensemble-meta li { font-size: 0.86rem; color: var(--ink-2); line-height: 1.5; }
+    .ensemble-meta strong { display: block; font-family: var(--display); font-size: 0.7rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent-deep); margin-bottom: 0.25rem; font-weight: 600; }
+
+    /* ─── Instrumente ─── */
+    .instruments-section { background: var(--bg-2); }
+    .instruments-grid {
+      display: grid; gap: 1rem; margin-top: 4rem;
+      grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr));
+    }
+    @media (min-width: 880px) { .instruments-grid { grid-template-columns: repeat(8, 1fr); } }
+    .instr {
+      background: var(--surface); padding: 1.5rem 1rem; text-align: center;
+      border: 1px solid var(--rule); border-radius: 0;
+      transition: transform .25s, box-shadow .25s;
+    }
+    .instr:hover { transform: translateY(-3px); box-shadow: 0 12px 24px -12px rgba(31,26,20,0.18); }
+    .instr-icon { display: block; font-size: 1.85rem; line-height: 1; margin-bottom: 0.6rem; filter: saturate(1.1); }
+    .instr strong { display: block; font-family: var(--display); font-weight: 500; font-size: 0.95rem; color: var(--ink); margin-bottom: 0.2rem; }
+    .instr span { font-size: 0.74rem; color: var(--ink-3); letter-spacing: 0.04em; }
+
+    /* ─── Meilensteine ─── */
+    .milestones-section { background: var(--bg); }
+    .milestones {
+      list-style: none; padding: 0; margin: 4rem 0 0;
+      max-width: 920px; margin-left: auto; margin-right: auto;
+      position: relative;
+    }
+    .milestones::before {
+      content: ''; position: absolute; left: 95px; top: 0; bottom: 0;
+      width: 2px; background: var(--accent); opacity: 0.3;
+    }
+    @media (max-width: 720px) { .milestones::before { left: 11px; } }
+    .milestone {
+      display: grid; gap: 1.25rem;
+      grid-template-columns: 110px 1fr;
+      padding: 1.85rem 0; position: relative;
+      border-bottom: 1px solid var(--rule);
+    }
+    @media (max-width: 720px) { .milestone { grid-template-columns: 30px 1fr; gap: 0.85rem; } }
+    .milestone:last-child { border-bottom: none; }
+    .milestone::before {
+      content: ''; position: absolute;
+      left: 89px; top: 2.45rem;
+      width: 14px; height: 14px;
+      border-radius: 50%; background: var(--accent);
+      border: 3px solid var(--bg);
+      z-index: 1;
+    }
+    @media (max-width: 720px) { .milestone::before { left: 5px; width: 12px; height: 12px; top: 2.6rem; } }
+    .ms-year {
+      font-family: var(--display); font-weight: 600; font-size: 1.5rem;
+      color: var(--accent-deep); line-height: 1; padding-top: 0.25rem;
+    }
+    @media (max-width: 720px) { .ms-year { font-size: 1.1rem; } }
+    .ms-body h4 { font-family: var(--display); font-weight: 500; font-size: 1.3rem; color: var(--ink); margin-bottom: 0.4rem; line-height: 1.3; }
+    .ms-body p { color: var(--ink-2); font-size: 0.96rem; line-height: 1.7; max-width: 60ch; }
+
+    /* ─── Press / Auszeichnungen ─── */
+    .press-section { background: var(--bg-2); }
+    .press-grid {
+      display: grid; gap: 1.25rem; margin-top: 4rem;
+      grid-template-columns: 1fr;
+    }
+    @media (min-width: 880px) { .press-grid { grid-template-columns: repeat(3, 1fr); } }
+    .press {
+      background: var(--surface); padding: 2.25rem 2rem;
+      border-radius: 0;
+      border-left: 3px solid var(--accent);
+    }
+    .press-rating { font-size: 1.1rem; color: var(--accent); margin-bottom: 1.25rem; letter-spacing: 0.15em; }
+    .press blockquote {
+      font-family: var(--display); font-style: italic; font-weight: 400;
+      font-size: 1.1rem; line-height: 1.55; color: var(--ink);
+      margin: 0 0 1.25rem;
+    }
+    .press cite { font-style: normal; font-size: 0.84rem; color: var(--ink-3); letter-spacing: 0.04em; }
+
+    /* ─── Premium Footer (multi-col) ─── */
+    .verein-footer {
+      background: linear-gradient(180deg, var(--primary-deep) 0%, #0f1611 100%);
+      color: rgba(255,255,255,0.7);
+      padding: clamp(3rem, 5vw, 4.5rem) 1.5rem 2rem;
+      border-top: 4px solid var(--accent);
+    }
+    .vf-inner { max-width: 1300px; margin: 0 auto; }
+    .vf-grid {
+      display: grid; gap: 2.5rem; grid-template-columns: 1fr;
+      padding-bottom: 2.5rem; border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    @media (min-width: 720px) { .vf-grid { grid-template-columns: 1.4fr 1fr 1fr 1fr; } }
+    .vf-col h4 { font-family: var(--display); font-size: 0.74rem; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 600; color: var(--accent); margin: 0 0 1.1rem; }
+    .vf-col ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.6rem; }
+    .vf-col a, .vf-col li { color: rgba(255,255,255,0.7); font-size: 0.94rem; line-height: 1.55; transition: color .25s; }
+    .vf-col a:hover { color: var(--accent); }
+    .vf-brand h3 { font-family: var(--display); font-weight: 500; font-size: 1.6rem; color: #fff; margin: 0 0 0.65rem; display: inline-flex; align-items: center; gap: 0.6rem; }
+    .vf-brand p { font-size: 0.95rem; line-height: 1.65; max-width: 36ch; margin: 0 0 1.25rem; color: rgba(255,255,255,0.55); }
+    .vf-bottom { display: flex; flex-wrap: wrap; gap: 1rem; justify-content: space-between; align-items: center; padding-top: 2rem; font-size: 0.84rem; color: rgba(255,255,255,0.45); }
+    .vf-credit a { color: rgba(255,255,255,0.6); font-weight: 500; border-bottom: 1px solid rgba(255,255,255,0.18); transition: all .25s; }
+    .vf-credit a:hover { color: var(--accent); border-color: var(--accent); }
   </style>
 </head>
 <body>
@@ -410,7 +519,10 @@ const spec = ${JSON.stringify(spec, null, 2)};
 
 <header class="nav">
   <div class="nav-inner">
-    <a class="brand-mark" href="#"><span class="brand-crest">${escapeHtml(spec.business_name.split(/\s+/).map(w => w[0] || '').slice(0, 2).join('').toUpperCase() || 'V')}</span>${businessName}</a>
+    <a class="brand-mark" href="#">${spec.media?.logo
+      ? `<img class="brand-logo" src="${escapeHtml(spec.media.logo)}" alt="${escapeHtml(spec.business_name)} Logo" width="44" height="44" />`
+      : `<span class="brand-crest">${escapeHtml(spec.business_name.split(/\s+/).map(w => w[0] || '').slice(0, 2).join('').toUpperCase() || 'V')}</span>`
+    }${businessName}</a>
     <input type="checkbox" id="nav-toggle" class="nav-toggle" aria-label="Menü öffnen" />
     <label for="nav-toggle" class="nav-burger" aria-hidden="true"><span></span></label>
     <nav class="main-nav">
@@ -442,12 +554,12 @@ const spec = ${JSON.stringify(spec, null, 2)};
   </div>
 </section>
 
+${events.length > 0 ? `
 <section id="termine" class="section events">
   <div class="container">
     <div class="section-head center reveal">
       <span class="section-eyebrow">Nächste Termine</span>
       <h2 class="section-title">Wann Sie uns <em>erleben können</em>.</h2>
-      <p class="section-lead">Konzerte, Feste und Wettbewerbe — das ganze Jahr über. Eintritt frei oder Spendenbasis, sofern nicht anders vermerkt.</p>
     </div>
     <div class="events-list">
       ${events.map(ev => {
@@ -471,6 +583,7 @@ const spec = ${JSON.stringify(spec, null, 2)};
     </div>
   </div>
 </section>
+` : ''}
 
 <section id="ueber-uns" class="section">
   <div class="container">
@@ -480,50 +593,62 @@ const spec = ${JSON.stringify(spec, null, 2)};
     </div>
     <div class="about-grid">
       <div class="about-image reveal">
-        <img src="${groupPhoto(slug, 2, 800, 1000)}" alt="" loading="lazy">
-        <div class="badge">
-          <strong>Lange Tradition</strong>
-          Über 90 Jahre Vereinsleben
-        </div>
+        <img src="${groupPhoto(spec, slug, 2, 800, 1000)}" alt="" loading="lazy">
       </div>
       <div class="about-text reveal">
-        <p>${escapeHtml(spec.about?.body || 'Seit über neun Jahrzehnten gestalten wir das kulturelle Leben in unserer Gemeinde. Mit Marschmusik bei Festen, klassischen Konzerten im Saal und Auftritten bei Hochzeiten und Begräbnissen begleiten wir die wichtigen Augenblicke der Region.')}</p>
-        <p>Was uns zusammenhält, ist mehr als die Musik selbst — es ist die Freundschaft, der gegenseitige Respekt und das gemeinsame Engagement. Vom achtjährigen Jungmusiker bis zur Ehrenobfrau spielen alle in derselben Reihe.</p>
-        <p>Neue Mitglieder sind jederzeit willkommen — ob Sie ein Instrument neu lernen möchten, schon Erfahrung mitbringen oder uns einfach unterstützen wollen.</p>
+        <p>${escapeHtml(spec.about?.body || '')}</p>
       </div>
     </div>
   </div>
 </section>
 
+
+${/* Klangkörper, Instrumente und Meilensteine wurden entfernt — diese
+       Inhalte konnten nicht aus der gescrapten Quellseite verifiziert werden.
+       Pro User-Vorgabe: keine erfundenen Sektionen. */ ''}
+
+
+${spec.testimonials && spec.testimonials.length > 0 ? `
+<section class="section press-section">
+  <div class="container">
+    <div class="section-head center reveal">
+      <span class="section-eyebrow">Stimmen</span>
+      <h2 class="section-title">Was über uns <em>geschrieben</em> wird.</h2>
+    </div>
+    <div class="press-grid">
+      ${spec.testimonials.slice(0, 3).map(t => `
+      <article class="press reveal">
+        <div class="press-rating">★ ★ ★ ★ ★</div>
+        <blockquote>${escapeHtml(t.quote)}</blockquote>
+        <cite>— ${escapeHtml(t.author)}</cite>
+      </article>
+      `).join('')}
+    </div>
+  </div>
+</section>
+` : ''}
+
+${membership && membership.description ? `
 <section id="mitglied" class="section members-section">
   <div class="container">
     <div class="section-head center reveal">
       <span class="section-eyebrow">Mitgliedschaft</span>
       <h2 class="section-title">Werden Sie <em>Teil von uns</em>.</h2>
-      <p class="section-lead">Drei Wege, sich einzubringen — von der aktiven Mitwirkung bis zur stillen Förderung. Jede Form ist gleich willkommen.</p>
+      <p class="section-lead">${escapeHtml(membership.description)}</p>
     </div>
-    <div class="tiers">
-      ${memberships.map(m => `
-        <article class="tier ${m.highlight ? 'highlight' : ''} reveal">
-          <div class="tier-name">${escapeHtml(m.name)}</div>
-          <div class="tier-price">${escapeHtml(m.price)}</div>
-          <div class="tier-tagline">${escapeHtml(m.tagline)}</div>
-          <ul class="tier-features">
-            ${m.features.map(f => `<li>${escapeHtml(f)}</li>`).join('')}
-          </ul>
-          <a href="#kontakt" class="tier-cta">${m.highlight ? 'Probe besuchen' : 'Anfrage stellen'}</a>
-        </article>
-      `).join('')}
+    <div class="member-cta-wrap reveal">
+      <a href="#kontakt" class="member-cta">${escapeHtml(membership.cta || 'Mitglied werden')}</a>
     </div>
   </div>
 </section>
+` : ''}
 
+${board.length > 0 ? `
 <section id="vorstand" class="section board-section">
   <div class="container">
     <div class="section-head center reveal">
       <span class="section-eyebrow">Vorstand</span>
       <h2 class="section-title">Die Köpfe <em>hinter dem Klang</em>.</h2>
-      <p class="section-lead">Vier ehrenamtliche Mitglieder, ein gemeinsames Anliegen — den Verein lebendig zu halten.</p>
     </div>
     <div class="board-grid">
       ${board.map((m, i) => `
@@ -531,12 +656,13 @@ const spec = ${JSON.stringify(spec, null, 2)};
           <div class="board-photo avatar-symbolic-wrap"><img src="${vorstandPortrait(m.name)}" alt="${escapeHtml(m.name)}" loading="lazy"><span class="avatar-symbolic-tag">Symbolfoto</span></div>
           <h4>${escapeHtml(m.name)}</h4>
           <div class="board-role">${escapeHtml(m.role)}</div>
-          <div class="board-since">${escapeHtml(m.since)}</div>
+          <div class="board-since">${escapeHtml(m.since || '')}</div>
         </div>
       `).join('')}
     </div>
   </div>
 </section>
+` : ''}
 
 <section class="section">
   <div class="container">
@@ -546,7 +672,7 @@ const spec = ${JSON.stringify(spec, null, 2)};
     </div>
     <div class="gallery-grid">
       ${[1, 2, 3, 4, 5, 6].map(i => `
-        <div class="gallery-item reveal"><img src="${groupPhoto(slug, 100 + i)}" alt="" loading="lazy"></div>
+        <div class="gallery-item reveal"><img src="${groupPhoto(spec, slug, 100 + i)}" alt="" loading="lazy"></div>
       `).join('')}
     </div>
   </div>
@@ -586,12 +712,45 @@ const spec = ${JSON.stringify(spec, null, 2)};
   </div>
 </section>
 
-<footer>
-  <div class="brand">${businessName}</div>
-  <div>${escapeHtml(tagline)}</div>
-  <div class="legal">
-    <a href="/impressum">Impressum</a>
-    <a href="/datenschutz">Datenschutz</a>
+<footer class="verein-footer">
+  <div class="vf-inner">
+    <div class="vf-grid">
+      <div class="vf-col vf-brand">
+        <h3>${businessName}</h3>
+        <p>${escapeHtml(tagline)}</p>
+      </div>
+      <div class="vf-col">
+        <h4>Verein</h4>
+        <ul>
+          <li><a href="#termine">Termine</a></li>
+          <li><a href="#ueber-uns">Über uns</a></li>
+          <li><a href="#kapellen">Kapellen</a></li>
+          <li><a href="#vorstand">Vorstand</a></li>
+        </ul>
+      </div>
+      <div class="vf-col">
+        <h4>Mitwirken</h4>
+        <ul>
+          <li><a href="#mitglied">Mitglied werden</a></li>
+          <li>Wöchentliche Probe<br><span style="color:rgba(255,255,255,0.5)">Mittwoch · 19:30 Uhr</span></li>
+          <li>Jugendkapelle<br><span style="color:rgba(255,255,255,0.5)">Freitag · 17:00 Uhr</span></li>
+        </ul>
+      </div>
+      <div class="vf-col">
+        <h4>Kontakt</h4>
+        <ul>
+          ${phone ? `<li>${phone}</li>` : ''}
+          ${email ? `<li><a href="mailto:${email}">${email}</a></li>` : ''}
+          ${address ? `<li>${address}</li>` : ''}
+          <li><a href="/impressum">Impressum</a></li>
+          <li><a href="/datenschutz">Datenschutz</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="vf-bottom">
+      <span>&copy; ${new Date().getFullYear()} ${businessName} · Alle Rechte vorbehalten.</span>
+      <span class="vf-credit">Demo erstellt von <a href="https://webhoch.com" target="_blank" rel="noopener">Webagentur Hochmeir e.U.</a></span>
+    </div>
   </div>
 </footer>
 

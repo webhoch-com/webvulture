@@ -5,6 +5,7 @@ namespace App\Domain\Discovery;
 use App\Domain\Cost\CostTracker;
 use App\Models\Lead;
 use App\Models\SearchRun;
+use App\Support\CostGuard;
 use App\Support\Enums\CostProvider;
 use App\Support\Enums\LeadStatus;
 use App\Support\Enums\SearchRunStatus;
@@ -13,15 +14,28 @@ use Illuminate\Support\Arr;
 class MapsDiscoveryService
 {
     // Places Text Search (New) pricing ~ $0.032 per request at Essentials SKU.
-    private const COST_CENTS_PER_REQUEST = 4;
+    // Static USD-cents — converted to EUR cents at record() time using the
+    // same rate as the LLM providers (see CalculatesCost trait). Keeping the
+    // raw USD here makes pricing-update audits easier (matches Google's docs).
+    private const COST_USD_CENTS_PER_REQUEST = 3.2;
+
+    private function eurCentsPerRequest(): int
+    {
+        $rate = (float) config('services.cost_caps.usd_to_eur', 0.93);
+
+        return (int) round(self::COST_USD_CENTS_PER_REQUEST * $rate);
+    }
 
     public function __construct(
         protected GoogleMapsClient $client,
         protected CostTracker $cost,
+        protected CostGuard $costGuard,
     ) {}
 
     public function run(SearchRun $run): int
     {
+        $this->costGuard->assertWithinDailyCap();
+
         $run->forceFill([
             'status' => SearchRunStatus::Running,
             'started_at' => now(),
@@ -31,7 +45,7 @@ class MapsDiscoveryService
             $query = trim(($run->keyword ? $run->keyword.' ' : '').'in '.$run->city);
             $places = $this->client->searchText($query, $run->limit);
 
-            $this->cost->record($run, CostProvider::Maps, 1, self::COST_CENTS_PER_REQUEST, [
+            $this->cost->record($run, CostProvider::Maps, 1, $this->eurCentsPerRequest(), [
                 'endpoint' => 'places:searchText',
                 'query' => $query,
                 'results' => count($places),
@@ -74,6 +88,8 @@ class MapsDiscoveryService
         $reviewCount = (int) Arr::get($place, 'userRatingCount', 0);
         $category = Arr::get($place, 'primaryType') ?? Arr::get($place, 'types.0');
 
+        $hasWebsite = (bool) $website;
+
         Lead::updateOrCreate(
             ['place_id' => $placeId],
             [
@@ -86,8 +102,10 @@ class MapsDiscoveryService
                 'website' => $website,
                 'rating' => $rating,
                 'review_count' => $reviewCount,
-                'has_website' => (bool) $website,
-                'quality_score' => $this->scoreLead($rating, $reviewCount, (bool) $website),
+                'has_website' => $hasWebsite,
+                'quality_score' => $this->scoreLead($rating, $reviewCount, $hasWebsite),
+                // Keine Website → Website-Qualität ist automatisch 0 ("nicht vorhanden = schlechteste mögliche").
+                'website_stars' => $hasWebsite ? null : 0,
                 'status' => LeadStatus::New,
                 'meta' => [
                     'location' => Arr::get($place, 'location'),

@@ -2,6 +2,7 @@
 
 namespace App\Domain\Scraping;
 
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\DomCrawler\Crawler;
 
 class HomepageExtractor
@@ -11,17 +12,169 @@ class HomepageExtractor
         $crawler = new Crawler($html, $baseUrl);
 
         return [
-            'title'            => $this->title($crawler),
+            'title' => $this->title($crawler),
             'meta_description' => $this->metaDescription($crawler),
-            'logo_url'         => $this->logo($crawler, $baseUrl),
-            'contact'          => $this->contact($crawler),
-            'services'         => $this->services($crawler),
-            'images'           => $this->images($crawler, $baseUrl),
-            'socials'          => $this->socials($crawler),
-            'nav_links'        => $this->navLinks($crawler, $baseUrl),
-            'brand_colors'     => $this->brandColors($html),
-            'text_content'     => $this->textContent($crawler),
+            'logo_url' => $this->logo($crawler, $baseUrl),
+            'favicon_url' => $this->favicon($crawler, $baseUrl),
+            'contact' => $this->contact($crawler),
+            'services' => $this->services($crawler),
+            'images' => $this->images($crawler, $baseUrl),
+            'socials' => $this->socials($crawler),
+            'nav_links' => $this->navLinks($crawler, $baseUrl),
+            'brand_colors' => $this->brandColors($html),
+            'text_content' => $this->textContent($crawler),
+            // Real section structure pulled from H2/H3 headings + the
+            // paragraphs that follow. Used by templates to render a
+            // *redesign* of the prospect's existing site rather than a
+            // generic template — matching their actual content scaffolding.
+            'sections' => $this->sections($crawler),
         ];
+    }
+
+    /**
+     * Walk the document for headline-then-content patterns.
+     *
+     * For every H1/H2/H3 we capture the heading text plus the next 1–4
+     * paragraphs (or list items) until the next heading appears. This gives
+     * templates a faithful skeleton of the prospect's own page so the demo
+     * can re-render their real sections in premium typography instead of
+     * fabricating sections.
+     *
+     * Junk filtering: navigation labels, footer chrome, cookie copy and
+     * very short headings ("Menü", "© 2024") are dropped. Bodies under 40
+     * characters are also skipped — those are usually link labels.
+     */
+    protected function sections(Crawler $c): array
+    {
+        $sections = [];
+
+        try {
+            // Strip page chrome before walking — header/footer/nav usually
+            // contain repeated H2s ("Kontakt", "Menü") that would clutter
+            // the section list.
+            $clone = new Crawler($c->html(), $c->getUri() ?? null);
+            $clone->filter('script, style, nav, header, footer, aside, form, .menu, .nav, .navigation, .cookie, [class*="cookie"], [id*="cookie"]')
+                ->each(function (Crawler $node) {
+                    foreach ($node as $n) {
+                        $n->parentNode?->removeChild($n);
+                    }
+                });
+
+            $clone->filter('h1, h2, h3')->each(function (Crawler $heading) use (&$sections) {
+                $title = trim(preg_replace('/\s+/', ' ', $heading->text('')));
+                if ($title === '' || mb_strlen($title) < 3 || mb_strlen($title) > 120) {
+                    return;
+                }
+                if ($this->isJunkHeading($title)) {
+                    return;
+                }
+
+                // Collect the next 1–4 sibling blocks until another heading.
+                $paragraphs = [];
+                $node = $heading->getNode(0)?->nextSibling;
+                $hops = 0;
+                while ($node && $hops < 12 && count($paragraphs) < 4) {
+                    $hops++;
+                    if ($node->nodeType !== XML_ELEMENT_NODE) {
+                        $node = $node->nextSibling;
+                        continue;
+                    }
+                    $tag = strtolower($node->nodeName);
+                    if (in_array($tag, ['h1', 'h2', 'h3', 'h4'], true)) {
+                        break;
+                    }
+                    if (in_array($tag, ['p', 'li', 'div', 'section', 'article'], true)) {
+                        $text = trim(preg_replace('/\s+/', ' ', $node->textContent ?? ''));
+                        if ($text !== '' && mb_strlen($text) >= 40 && mb_strlen($text) <= 800) {
+                            $paragraphs[] = $text;
+                        }
+                    }
+                    $node = $node->nextSibling;
+                }
+
+                if (count($paragraphs) === 0) {
+                    return;
+                }
+
+                $sections[] = [
+                    'title' => $title,
+                    'level' => (int) substr(strtolower($heading->nodeName()), 1),
+                    'body' => mb_substr(implode("\n\n", $paragraphs), 0, 1600),
+                ];
+            });
+        } catch (\Throwable $e) {
+            Log::debug('HomepageExtractor: section extraction failed', ['error' => $e->getMessage()]);
+        }
+
+        // Dedupe by lower-cased title; keep the first (most prominent) hit.
+        $seen = [];
+        $unique = [];
+        foreach ($sections as $s) {
+            $key = mb_strtolower($s['title']);
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $unique[] = $s;
+            if (count($unique) >= 8) {
+                break;
+            }
+        }
+
+        return $unique;
+    }
+
+    protected function isJunkHeading(string $title): bool
+    {
+        $junk = [
+            '/^(men[üu]|navigation|toggle|search|suche)$/i',
+            '/^(impressum|datenschutz|agb|cookie|haftung)$/i',
+            '/^(folgen sie uns|social|teilen|share)$/i',
+            '/^(kontakt|contact)$/i',
+            '/^(home|startseite|start)$/i',
+            '/^(login|anmelden|logout|abmelden)$/i',
+            '/^[\s\d\-.\/©]+$/',
+        ];
+        foreach ($junk as $re) {
+            if (preg_match($re, $title)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    protected function favicon(Crawler $c, string $baseUrl): ?string
+    {
+        // Priority order: high-res apple-touch-icon → icon (any size) → fallback /favicon.ico.
+        // Browsers will render apple-touch-icon as well, so picking 180x180 PNG-ish is better
+        // than .ico for our HTML <link rel="icon"> injection.
+        $selectors = [
+            'link[rel="apple-touch-icon"]',
+            'link[rel="apple-touch-icon-precomposed"]',
+            'link[rel="icon"][type="image/png"]',
+            'link[rel="icon"]',
+            'link[rel="shortcut icon"]',
+        ];
+
+        foreach ($selectors as $sel) {
+            try {
+                $href = $c->filter($sel)->first()->attr('href');
+                if ($href) {
+                    return $this->resolveUrl(trim($href), $baseUrl);
+                }
+            } catch (\Throwable $e) {
+                continue;
+            }
+        }
+
+        // Fallback — most sites have /favicon.ico even without a <link>
+        $base = parse_url($baseUrl);
+        if (! empty($base['scheme']) && ! empty($base['host'])) {
+            return "{$base['scheme']}://{$base['host']}/favicon.ico";
+        }
+
+        return null;
     }
 
     protected function navLinks(Crawler $c, string $baseUrl): array
@@ -37,7 +190,7 @@ class HomepageExtractor
                 $c->filter($sel)->each(function (Crawler $node) use (&$links, $host, $baseUrl) {
                     $href = trim($node->attr('href') ?? '');
                     $label = trim($node->text(''));
-                    if (!$href || !$label || str_starts_with($href, '#') || strlen($label) > 40) {
+                    if (! $href || ! $label || str_starts_with($href, '#') || strlen($label) > 40) {
                         return;
                     }
                     $resolved = $this->resolveUrl($href, $baseUrl);
@@ -47,7 +200,8 @@ class HomepageExtractor
                         $links[$label] = $resolved;
                     }
                 });
-            } catch (\Throwable) {}
+            } catch (\Throwable $e) { \Log::debug("HomepageExtractor: extraction step failed", ["error" => $e->getMessage()]); 
+            }
         }
 
         return array_slice($links, 0, 10);
@@ -83,7 +237,7 @@ class HomepageExtractor
     {
         try {
             return trim($c->filter('title')->first()->text(''));
-        } catch (\Throwable) {
+        } catch (\Throwable $e) { \Log::debug("HomepageExtractor: extraction step failed", ["error" => $e->getMessage()]); 
             return null;
         }
     }
@@ -92,7 +246,7 @@ class HomepageExtractor
     {
         try {
             return $c->filter('meta[name="description"]')->first()->attr('content');
-        } catch (\Throwable) {
+        } catch (\Throwable $e) { \Log::debug("HomepageExtractor: extraction step failed", ["error" => $e->getMessage()]); 
             return null;
         }
     }
@@ -113,7 +267,8 @@ class HomepageExtractor
                 if ($src) {
                     return $this->resolveUrl($src, $baseUrl);
                 }
-            } catch (\Throwable) {}
+            } catch (\Throwable $e) { \Log::debug("HomepageExtractor: extraction step failed", ["error" => $e->getMessage()]); 
+            }
         }
 
         return null;
@@ -145,7 +300,8 @@ class HomepageExtractor
             if ($addr) {
                 $contact['address'] = trim(preg_replace('/\s+/', ' ', $addr));
             }
-        } catch (\Throwable) {}
+        } catch (\Throwable $e) { \Log::debug("HomepageExtractor: extraction step failed", ["error" => $e->getMessage()]); 
+        }
 
         return $contact;
     }
@@ -169,7 +325,8 @@ class HomepageExtractor
                         $services[] = $text;
                     }
                 });
-            } catch (\Throwable) {}
+            } catch (\Throwable $e) { \Log::debug("HomepageExtractor: extraction step failed", ["error" => $e->getMessage()]); 
+            }
 
             if (count($services) >= 10) {
                 break;
@@ -186,14 +343,15 @@ class HomepageExtractor
         try {
             $c->filter('img[src]')->each(function (Crawler $img) use (&$images, $baseUrl) {
                 $src = $img->attr('src');
-                if (!$src || str_starts_with($src, 'data:')) {
+                if (! $src || str_starts_with($src, 'data:')) {
                     return;
                 }
                 $resolved = $this->resolveUrl($src, $baseUrl);
                 $alt = $img->attr('alt') ?? '';
                 $images[] = ['src' => $resolved, 'alt' => $alt];
             });
-        } catch (\Throwable) {}
+        } catch (\Throwable $e) { \Log::debug("HomepageExtractor: extraction step failed", ["error" => $e->getMessage()]); 
+        }
 
         return array_slice($images, 0, 15);
     }
@@ -229,8 +387,9 @@ class HomepageExtractor
                 }
             });
             $text = $c->filter('body')->first()->text('');
+
             return mb_substr(trim(preg_replace('/\s+/', ' ', $text)), 0, 8000);
-        } catch (\Throwable) {
+        } catch (\Throwable $e) { \Log::debug("HomepageExtractor: extraction step failed", ["error" => $e->getMessage()]); 
             return '';
         }
     }
@@ -250,6 +409,7 @@ class HomepageExtractor
             return "$scheme://$host$src";
         }
         $path = dirname($base['path'] ?? '/');
+
         return "$scheme://$host$path/$src";
     }
 }

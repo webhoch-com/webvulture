@@ -6,6 +6,8 @@
  */
 
 import type { SiteSpec } from '../types.js';
+import { renderSeoHead } from './_seo.js';
+import { getGalleryImage, getHeroImage } from './_media.js';
 
 function escapeHtml(s: string): string {
   return String(s)
@@ -13,8 +15,8 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-function hotelPhoto(slug: string, idx: number, w = 1200, h = 800): string {
-  return `https://picsum.photos/seed/${encodeURIComponent(slug)}-hotel-${idx}/${w}/${h}`;
+function hotelPhoto(spec: SiteSpec, slug: string, idx: number, w = 1200, h = 800): string {
+  return getGalleryImage(spec, slug, idx, w, h);
 }
 
 export function renderHotelPage(spec: SiteSpec, slug: string): string {
@@ -35,17 +37,11 @@ export function renderHotelPage(spec: SiteSpec, slug: string): string {
   const address = spec.contact.address ? escapeHtml(spec.contact.address) : '';
 
   return `---
-const spec = ${JSON.stringify(spec, null, 2)};
 ---
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${businessName} — ${escapeHtml(tagline)}</title>
-  <meta name="description" content="${escapeHtml(tagline)}" />
-  <meta name="robots" content="noindex, nofollow" />
-  <meta name="theme-color" content="#1c1410" />
+  ${renderSeoHead(spec, { slug, schemaKind: 'LodgingBusiness' })}
   <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
   <link href="https://fonts.bunny.net/css?family=cormorant-garamond:400,500,600,700|inter:400,500,600&display=swap" rel="stylesheet">
   <style>
@@ -153,6 +149,7 @@ const spec = ${JSON.stringify(spec, null, 2)};
       transition: background .2s, border-color .2s;
     }
     .nav-cta:hover { background: rgba(255,255,255,0.15); border-color: #fff; }
+    @media (max-width: 879px) { .nav-cta { display: none; } }
 
     /* ─── Hero — full-bleed photo + overlay heading ─────── */
     .hero {
@@ -271,7 +268,7 @@ const spec = ${JSON.stringify(spec, null, 2)};
 
     /* ─── Direct booking advantage ───────────────────────── */
     .advantage {
-      background-image: linear-gradient(rgba(0,0,0,0.55), rgba(0,0,0,0.7)), url('${hotelPhoto(slug, 80, 1800, 1200)}');
+      background-image: linear-gradient(rgba(0,0,0,0.55), rgba(0,0,0,0.7)), url('${hotelPhoto(spec, slug, 80, 1800, 1200)}');
       background-size: cover; background-position: center;
       color: #fff;
       padding: clamp(6rem, 10vw, 10rem) 1.5rem; text-align: center;
@@ -303,8 +300,8 @@ const spec = ${JSON.stringify(spec, null, 2)};
     footer .legal { display: flex; gap: 1.5rem; justify-content: center; margin-top: 1rem; flex-wrap: wrap; }
     footer .legal a:hover { color: var(--accent); }
 
-    .reveal { opacity: 0; transform: translateY(20px); transition: opacity 1s ease, transform 1s ease; }
-    .reveal.is-visible { opacity: 1; transform: translateY(0); }
+    .reveal { opacity: 1; transform: none; }
+    /* visible by default */
     @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1 !important; transform: none !important; } }
   </style>
 </head>
@@ -338,7 +335,7 @@ const spec = ${JSON.stringify(spec, null, 2)};
 </header>
 
 <section class="hero">
-  <div class="hero-img" style="background-image: url('${hotelPhoto(slug, 0, 1800, 1200)}');"></div>
+  <div class="hero-img" style="background-image: url('${getHeroImage(spec, slug, 1800, 1200)}');"></div>
   <div class="hero-text">
     <span class="eyebrow">${escapeHtml(tagline.slice(0, 60))}</span>
     <h1>${escapeHtml(headline.replace(/(\.|!|\?)([^.!?]*)$/, '|$1$2|')).replace(/\|([^|]+)\|/, '<em>$1</em>')}</h1>
@@ -365,7 +362,7 @@ const spec = ${JSON.stringify(spec, null, 2)};
     <div class="rooms-grid">
       ${rooms.map((r, i) => `
         <article class="room reveal">
-          <div class="room-photo" style="background-image: url('${hotelPhoto(slug, 10 + i)}');"></div>
+          <div class="room-photo" style="background-image: url('${hotelPhoto(spec, slug, 10 + i)}');"></div>
           <div class="room-info">
             <h3 class="room-name">${escapeHtml(r.name)}</h3>
             <p class="room-desc">${escapeHtml(r.description)}</p>
@@ -382,7 +379,7 @@ const spec = ${JSON.stringify(spec, null, 2)};
 
 <section id="restaurant" class="photo-split">
   <div class="ps-grid">
-    <div class="ps-image" style="background-image: url('${hotelPhoto(slug, 30)}');" aria-hidden="true"></div>
+    <div class="ps-image" style="background-image: url('${hotelPhoto(spec, slug, 30)}');" aria-hidden="true"></div>
     <div class="ps-text reveal">
       <span class="section-eyebrow">Restaurant</span>
       <h2 class="section-title">Saisonal, regional, <em>sorgfältig</em>.</h2>
@@ -400,7 +397,7 @@ const spec = ${JSON.stringify(spec, null, 2)};
       <p class="lead">Finnische Sauna, Infrarotkabine, Ruheraum mit Panoramafenster — kostenfrei für Hausgäste. Massagen auf Anfrage.</p>
       <div class="ctas"><a href="#kontakt">Anwendungen anfragen →</a></div>
     </div>
-    <div class="ps-image" style="background-image: url('${hotelPhoto(slug, 40)}'); order: 1;" aria-hidden="true"></div>
+    <div class="ps-image" style="background-image: url('${hotelPhoto(spec, slug, 40)}'); order: 1;" aria-hidden="true"></div>
   </div>
 </section>
 
@@ -412,7 +409,7 @@ const spec = ${JSON.stringify(spec, null, 2)};
   </div>
   <div class="gallery-grid">
     ${[51,52,53,54,55,56].map(i => `
-      <div class="gallery-img reveal"><img src="${hotelPhoto(slug, i, 700, 525)}" alt="" loading="lazy"></div>
+      <div class="gallery-img reveal"><img src="${hotelPhoto(spec, slug, i, 700, 525)}" alt="" loading="lazy"></div>
     `).join('')}
   </div>
 </section>

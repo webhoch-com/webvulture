@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-use App\Domain\Storage\LeadStorageService;
+use App\Jobs\CleanupLeadStorageJob;
 use App\Support\Enums\LeadStatus;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -12,26 +12,18 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Lead extends Model
 {
-    protected $guarded = [];
+    protected $guarded = ['id'];
 
     protected static function booted(): void
     {
         static::deleting(function (Lead $lead) {
-            $storage = app(LeadStorageService::class);
-
-            // Delete scraped files
-            $storage->deleteAll($lead->id);
-
-            // Delete Node prototype project + artifact dirs
             $versionIds = $lead->prototypes()
                 ->with('versions:id,prototype_id')
                 ->get()
-                ->flatMap(fn($p) => $p->versions->pluck('id'))
+                ->flatMap(fn ($p) => $p->versions->pluck('id'))
                 ->all();
 
-            if ($versionIds) {
-                $storage->deletePrototypeFiles($versionIds);
-            }
+            CleanupLeadStorageJob::dispatch($lead->id, $versionIds)->afterCommit();
         });
     }
 
@@ -40,6 +32,10 @@ class Lead extends Model
         'has_website' => 'bool',
         'status' => LeadStatus::class,
         'rating' => 'decimal:1',
+        'website_stars' => 'decimal:1',
+        'last_outreach_at' => 'datetime',
+        'awaiting_response_since' => 'datetime',
+        'replied_at' => 'datetime',
     ];
 
     public function searchRun(): BelongsTo

@@ -5,6 +5,7 @@
  */
 
 import type { SiteSpec } from '../types.js';
+import { renderSeoHead } from './_seo.js';
 
 function escapeHtml(s: string): string {
   return String(s)
@@ -12,7 +13,7 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-export function renderArztPage(spec: SiteSpec, _slug: string): string {
+export function renderArztPage(spec: SiteSpec, slug: string): string {
   const businessName = escapeHtml(spec.business_name);
   const tagline = spec.tagline;
   const headline = spec.hero.headline;
@@ -41,17 +42,11 @@ export function renderArztPage(spec: SiteSpec, _slug: string): string {
   const address = spec.contact.address ? escapeHtml(spec.contact.address) : '';
 
   return `---
-const spec = ${JSON.stringify(spec, null, 2)};
 ---
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${businessName} — ${escapeHtml(tagline)}</title>
-  <meta name="description" content="${escapeHtml(tagline)}" />
-  <meta name="robots" content="noindex, nofollow" />
-  <meta name="theme-color" content="#0e7490" />
+  ${renderSeoHead(spec, { slug, schemaKind: 'MedicalBusiness' })}
   <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
   <link href="https://fonts.bunny.net/css?family=fraunces:400,500,600|inter:400,500,600,700&display=swap" rel="stylesheet">
   <style>
@@ -179,6 +174,7 @@ const spec = ${JSON.stringify(spec, null, 2)};
       transition: background .2s, transform .2s;
     }
     .nav-cta:hover { background: var(--primary-700); transform: translateY(-1px); }
+    @media (max-width: 879px) { .nav-cta { display: none; } }
 
     /* ─── Hero — 2-column with reassurance ──────────────── */
     .hero { padding: clamp(3.5rem, 7vw, 6rem) 1.5rem; }
@@ -346,8 +342,8 @@ const spec = ${JSON.stringify(spec, null, 2)};
     footer .legal a { color: inherit; transition: color .2s; }
     footer .legal a:hover { color: var(--primary-soft); }
 
-    .reveal { opacity: 0; transform: translateY(16px); transition: opacity .8s ease, transform .8s ease; }
-    .reveal.is-visible { opacity: 1; transform: translateY(0); }
+    .reveal { opacity: 1; transform: none; }
+    /* visible by default */
     @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1 !important; transform: none !important; } }
   </style>
 </head>

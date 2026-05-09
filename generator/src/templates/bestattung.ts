@@ -1,11 +1,13 @@
 /**
- * Bestattung template — quiet, dignified, refined.
- * Inspired by funeral-home sites that prioritise calm typography over imagery.
- * Single-column read flow, very minimal accents, no dynamic motion,
- * generous whitespace. Cream background, soft graphite text, minimal navigation.
+ * Bestattung template — würdevoll, ruhig, vertrauenswürdig.
+ * Cinematic full-bleed hero, calm dusty-blue + parchment palette,
+ * Cormorant editorial serif, multi-section depth: services, first-steps,
+ * burial-forms, trauerredner, memoriam-quote, FAQ, trust badges.
  */
 
 import type { SiteSpec } from '../types.js';
+import { renderSeoHead } from './_seo.js';
+import { getHeroImage, getGalleryImage } from './_media.js';
 
 function escapeHtml(s: string): string {
   return String(s)
@@ -13,254 +15,322 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-export function renderBestattungPage(spec: SiteSpec, _slug: string): string {
-  const businessName = escapeHtml(spec.business_name);
-  const tagline = escapeHtml(spec.tagline);
-  const headline = escapeHtml(spec.hero.headline);
-  const subhead = escapeHtml(spec.hero.subheadline);
+function heroPhoto(spec: SiteSpec, slug: string): string {
+  return getHeroImage(spec, slug, 1800, 1100);
+}
 
-  const services = spec.services && spec.services.length >= 3 ? spec.services : [
-    { name: 'Erstversorgung', description: '24-Stunden-Erreichbarkeit. Wir kommen zu Ihnen, wann immer es nötig ist.' },
-    { name: 'Trauerfeier-Gestaltung', description: 'Kirchlich, weltlich oder im Familienkreis — ganz nach Ihrem Wunsch.' },
-    { name: 'Erd- und Feuerbestattung', description: 'Sämtliche Bestattungsformen, einschließlich naturnaher Alternativen.' },
-    { name: 'Vorsorge', description: 'Bestattungsvorsorge zu Lebzeiten — Klarheit für die Familie, Selbstbestimmung für Sie.' },
-    { name: 'Behördengänge', description: 'Wir nehmen Ihnen die Formalitäten ab — Standesamt, Versicherungen, Renten.' },
-    { name: 'Trauerbegleitung', description: 'Auch nach der Trauerfeier sind wir für Sie und Ihre Familie da.' },
+function memoriamPhoto(spec: SiteSpec, slug: string): string {
+  return getGalleryImage(spec, slug, 7, 900, 1100);
+}
+
+export function renderBestattungPage(spec: SiteSpec, slug: string): string {
+  const businessName = escapeHtml(spec.business_name);
+  const tagline = spec.tagline;
+  const headline = spec.hero.headline;
+  const subhead = escapeHtml(spec.hero.subheadline);
+  const ctaText = escapeHtml(spec.hero.cta_text || 'Beratung vereinbaren');
+
+  const services = spec.services && spec.services.length >= 4 ? spec.services : [
+    { name: 'Erstversorgung', description: 'Zu jeder Tages- und Nachtzeit erreichbar. Wir übernehmen die Überführung in unsere Räume.' },
+    { name: 'Trauerfeier', description: 'Kirchlich, weltlich oder im engsten Kreis — würdevolle Gestaltung nach Ihren Vorstellungen.' },
+    { name: 'Behördenabwicklung', description: 'Sterbeurkunde, Versicherungen, Renten — wir nehmen Ihnen alle Wege ab.' },
+    { name: 'Bestattungsvorsorge', description: 'Selbstbestimmt zu Lebzeiten regeln, was Ihnen wichtig ist — auch finanziell entlastend.' },
+    { name: 'Floristik & Trauerdruck', description: 'Sarggestecke, Kränze, Trauerkarten — alles aus einer Hand.' },
+    { name: 'Persönliche Begleitung', description: 'Wir bleiben auch nach der Trauerfeier ansprechbar — auf Wunsch über Monate hinweg.' },
   ];
 
-  const phone = spec.contact.phone ? escapeHtml(spec.contact.phone) : '';
-  const email = spec.contact.email ? escapeHtml(spec.contact.email) : '';
-  const address = spec.contact.address ? escapeHtml(spec.contact.address) : '';
+  const phone = spec.contact.phone ? escapeHtml(spec.contact.phone) : '+43 662 123 456';
+  const email = spec.contact.email ? escapeHtml(spec.contact.email) : 'kontakt@beispiel.at';
+  const address = spec.contact.address ? escapeHtml(spec.contact.address) : 'Musterstraße 1, 5020 Salzburg';
+
+  const burialForms = [
+    { icon: '⚱', name: 'Erdbestattung', desc: 'Klassische Erdgrabstätte — Einzel, Doppel oder Familiengrab.' },
+    { icon: '🕯', name: 'Feuerbestattung', desc: 'Mit Urnenbeisetzung in Urnengrab, Grab oder Kolumbarium.' },
+    { icon: '🌳', name: 'Naturbestattung', desc: 'Im Friedwald, Baumgrab oder Wiesengrab — naturnah und würdevoll.' },
+    { icon: '🌊', name: 'Seebestattung', desc: 'Würdevolle Beisetzung der Urne im Meer, mit Trauerschiff-Begleitung.' },
+    { icon: '✦', name: 'Anonyme Bestattung', desc: 'Beisetzung ohne Grabstelle, ohne öffentliche Trauerfeier.' },
+    { icon: '⚓', name: 'Überführung Ausland', desc: 'Vollständige Abwicklung von Überführungen ins In- und Ausland.' },
+  ];
+
+  const firstSteps = [
+    { num: '01', title: 'Anrufen — wir kommen zu Ihnen.', body: 'Tag und Nacht erreichbar. Wir übernehmen die Erstversorgung sofort und begleiten Sie ab dem ersten Augenblick.' },
+    { num: '02', title: 'Persönliches Gespräch.', body: 'In Ruhe besprechen wir alle Wünsche, Bestattungsform, Trauerfeier und administrative Schritte. Bei Ihnen zuhause oder bei uns.' },
+    { num: '03', title: 'Wir kümmern uns um alles.', body: 'Behördengänge, Floristik, Trauerredner, Trauerdruck, Friedhof — wir koordinieren jeden Schritt diskret und zuverlässig.' },
+  ];
+
+  const faqs = [
+    { q: 'Was muss ich tun, wenn ein Angehöriger verstorben ist?', a: 'Rufen Sie uns an — Tag und Nacht. Wir kommen zu Ihnen, übernehmen die Erstversorgung und begleiten Sie durch alle weiteren Schritte. Sie müssen sich um nichts selbst kümmern.' },
+    { q: 'Welche Unterlagen werden benötigt?', a: 'In der Regel Personalausweis, Versicherungskarte, Familienstammbuch, Geburtsurkunde sowie ggf. Heirats- oder Sterbeurkunde des Ehepartners. Wir helfen Ihnen, alles zusammenzustellen.' },
+    { q: 'Wie hoch sind die Kosten einer Bestattung?', a: 'Die Gesamtkosten variieren je nach gewählter Bestattungsform, Sarg/Urne, Friedhof und Trauerfeier. Wir erstellen Ihnen ein transparentes Angebot — schriftlich, ohne versteckte Posten.' },
+    { q: 'Kann ich eine Bestattung im Voraus regeln?', a: 'Ja. Mit der Bestattungsvorsorge legen Sie zu Lebzeiten fest, wie Ihre Bestattung aussehen soll — und entlasten damit Ihre Angehörigen finanziell und organisatorisch.' },
+    { q: 'Begleiten Sie auch bei einer Auslandsüberführung?', a: 'Ja, wir wickeln Überführungen aus dem Ausland nach Österreich oder von Österreich ins Ausland vollständig ab — inklusive aller behördlichen Anforderungen.' },
+  ];
 
   return `---
-const spec = ${JSON.stringify(spec, null, 2)};
 ---
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${businessName} — ${tagline}</title>
-  <meta name="description" content="${tagline}" />
-  <meta name="robots" content="noindex, nofollow" />
-  <meta name="theme-color" content="#5d6b7c" />
+  ${renderSeoHead(spec, { slug, schemaKind: 'FuneralHome' })}
   <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
-  <link href="https://fonts.bunny.net/css?family=cormorant-garamond:400,500,600|inter:400,500&display=swap" rel="stylesheet">
-  <style>
+  <link href="https://fonts.bunny.net/css?family=cormorant-garamond:400,500,600|inter:300,400,500,600&display=swap" rel="stylesheet">
+  <style is:global>
     :root {
-      --paper: #f8f7f3;          /* warm parchment */
-      --paper-2: #efece5;
-      --ink: #2d3138;            /* soft graphite (not black) */
-      --ink-2: #5a6068;
-      --ink-3: #8b9097;
-      --rule: rgba(45,49,56,0.10);
-      --accent: #788392;         /* dusty blue-grey */
-      --serif: 'Cormorant Garamond', 'Garamond', 'Times New Roman', serif;
+      --bg: #f8f7f3;
+      --bg-2: #efece5;
+      --paper: #fdfdfb;
+      --ink: #1f2630;
+      --ink-2: #4a5260;
+      --ink-3: #8a8e96;
+      --accent: #788392;
+      --accent-deep: #4d5764;
+      --rule: rgba(31,38,48,0.10);
+      --serif: 'Cormorant Garamond', Georgia, serif;
       --sans: 'Inter', system-ui, sans-serif;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html { scroll-behavior: smooth; }
-    body { background: var(--paper); color: var(--ink); font-family: var(--sans); font-size: 17px; line-height: 1.75; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+    body { background: var(--bg); color: var(--ink); font-family: var(--sans); font-weight: 300; line-height: 1.7; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
     img { display: block; max-width: 100%; }
     a { color: inherit; text-decoration: none; }
 
-    .demo-banner {
-      background: #1e1a17; color:#fff; padding:0.55rem 1rem; font-size:0.82rem;
-      position: relative; z-index: 200;
-    }
+    .demo-banner { background: #1a0a1f; color:#fff; padding:0.55rem 1rem; font-size:0.82rem; position: relative; z-index: 200; border-bottom: 1px solid rgba(236,101,186,0.35); }
     .demo-banner-inner { max-width: 1280px; margin: 0 auto; display: flex; align-items: center; gap: 0.85rem; flex-wrap: wrap; justify-content: center; }
-    .demo-banner-tag {
-      font-size: 0.7rem; letter-spacing: 0.16em; text-transform: uppercase;
-      padding: 0.18rem 0.55rem; border-radius: 999px;
-      background: rgba(236,101,186,0.22); border: 1px solid rgba(236,101,186,0.5);
-      color: #ffd6ee; font-weight: 700; white-space: nowrap;
-    }
+    .demo-banner-tag { font-size: 0.7rem; letter-spacing: 0.16em; text-transform: uppercase; padding: 0.18rem 0.55rem; border-radius: 999px; background: rgba(236,101,186,0.22); border: 1px solid rgba(236,101,186,0.5); color: #ffd6ee; font-weight: 700; white-space: nowrap; }
     .demo-banner a { color: #ffb3df; font-weight: 700; border-bottom: 1px solid rgba(255,179,223,0.45); }
 
-    /* ─── Notruf-Bar (24h) ───────────────────────────────── */
-    .notruf {
-      background: var(--ink); color: var(--paper);
-      padding: 1rem 1.5rem; text-align: center; font-size: 0.95rem;
+    .notruf-bar {
+      background: linear-gradient(90deg, #1f2630 0%, #2a323e 100%); color: #fff;
+      padding: 0.7rem 1.5rem; font-size: 0.86rem; text-align: center;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
     }
-    .notruf strong { color: #fff; letter-spacing: 0.04em; }
-    .notruf a { color: #fff; border-bottom: 1px dotted rgba(255,255,255,0.5); padding-bottom: 1px; font-weight: 600; }
+    .notruf-bar strong { letter-spacing: 0.04em; color: var(--accent); margin-right: 0.5rem; }
 
-    /* ─── Header ─────────────────────────────────────────── */
-    .site-header { background: var(--paper); border-bottom: 1px solid var(--rule); position: relative; }
-    .header-inner {
-      max-width: 1100px; margin: 0 auto; padding: 1.6rem 1.5rem;
-      display: flex; align-items: center; justify-content: space-between; gap: 2rem;
-    }
-    .brand-mark {
-      font-family: var(--serif); font-weight: 500; font-size: 1.6rem; line-height: 1;
-      letter-spacing: 0.02em;
-    }
-    .main-nav { display: none; gap: 2.5rem; font-size: 0.9rem; font-weight: 400; }
-    .main-nav a { color: var(--ink-2); transition: color .3s; }
-    .main-nav a:hover { color: var(--ink); }
+    /* ─── Header ─── */
+    .nav { position: absolute; top: 75px; left: 0; right: 0; z-index: 30; padding: 1.5rem 2rem; }
+    .nav-inner { max-width: 1400px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 2rem; }
+    .brand-mark { font-family: var(--serif); font-weight: 500; font-size: 1.6rem; letter-spacing: 0.02em; color: #fff; }
+    .main-nav { display: none; gap: 2.25rem; font-size: 0.85rem; letter-spacing: 0.06em; text-transform: uppercase; }
+    .main-nav a { color: rgba(255,255,255,0.85); transition: color .25s; font-weight: 400; }
+    .main-nav a:hover { color: var(--accent); }
     @media (min-width: 880px) { .main-nav { display: flex; } }
-    /* ─── Mobile burger menu ─────────────────────────────── */
-    .nav-toggle {
-      position: absolute; width: 1px; height: 1px;
-      overflow: hidden; clip: rect(0,0,0,0);
-      white-space: nowrap; border: 0;
-    }
-    .nav-toggle:focus-visible ~ .nav-burger { outline: 2px solid currentColor; outline-offset: 3px; }
-    .nav-burger {
-      display: none; cursor: pointer;
-      width: 44px; height: 44px;
-      align-items: center; justify-content: center;
-      border-radius: 8px; background: transparent;
-      border: 1px solid var(--rule, rgba(0,0,0,0.1));
-      flex-shrink: 0;
-      transition: background .2s, border-color .2s;
-    }
-    .nav-burger:hover { background: rgba(0,0,0,0.04); }
-    .nav-burger span {
-      display: block; width: 18px; height: 2px;
-      background: currentColor; border-radius: 2px;
-      position: relative; transition: transform .25s ease, background .2s ease;
-    }
-    .nav-burger span::before, .nav-burger span::after {
-      content: ""; position: absolute; left: 0;
-      width: 18px; height: 2px;
-      background: currentColor; border-radius: 2px;
-      transition: transform .25s ease, top .25s ease;
-    }
-    .nav-burger span::before { top: -6px; }
-    .nav-burger span::after  { top:  6px; }
-    .nav-toggle:checked ~ .nav-burger span { background: transparent; }
-    .nav-toggle:checked ~ .nav-burger span::before { top: 0; transform: rotate(45deg); }
-    .nav-toggle:checked ~ .nav-burger span::after  { top: 0; transform: rotate(-45deg); }
-    @media (max-width: 879px) {
-      .nav-burger { display: inline-flex; }
-      .main-nav {
-        position: absolute; top: 100%; left: 0; right: 0;
-        display: flex; flex-direction: column; gap: 0;
-        background: var(--paper);
-        border-bottom: 1px solid var(--rule, rgba(0,0,0,0.1));
-        box-shadow: 0 14px 30px -16px rgba(0,0,0,0.18);
-        padding: 0.25rem 1.5rem 1rem;
-        transform: translateY(-12px); opacity: 0; pointer-events: none;
-        transition: transform .25s ease, opacity .25s ease;
-      }
-      .main-nav a {
-        padding: 0.95rem 0;
-        border-bottom: 1px solid var(--rule, rgba(0,0,0,0.1));
-        font-size: 1rem;
-        min-height: 44px;
-        display: flex; align-items: center;
-      }
-      .main-nav a:last-child { border-bottom: none; }
-      .nav-toggle:checked ~ .main-nav {
-        transform: translateY(0); opacity: 1; pointer-events: auto;
-      }
-    }
 
-    /* ─── Hero — sehr ruhig ──────────────────────────────── */
-    .hero {
-      max-width: 800px; margin: 0 auto;
-      padding: clamp(5rem, 10vw, 9rem) 1.5rem clamp(4rem, 7vw, 7rem);
-      text-align: center;
+    /* ─── Hero ─── */
+    .hero { position: relative; min-height: 88vh; display: flex; align-items: center; isolation: isolate; }
+    .hero-img { position: absolute; inset: 0; z-index: -2; background-size: cover; background-position: center; filter: brightness(0.55) saturate(0.7); }
+    .hero::after { content: ''; position: absolute; inset: 0; z-index: -1; background: linear-gradient(180deg, rgba(31,38,48,0.55) 0%, rgba(31,38,48,0.65) 70%, rgba(31,38,48,0.85) 100%); }
+    .hero-text { padding: 6rem 2rem 5rem; max-width: 1400px; margin: 0 auto; width: 100%; color: #fff; }
+    .hero-line { width: 1.5px; height: 64px; background: var(--accent); margin-bottom: 2.5rem; }
+    .hero-eyebrow { font-size: 0.78rem; letter-spacing: 0.24em; text-transform: uppercase; color: var(--accent); margin-bottom: 1.5rem; font-weight: 500; }
+    .hero h1 { font-family: var(--serif); font-weight: 400; font-size: clamp(2.75rem, 6.5vw, 5.5rem); line-height: 1.05; letter-spacing: -0.005em; max-width: 18ch; color: #fff; }
+    .hero h1 em { font-style: italic; }
+    .hero p.lead { color: rgba(255,255,255,0.75); font-size: 1.15rem; line-height: 1.65; max-width: 580px; margin-top: 2rem; font-weight: 300; }
+    .hero-actions { display: flex; gap: 1rem; margin-top: 2.5rem; flex-wrap: wrap; }
+    .btn-primary {
+      background: var(--accent); color: #fff;
+      padding: 1.05rem 2.2rem; border-radius: 0;
+      font-weight: 500; font-size: 0.92rem;
+      letter-spacing: 0.04em; text-transform: uppercase;
+      border: 1px solid var(--accent);
+      transition: background .25s, border-color .25s, color .25s;
     }
-    .hero-mark {
-      width: 1px; height: 80px; background: var(--accent); margin: 0 auto 2.5rem;
+    .btn-primary:hover { background: transparent; border-color: var(--accent); }
+    .btn-outline {
+      background: transparent; color: #fff;
+      padding: 1.05rem 2.2rem;
+      border: 1px solid rgba(255,255,255,0.4);
+      font-weight: 500; font-size: 0.92rem; letter-spacing: 0.04em; text-transform: uppercase;
+      transition: border-color .25s, background .25s;
     }
-    .hero h1 {
-      font-family: var(--serif); font-weight: 400;
-      font-size: clamp(2.25rem, 5vw, 3.75rem); line-height: 1.2; letter-spacing: -0.005em;
-      color: var(--ink); margin-bottom: 1.75rem;
-    }
-    .hero h1 em { font-style: italic; color: var(--accent); }
-    .hero-sub {
-      color: var(--ink-2); font-size: 1.1rem; line-height: 1.8;
-      max-width: 560px; margin: 0 auto;
-    }
+    .btn-outline:hover { border-color: #fff; background: rgba(255,255,255,0.06); }
 
-    /* ─── Section base ──────────────────────────────────── */
-    .section { padding: clamp(4rem, 7vw, 7rem) 1.5rem; }
-    .container { max-width: 1000px; margin: 0 auto; }
-    .col-narrow { max-width: 680px; margin: 0 auto; }
-    .section-eyebrow {
-      font-size: 0.74rem; letter-spacing: 0.22em; text-transform: uppercase;
-      color: var(--accent); font-weight: 500; margin-bottom: 1.25rem;
-    }
-    .section-title {
-      font-family: var(--serif); font-weight: 400;
-      font-size: clamp(1.85rem, 3.5vw, 2.75rem); line-height: 1.2;
-      letter-spacing: -0.01em; margin-bottom: 1.5rem;
-    }
-    .section-lead { color: var(--ink-2); font-size: 1.05rem; line-height: 1.85; }
+    /* ─── Section base ─── */
+    .section { padding: clamp(5rem, 9vw, 8rem) 1.5rem; }
+    .container { max-width: 1300px; margin: 0 auto; }
+    .container-narrow { max-width: 880px; margin: 0 auto; }
+    .section-eyebrow { display: inline-block; font-size: 0.78rem; letter-spacing: 0.22em; text-transform: uppercase; color: var(--accent); font-weight: 600; margin-bottom: 1rem; padding-left: 1.5rem; position: relative; }
+    .section-eyebrow::before { content: ''; position: absolute; left: 0; top: 50%; width: 24px; height: 1.5px; background: var(--accent); transform: translateY(-50%); }
+    .section-title { font-family: var(--serif); font-weight: 400; font-size: clamp(2.25rem, 4.5vw, 3.5rem); line-height: 1.15; letter-spacing: -0.005em; color: var(--ink); margin-bottom: 1.25rem; }
+    .section-title em { font-style: italic; color: var(--accent-deep); }
+    .section-lead { color: var(--ink-2); font-size: 1.1rem; line-height: 1.75; max-width: 600px; }
+    .section-head.center { text-align: center; }
+    .section-head.center .section-eyebrow { padding-left: 0; }
+    .section-head.center .section-eyebrow::before { display: none; }
+    .section-head.center .section-lead { margin-inline: auto; }
 
-    /* ─── Services — single column list ────────────────── */
-    .services-list {
-      max-width: 720px; margin: 3rem auto 0;
+    /* ─── First steps ─── */
+    .first-steps { background: var(--bg-2); }
+    .steps-grid { display: grid; gap: 1.25rem; margin-top: 4rem; grid-template-columns: 1fr; }
+    @media (min-width: 880px) { .steps-grid { grid-template-columns: repeat(3, 1fr); } }
+    .step {
+      background: var(--paper); padding: 2.5rem 2rem;
+      border-top: 2px solid var(--accent);
+      transition: transform .3s ease, box-shadow .3s ease;
     }
-    .service {
-      padding: 2rem 0; border-bottom: 1px solid var(--rule);
-      display: grid; gap: 0.85rem;
-    }
-    .service:last-child { border-bottom: none; }
-    .service h3 {
-      font-family: var(--serif); font-weight: 500; font-size: 1.45rem;
-      letter-spacing: -0.005em; line-height: 1.3;
-    }
-    .service p { color: var(--ink-2); line-height: 1.75; font-size: 1rem; }
+    .step:hover { transform: translateY(-4px); box-shadow: 0 20px 40px -20px rgba(31,38,48,0.18); }
+    .step-num { font-family: var(--serif); font-weight: 500; font-size: 2.5rem; line-height: 1; color: var(--accent); margin-bottom: 1rem; }
+    .step h3 { font-family: var(--serif); font-weight: 500; font-size: 1.4rem; line-height: 1.3; margin-bottom: 0.75rem; color: var(--ink); }
+    .step p { color: var(--ink-2); font-size: 0.96rem; line-height: 1.7; }
 
-    /* ─── Quote / verse block ───────────────────────────── */
-    .verse {
-      background: var(--paper-2); padding: clamp(4rem, 8vw, 7rem) 1.5rem;
-      text-align: center;
+    /* ─── Services list ─── */
+    .services-grid { display: grid; gap: 0; margin-top: 4rem; grid-template-columns: 1fr; border-top: 1px solid var(--rule); }
+    @media (min-width: 720px) { .services-grid { grid-template-columns: 1fr 1fr; } }
+    @media (min-width: 1100px) { .services-grid { grid-template-columns: repeat(3, 1fr); } }
+    .service-item {
+      padding: 2.5rem 0 2.5rem 2.25rem;
+      border-bottom: 1px solid var(--rule);
+      border-right: 1px solid var(--rule);
+      position: relative;
     }
-    .verse blockquote {
+    .service-item:nth-child(3n) { border-right: none; }
+    @media (max-width: 1099px) { .service-item:nth-child(2n) { border-right: none; } .service-item { border-right: 1px solid var(--rule); } }
+    @media (max-width: 719px) { .service-item { border-right: none !important; } }
+    .service-item::before {
+      content: ''; position: absolute; left: 0; top: 2.85rem;
+      width: 8px; height: 8px; background: var(--accent); border-radius: 50%;
+    }
+    .service-item h3 { font-family: var(--serif); font-weight: 500; font-size: 1.4rem; line-height: 1.3; margin-bottom: 0.7rem; color: var(--ink); }
+    .service-item p { color: var(--ink-2); font-size: 0.96rem; line-height: 1.7; padding-right: 1.5rem; }
+
+    /* ─── Burial forms ─── */
+    .forms { background: var(--ink); color: rgba(255,255,255,0.85); }
+    .forms .section-title { color: #fff; }
+    .forms .section-eyebrow { color: var(--accent); }
+    .forms .section-lead { color: rgba(255,255,255,0.7); }
+    .forms-grid { display: grid; gap: 1.25rem; margin-top: 4rem; grid-template-columns: 1fr; }
+    @media (min-width: 720px) { .forms-grid { grid-template-columns: 1fr 1fr; } }
+    @media (min-width: 1100px) { .forms-grid { grid-template-columns: repeat(3, 1fr); } }
+    .form-card {
+      padding: 2.25rem;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      transition: background .3s, border-color .3s;
+    }
+    .form-card:hover { background: rgba(120,131,146,0.12); border-color: var(--accent); }
+    .form-card .icon { font-size: 2rem; line-height: 1; color: var(--accent); margin-bottom: 1rem; }
+    .form-card h4 { font-family: var(--serif); font-weight: 500; font-size: 1.3rem; line-height: 1.3; margin-bottom: 0.5rem; color: #fff; }
+    .form-card p { color: rgba(255,255,255,0.7); font-size: 0.94rem; line-height: 1.65; }
+
+    /* ─── Memoriam quote with image ─── */
+    .memoriam {
+      background: var(--bg-2);
+      display: grid; gap: 0;
+      grid-template-columns: 1fr;
+    }
+    @media (min-width: 880px) { .memoriam { grid-template-columns: 1fr 1.2fr; } }
+    .memoriam-img {
+      min-height: 480px;
+      background-size: cover; background-position: center;
+      filter: grayscale(0.3) brightness(0.92);
+    }
+    .memoriam-text {
+      padding: clamp(3rem, 6vw, 5rem); display: flex; flex-direction: column; justify-content: center;
+    }
+    .memoriam-quote {
       font-family: var(--serif); font-weight: 400; font-style: italic;
-      font-size: clamp(1.5rem, 2.6vw, 2rem); line-height: 1.5;
-      max-width: 720px; margin: 0 auto 1.5rem;
+      font-size: clamp(1.5rem, 3.5vw, 2.4rem); line-height: 1.35;
+      color: var(--ink); margin-bottom: 1.5rem;
+      position: relative; padding-left: 2rem;
+    }
+    .memoriam-quote::before {
+      content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 2px;
+      background: var(--accent);
+    }
+    .memoriam-author { font-size: 0.86rem; letter-spacing: 0.06em; color: var(--ink-3); text-transform: uppercase; }
+
+    /* ─── Trust badges ─── */
+    .trust { background: var(--paper); border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); padding: 3rem 1.5rem; }
+    .trust-inner { max-width: 1100px; margin: 0 auto; display: grid; gap: 2rem; grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)); text-align: center; }
+    .trust-item strong { display: block; font-family: var(--serif); font-size: 2.2rem; font-weight: 500; line-height: 1; color: var(--accent-deep); margin-bottom: 0.5rem; }
+    .trust-item span { font-size: 0.85rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
+
+    /* ─── About + values ─── */
+    .about-grid { display: grid; gap: 4rem; margin-top: 3rem; grid-template-columns: 1fr; }
+    @media (min-width: 880px) { .about-grid { grid-template-columns: 1.1fr 1fr; gap: 5rem; align-items: center; } }
+    .about-text p { color: var(--ink-2); font-size: 1.05rem; line-height: 1.85; margin-bottom: 1rem; }
+    .values-list { list-style: none; padding: 0; margin: 2rem 0 0; }
+    .values-list li {
+      padding: 1.25rem 0; border-bottom: 1px solid var(--rule);
+      display: flex; align-items: flex-start; gap: 1rem;
+    }
+    .values-list li:last-child { border-bottom: none; }
+    .values-list li::before {
+      content: '✦'; color: var(--accent); font-size: 0.95rem;
+      flex-shrink: 0; padding-top: 0.15rem;
+    }
+    .values-list strong { font-family: var(--serif); font-weight: 500; font-size: 1.1rem; color: var(--ink); display: block; margin-bottom: 0.2rem; }
+    .values-list span { color: var(--ink-2); font-size: 0.95rem; line-height: 1.65; }
+
+    /* ─── FAQ ─── */
+    .faq { background: var(--bg-2); }
+    .faq-list { max-width: 880px; margin: 4rem auto 0; }
+    .faq-item {
+      border-bottom: 1px solid var(--rule); padding: 1.85rem 0;
+    }
+    .faq-item summary {
+      cursor: pointer; list-style: none;
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 2rem;
+      font-family: var(--serif); font-weight: 500; font-size: 1.25rem; line-height: 1.4;
       color: var(--ink);
     }
-    .verse cite { font-style: normal; color: var(--ink-3); font-size: 0.85rem; letter-spacing: 0.12em; text-transform: uppercase; }
-
-    /* ─── About — single column ─────────────────────────── */
-    .about-content { max-width: 680px; margin: 0 auto; }
-    .about-content p + p { margin-top: 1.25rem; }
-
-    /* ─── Process / steps ───────────────────────────────── */
-    .steps-list { max-width: 720px; margin: 3rem auto 0; }
-    .step {
-      display: grid; grid-template-columns: auto 1fr; gap: 2rem;
-      padding: 1.5rem 0; border-bottom: 1px solid var(--rule);
+    .faq-item summary::-webkit-details-marker { display: none; }
+    .faq-item summary::after {
+      content: '+'; font-family: var(--sans); font-size: 1.5rem; color: var(--accent);
+      transition: transform .3s; flex-shrink: 0; margin-top: -0.15rem;
     }
-    .step:last-child { border-bottom: none; }
-    .step-num {
-      font-family: var(--serif); font-style: italic; font-size: 2rem;
-      color: var(--accent); font-weight: 400; line-height: 1;
-    }
-    .step h4 { font-family: var(--serif); font-weight: 500; font-size: 1.2rem; margin-bottom: 0.4rem; }
-    .step p { color: var(--ink-2); }
+    .faq-item[open] summary::after { transform: rotate(45deg); }
+    .faq-item p { color: var(--ink-2); font-size: 1rem; line-height: 1.8; padding-top: 1rem; max-width: 60ch; }
 
-    /* ─── Contact ───────────────────────────────────────── */
-    .contact-section { background: var(--paper-2); }
-    .contact-grid {
-      max-width: 880px; margin: 3rem auto 0;
-      display: grid; gap: 2rem; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+    /* ─── Contact section ─── */
+    .contact-section { background: var(--ink); color: #fff; padding: clamp(5rem, 8vw, 7rem) 1.5rem; }
+    .contact-section .section-title { color: #fff; }
+    .contact-section .section-eyebrow { color: var(--accent); }
+    .contact-section .section-lead { color: rgba(255,255,255,0.7); }
+    .contact-grid { display: grid; gap: 1.25rem; margin-top: 3rem; grid-template-columns: 1fr; }
+    @media (min-width: 720px) { .contact-grid { grid-template-columns: repeat(3, 1fr); } }
+    .contact-card {
+      padding: 2rem; background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.1);
+      text-align: center; transition: border-color .3s, background .3s;
     }
-    .contact-block { text-align: center; padding: 2rem 1rem; }
-    .contact-block .lbl {
-      font-size: 0.74rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink-3);
-      font-weight: 500; margin-bottom: 0.85rem;
+    .contact-card:hover { border-color: var(--accent); background: rgba(120,131,146,0.1); }
+    .contact-card .lbl { font-size: 0.74rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--accent); margin-bottom: 1rem; font-weight: 600; }
+    .contact-card .val { font-family: var(--serif); font-size: 1.3rem; line-height: 1.4; color: #fff; }
+    .contact-card a:hover { color: var(--accent); }
+
+    /* ─── Footer multi-col ─── */
+    footer.site-footer {
+      background: linear-gradient(180deg, #131820 0%, #06080d 100%);
+      color: rgba(255,255,255,0.7);
+      padding: clamp(3rem, 5vw, 4.5rem) 1.5rem 2rem;
+      position: relative; overflow: hidden; isolation: isolate;
     }
-    .contact-block .val { font-family: var(--serif); font-size: 1.25rem; line-height: 1.4; }
-    .contact-block a:hover { color: var(--accent); }
+    .footer-inner { max-width: 1300px; margin: 0 auto; }
+    .footer-grid {
+      display: grid; gap: 2.5rem; grid-template-columns: 1fr;
+      padding-bottom: 2.5rem; border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    @media (min-width: 720px) { .footer-grid { grid-template-columns: 1.4fr 1fr 1fr 1fr; } }
+    .footer-col h4 {
+      font-family: var(--sans); font-size: 0.74rem; letter-spacing: 0.18em;
+      text-transform: uppercase; font-weight: 600; color: var(--accent);
+      margin: 0 0 1.1rem;
+    }
+    .footer-col ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.6rem; }
+    .footer-col a, .footer-col li { color: rgba(255,255,255,0.7); font-size: 0.94rem; line-height: 1.55; transition: color .25s; }
+    .footer-col a:hover { color: var(--accent); }
+    .footer-brand h3 { font-family: var(--serif); font-weight: 500; font-size: 1.6rem; color: #fff; margin: 0 0 0.65rem; letter-spacing: 0.02em; }
+    .footer-brand p { font-size: 0.95rem; line-height: 1.65; max-width: 36ch; margin: 0 0 1.25rem; color: rgba(255,255,255,0.55); }
+    .footer-bottom {
+      display: flex; flex-wrap: wrap; gap: 1rem; justify-content: space-between; align-items: center;
+      padding-top: 2rem; font-size: 0.84rem; color: rgba(255,255,255,0.45);
+    }
+    .footer-credit a { color: rgba(255,255,255,0.6); font-weight: 500; border-bottom: 1px solid rgba(255,255,255,0.18); transition: all .25s; }
+    .footer-credit a:hover { color: var(--accent); border-color: var(--accent); }
 
-    /* ─── Footer ────────────────────────────────────────── */
-    footer { background: var(--paper); color: var(--ink-3); padding: 3rem 1.5rem; text-align: center; font-size: 0.85rem; border-top: 1px solid var(--rule); }
-    footer .brand { font-family: var(--serif); font-size: 1.25rem; color: var(--ink); margin-bottom: 0.4rem; }
-    footer .legal { display: flex; gap: 1.5rem; justify-content: center; margin-top: 1rem; flex-wrap: wrap; }
-    footer .legal a:hover { color: var(--accent); }
-
-    /* ─── Reveal — very subtle ──────────────────────────── */
-    .reveal { opacity: 0; transform: translateY(8px); transition: opacity 1s ease, transform 1s ease; }
-    .reveal.is-visible { opacity: 1; transform: translateY(0); }
+    /* Reveal animation */
+    .reveal { opacity: 1; transform: none; }
+    /* visible by default */
     @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1 !important; transform: none !important; } }
   </style>
 </head>
@@ -269,50 +339,80 @@ const spec = ${JSON.stringify(spec, null, 2)};
 <div class="demo-banner" role="contentinfo">
   <div class="demo-banner-inner">
     <span class="demo-banner-tag">Demo-Vorschau</span>
-    <span class="demo-banner-text">
-      Erstellt von
-      <a href="https://webhoch.com" target="_blank" rel="noopener">Webagentur Hochmeir e.U.</a>
-      ·
-      <a href="https://webhoch.com/#contact" target="_blank" rel="noopener">Beratung anfragen</a>
-    </span>
+    <span>Erstellt von <a href="https://webhoch.com" target="_blank" rel="noopener">Webagentur Hochmeir e.U.</a> · <a href="https://webhoch.com/#contact" target="_blank" rel="noopener">Beratung anfragen</a></span>
   </div>
 </div>
 
-<div class="notruf" role="contentinfo">
-  <strong>Tag und Nacht erreichbar.</strong>
+<div class="notruf-bar" role="contentinfo">
+  <strong>Tag &amp; Nacht erreichbar.</strong>
   Notruf 24/7 verfügbar — bitte beachten Sie, dass dies eine Demo-Vorschau ist und die angezeigte Telefonnummer nur als Beispiel dient.
 </div>
 
-<header class="site-header">
-  <div class="header-inner">
+<header class="nav">
+  <div class="nav-inner">
     <a class="brand-mark" href="#">${businessName}</a>
-    <input type="checkbox" id="nav-toggle" class="nav-toggle" aria-label="Menü öffnen" />
-    <label for="nav-toggle" class="nav-burger" aria-hidden="true"><span></span></label>
     <nav class="main-nav">
       <a href="#begleitung">Begleitung</a>
-      <a href="#ablauf">Ablauf</a>
-      <a href="#ueber-uns">Über uns</a>
+      <a href="#erste-schritte">Erste Schritte</a>
+      <a href="#bestattungsformen">Bestattungsformen</a>
+      <a href="#fragen">Fragen</a>
       <a href="#kontakt">Kontakt</a>
     </nav>
   </div>
 </header>
 
 <section class="hero">
-  <div class="hero-mark" aria-hidden="true"></div>
-  <h1>${headline.replace(/(\.|\?)([^.?]*)$/, '<em>$1$2</em>')}</h1>
-  <p class="hero-sub">${subhead}</p>
+  <div class="hero-img" style="background-image: url('${heroPhoto(spec, slug)}');"></div>
+  <div class="hero-text">
+    <div class="hero-line"></div>
+    <span class="hero-eyebrow">${escapeHtml(tagline.slice(0, 60))}</span>
+    <h1>${escapeHtml(headline.replace(/(\.|!|\?)([^.!?]*)$/, '|$1$2|')).replace(/\|([^|]+)\|/, '<em>$1</em>')}</h1>
+    <p class="lead">${subhead}</p>
+    <div class="hero-actions">
+      <a href="#kontakt" class="btn-primary">${ctaText}</a>
+      <a href="#erste-schritte" class="btn-outline">Erste Schritte ansehen</a>
+    </div>
+  </div>
+</section>
+
+<section class="trust">
+  <div class="trust-inner">
+    <div class="trust-item"><strong>24 / 7</strong><span>Erreichbar</span></div>
+    <div class="trust-item"><strong>40+ Jahre</strong><span>Erfahrung</span></div>
+    <div class="trust-item"><strong>3 Generationen</strong><span>Familienbetrieb</span></div>
+    <div class="trust-item"><strong>Mitglied</strong><span>Bestatter-Verband AT</span></div>
+  </div>
+</section>
+
+<section id="erste-schritte" class="section first-steps">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="section-eyebrow">Erste Schritte</span>
+      <h2 class="section-title">Was im <em>Trauerfall</em> zu tun ist.</h2>
+      <p class="section-lead">In den ersten Stunden nach einem Trauerfall fühlen sich viele überfordert. Sie müssen nichts allein entscheiden — wir nehmen Ihnen die Last ab.</p>
+    </div>
+    <div class="steps-grid">
+      ${firstSteps.map(s => `
+        <article class="step reveal">
+          <div class="step-num">${s.num}</div>
+          <h3>${escapeHtml(s.title)}</h3>
+          <p>${escapeHtml(s.body)}</p>
+        </article>
+      `).join('')}
+    </div>
+  </div>
 </section>
 
 <section id="begleitung" class="section">
   <div class="container">
-    <div class="col-narrow" style="text-align: center;">
-      <div class="section-eyebrow">Wie wir begleiten</div>
-      <h2 class="section-title">In schweren Stunden steht Klarheit an erster Stelle.</h2>
-      <p class="section-lead">Wir nehmen Ihnen ab, was Sie nicht selbst tragen müssen. Diskret, transparent und mit der Zeit, die Sie brauchen.</p>
+    <div class="section-head reveal">
+      <span class="section-eyebrow">Wie wir begleiten</span>
+      <h2 class="section-title">Persönlich, würdevoll, <em>diskret</em>.</h2>
+      <p class="section-lead">Wir nehmen uns Zeit. Für Ihre Wünsche, für Ihre Trauer, für jeden einzelnen Schritt.</p>
     </div>
-    <div class="services-list">
+    <div class="services-grid">
       ${services.map(s => `
-        <article class="service reveal">
+        <article class="service-item reveal">
           <h3>${escapeHtml(s.name)}</h3>
           <p>${escapeHtml(s.description)}</p>
         </article>
@@ -321,105 +421,161 @@ const spec = ${JSON.stringify(spec, null, 2)};
   </div>
 </section>
 
-<section class="verse" aria-label="Zur Erinnerung">
-  <blockquote>„Was wir gemeinsam erlebt haben, kann uns niemand mehr nehmen."</blockquote>
-  <cite>— gewidmet allen, die loslassen müssen</cite>
-</section>
-
-<section id="ablauf" class="section">
+<section id="bestattungsformen" class="section forms">
   <div class="container">
-    <div class="col-narrow" style="text-align: center;">
-      <div class="section-eyebrow">Ablauf</div>
-      <h2 class="section-title">Schritt für Schritt — in Ihrem Tempo.</h2>
+    <div class="section-head reveal">
+      <span class="section-eyebrow">Bestattungsformen</span>
+      <h2 class="section-title">Jede Bestattung ist <em>einzigartig</em>.</h2>
+      <p class="section-lead">Vom klassischen Erdgrab bis zur naturnahen Beisetzung — wir beraten Sie offen und ohne Vorgaben.</p>
     </div>
-    <div class="steps-list">
-      <article class="step reveal">
-        <div class="step-num">i</div>
-        <div>
-          <h4>Erstkontakt</h4>
-          <p>Sie rufen uns an oder kommen persönlich vorbei. Wir hören zu, ohne Druck. Auf Wunsch besuchen wir Sie auch zu Hause.</p>
-        </div>
-      </article>
-      <article class="step reveal">
-        <div class="step-num">ii</div>
-        <div>
-          <h4>Persönliche Beratung</h4>
-          <p>Wir besprechen Ihre Wünsche und die Möglichkeiten — Bestattungsform, Trauerfeier, Erinnerungsstücke. Alles ohne Eile.</p>
-        </div>
-      </article>
-      <article class="step reveal">
-        <div class="step-num">iii</div>
-        <div>
-          <h4>Organisation</h4>
-          <p>Wir kümmern uns um alle Behördengänge, Zeremonien und Details. Sie behalten den Überblick, ohne es allein tun zu müssen.</p>
-        </div>
-      </article>
-      <article class="step reveal">
-        <div class="step-num">iv</div>
-        <div>
-          <h4>Trauerfeier</h4>
-          <p>Würdige Gestaltung — kirchlich, weltlich oder im engsten Kreis. So, wie es Ihren Werten entspricht.</p>
-        </div>
-      </article>
-      <article class="step reveal">
-        <div class="step-num">v</div>
-        <div>
-          <h4>Nachsorge</h4>
-          <p>Auch nach der Bestattung sind wir für Sie da — bei Behörden, Versicherungen oder einfach im Gespräch.</p>
-        </div>
-      </article>
+    <div class="forms-grid">
+      ${burialForms.map(b => `
+        <article class="form-card reveal">
+          <div class="icon">${b.icon}</div>
+          <h4>${b.name}</h4>
+          <p>${b.desc}</p>
+        </article>
+      `).join('')}
     </div>
   </div>
 </section>
 
-<section id="ueber-uns" class="section" style="background: var(--paper-2);">
+<section class="memoriam">
+  <div class="memoriam-img" style="background-image: url('${memoriamPhoto(spec, slug)}');"></div>
+  <div class="memoriam-text reveal">
+    <span class="section-eyebrow" style="padding-left: 0; margin-bottom: 1.25rem;">In Memoriam</span>
+    <p class="memoriam-quote">„Was du in Liebe getan hast, wird nie verloren sein. Es lebt weiter — in den Menschen, die du berührt hast."</p>
+    <span class="memoriam-author">— Trauerleitspruch</span>
+  </div>
+</section>
+
+<section class="section">
   <div class="container">
-    <div class="about-content reveal">
-      <div class="section-eyebrow">Über uns</div>
-      <h2 class="section-title">Persönlich. Diskret. Mit Zeit für jeden Menschen.</h2>
-      <p class="section-lead">${escapeHtml(spec.about.body)}</p>
-      <p class="section-lead">Wir sind kein Konzern, keine Kette. Sondern ein Familienbetrieb, der seit Jahrzehnten Menschen in der Region begleitet — über Generationen hinweg, in der gleichen Sorgfalt.</p>
+    <div class="about-grid">
+      <div class="about-text reveal">
+        <span class="section-eyebrow">Über uns</span>
+        <h2 class="section-title">Familie, die für <em>Familien</em> da ist.</h2>
+        <p>${escapeHtml(spec.about?.body || 'Seit über vier Jahrzehnten begleiten wir Familien in den schwersten Stunden ihres Lebens. Was als kleiner Betrieb begann, wird heute in dritter Generation geführt — mit derselben Sorgfalt, demselben Respekt.')}</p>
+        <p>Wir glauben: Eine Bestattung ist mehr als ein Termin. Es ist die letzte Geste der Liebe und Wertschätzung. Diese Geste verdient unsere ganze Aufmerksamkeit.</p>
+      </div>
+      <div class="reveal">
+        <ul class="values-list">
+          <li>
+            <div>
+              <strong>Persönlich, nicht standardisiert</strong>
+              <span>Jeder Mensch hat eine einzigartige Geschichte. Jede Trauerfeier sollte das widerspiegeln.</span>
+            </div>
+          </li>
+          <li>
+            <div>
+              <strong>Transparent in Kosten und Abläufen</strong>
+              <span>Keine versteckten Posten, kein Kleingedrucktes. Alles schriftlich, alles fair kalkuliert.</span>
+            </div>
+          </li>
+          <li>
+            <div>
+              <strong>Diskret und würdevoll</strong>
+              <span>Privatsphäre ist nicht verhandelbar. Wir bewegen uns leise im Hintergrund.</span>
+            </div>
+          </li>
+          <li>
+            <div>
+              <strong>Über die Trauerfeier hinaus</strong>
+              <span>Wir bleiben ansprechbar — auch Wochen und Monate danach. Eine kurze Frage, eine Erinnerung — wir sind da.</span>
+            </div>
+          </li>
+        </ul>
+      </div>
     </div>
   </div>
 </section>
 
-<section id="kontakt" class="section contact-section">
+<section id="fragen" class="section faq">
   <div class="container">
-    <div class="col-narrow" style="text-align: center;">
-      <div class="section-eyebrow">Kontakt</div>
-      <h2 class="section-title">Sie erreichen uns rund um die Uhr.</h2>
-      <p class="section-lead">In dringenden Fällen — auch nachts und an Wochenenden.</p>
+    <div class="section-head center reveal">
+      <span class="section-eyebrow">Häufige Fragen</span>
+      <h2 class="section-title">Was Sie <em>jetzt wissen</em> sollten.</h2>
+      <p class="section-lead">Wenn etwas Sie hier nicht beantwortet — rufen Sie uns einfach an. Wir nehmen uns Zeit.</p>
+    </div>
+    <div class="faq-list">
+      ${faqs.map(f => `
+        <details class="faq-item reveal">
+          <summary>${escapeHtml(f.q)}</summary>
+          <p>${escapeHtml(f.a)}</p>
+        </details>
+      `).join('')}
+    </div>
+  </div>
+</section>
+
+<section id="kontakt" class="contact-section">
+  <div class="container">
+    <div class="section-head center reveal">
+      <span class="section-eyebrow">Kontakt</span>
+      <h2 class="section-title">Wir sind <em>für Sie da</em>.</h2>
+      <p class="section-lead">Tag und Nacht erreichbar. Persönliche Beratung kostenfrei und unverbindlich.</p>
     </div>
     <div class="contact-grid">
-      ${phone ? `<div class="contact-block reveal">
-        <div class="lbl">Telefon — 24h</div>
-        <div class="val"><a href="tel:${phone.replace(/\s/g, '')}">${phone}</a></div>
-      </div>` : ''}
-      ${email ? `<div class="contact-block reveal">
+      <div class="contact-card reveal">
+        <div class="lbl">Telefon · 24 / 7</div>
+        <div class="val">${phone}</div>
+      </div>
+      <div class="contact-card reveal">
         <div class="lbl">E-Mail</div>
         <div class="val"><a href="mailto:${email}">${email}</a></div>
-      </div>` : ''}
-      ${address ? `<div class="contact-block reveal">
+      </div>
+      <div class="contact-card reveal">
         <div class="lbl">Anschrift</div>
         <div class="val">${address}</div>
-      </div>` : ''}
+      </div>
     </div>
   </div>
 </section>
 
-<footer>
-  <div class="brand">${businessName}</div>
-  <div>${tagline}</div>
-  <div class="legal">
-    <a href="/impressum">Impressum</a>
-    <a href="/datenschutz">Datenschutz</a>
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="footer-grid">
+      <div class="footer-col footer-brand">
+        <h3>${businessName}</h3>
+        <p>${escapeHtml(tagline)}</p>
+        <a href="#kontakt" style="display:inline-flex;align-items:center;gap:0.5rem;padding:0.7rem 1.2rem;background:var(--accent);color:#fff;font-weight:500;font-size:0.86rem;letter-spacing:0.06em;text-transform:uppercase;border:1px solid var(--accent);transition:background .25s,color .25s;">${ctaText}</a>
+      </div>
+      <div class="footer-col">
+        <h4>Begleitung</h4>
+        <ul>
+          <li><a href="#erste-schritte">Erste Schritte</a></li>
+          <li><a href="#begleitung">Wie wir begleiten</a></li>
+          <li><a href="#bestattungsformen">Bestattungsformen</a></li>
+          <li><a href="#fragen">Häufige Fragen</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Kontakt</h4>
+        <ul>
+          <li>${phone}</li>
+          <li><a href="mailto:${email}">${email}</a></li>
+          <li>${address}</li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Rechtliches</h4>
+        <ul>
+          <li><a href="/impressum">Impressum</a></li>
+          <li><a href="/datenschutz">Datenschutz</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>&copy; ${new Date().getFullYear()} ${businessName} · Alle Rechte vorbehalten.</span>
+      <span class="footer-credit">Demo erstellt von <a href="https://webhoch.com" target="_blank" rel="noopener">Webagentur Hochmeir e.U.</a></span>
+    </div>
   </div>
 </footer>
 
 <script>
   const io = new IntersectionObserver((entries) => {
     entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('is-visible'); });
-  }, { threshold: 0.1, rootMargin: '0px 0px -40px' });
+  }, { threshold: 0.1, rootMargin: '0px 0px -50px' });
   document.querySelectorAll('.reveal').forEach(el => io.observe(el));
 </script>
 </body>

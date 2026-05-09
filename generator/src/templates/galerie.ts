@@ -5,6 +5,8 @@
  */
 
 import type { SiteSpec } from '../types.js';
+import { renderSeoHead } from './_seo.js';
+import { getGalleryImage, getHeroImage } from './_media.js';
 
 function escapeHtml(s: string): string {
   return String(s)
@@ -12,8 +14,8 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-function workPhoto(slug: string, idx: number, w = 800, h = 1000): string {
-  return `https://picsum.photos/seed/${encodeURIComponent(slug)}-work-${idx}/${w}/${h}`;
+function workPhoto(spec: SiteSpec, slug: string, idx: number, w = 800, h = 1000): string {
+  return getGalleryImage(spec, slug, idx, w, h);
 }
 
 export function renderGaleriePage(spec: SiteSpec, slug: string): string {
@@ -36,17 +38,11 @@ export function renderGaleriePage(spec: SiteSpec, slug: string): string {
   const email = spec.contact.email ? escapeHtml(spec.contact.email) : '';
 
   return `---
-const spec = ${JSON.stringify(spec, null, 2)};
 ---
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${businessName} — ${escapeHtml(tagline)}</title>
-  <meta name="description" content="${escapeHtml(tagline)}" />
-  <meta name="robots" content="noindex, nofollow" />
-  <meta name="theme-color" content="#0a0a0a" />
+  ${renderSeoHead(spec, { slug, schemaKind: 'LocalBusiness' })}
   <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
   <link href="https://fonts.bunny.net/css?family=fraunces:400,500,600,700,800,900|inter:400,500,600&display=swap" rel="stylesheet">
   <style>
@@ -262,7 +258,7 @@ const spec = ${JSON.stringify(spec, null, 2)};
     /* ─── Contact ───────────────────────────────────────── */
     .contact-section {
       padding: clamp(6rem, 10vw, 10rem) 2rem;
-      background-image: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.85)), url('${workPhoto(slug, 99, 1800, 1200)}');
+      background-image: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.85)), url('${workPhoto(spec, slug, 99, 1800, 1200)}');
       background-size: cover; background-position: center;
       text-align: center;
     }
@@ -283,8 +279,8 @@ const spec = ${JSON.stringify(spec, null, 2)};
     footer .legal { display: flex; gap: 1.5rem; justify-content: center; margin-top: 1rem; flex-wrap: wrap; }
     footer .legal a:hover { color: var(--accent); }
 
-    .reveal { opacity: 0; transform: translateY(24px); transition: opacity 1s ease, transform 1s ease; }
-    .reveal.is-visible { opacity: 1; transform: translateY(0); }
+    .reveal { opacity: 1; transform: none; }
+    /* visible by default */
     @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1 !important; transform: none !important; } .scroll-hint { animation: none; } }
   </style>
 </head>
@@ -317,7 +313,7 @@ const spec = ${JSON.stringify(spec, null, 2)};
 </header>
 
 <section class="hero">
-  <div class="hero-img" style="background-image: url('${workPhoto(slug, 0, 1800, 1200)}');"></div>
+  <div class="hero-img" style="background-image: url('${getHeroImage(spec, slug, 1800, 1200)}');"></div>
   <div class="hero-text">
     <div class="hero-eyebrow">${escapeHtml(tagline.slice(0, 80))}</div>
     <h1>${headline.replace(/(\.|\?|!)([^.?!]*)$/, '<em>$1$2</em>')}</h1>
@@ -341,29 +337,29 @@ const spec = ${JSON.stringify(spec, null, 2)};
 
   <div class="work-grid">
     <div class="work-row r1">
-      <a href="#kontakt" class="tile wide reveal"><img class="tile-img" src="${workPhoto(slug, 1, 1200, 750)}" alt="" loading="lazy">
+      <a href="#kontakt" class="tile wide reveal"><img class="tile-img" src="${workPhoto(spec, slug, 1, 1200, 750)}" alt="" loading="lazy">
         <div class="tile-caption"><div class="cat">Hochzeit</div><div class="ttl">Sophie & Daniel</div></div>
       </a>
-      <a href="#kontakt" class="tile reveal"><img class="tile-img" src="${workPhoto(slug, 2)}" alt="" loading="lazy">
+      <a href="#kontakt" class="tile reveal"><img class="tile-img" src="${workPhoto(spec, slug, 2)}" alt="" loading="lazy">
         <div class="tile-caption"><div class="cat">Portrait</div><div class="ttl">Editorial</div></div>
       </a>
     </div>
     <div class="work-row r2">
-      <a href="#kontakt" class="tile reveal"><img class="tile-img" src="${workPhoto(slug, 3)}" alt="" loading="lazy">
+      <a href="#kontakt" class="tile reveal"><img class="tile-img" src="${workPhoto(spec, slug, 3)}" alt="" loading="lazy">
         <div class="tile-caption"><div class="cat">Produkt</div><div class="ttl">Kollektion 24</div></div>
       </a>
-      <a href="#kontakt" class="tile tall reveal"><img class="tile-img" src="${workPhoto(slug, 4)}" alt="" loading="lazy">
+      <a href="#kontakt" class="tile tall reveal"><img class="tile-img" src="${workPhoto(spec, slug, 4)}" alt="" loading="lazy">
         <div class="tile-caption"><div class="cat">Event</div><div class="ttl">Im Hintergrund</div></div>
       </a>
-      <a href="#kontakt" class="tile reveal"><img class="tile-img" src="${workPhoto(slug, 5)}" alt="" loading="lazy">
+      <a href="#kontakt" class="tile reveal"><img class="tile-img" src="${workPhoto(spec, slug, 5)}" alt="" loading="lazy">
         <div class="tile-caption"><div class="cat">Architektur</div><div class="ttl">Lichtspiele</div></div>
       </a>
     </div>
     <div class="work-row r3">
-      <a href="#kontakt" class="tile reveal"><img class="tile-img" src="${workPhoto(slug, 6)}" alt="" loading="lazy">
+      <a href="#kontakt" class="tile reveal"><img class="tile-img" src="${workPhoto(spec, slug, 6)}" alt="" loading="lazy">
         <div class="tile-caption"><div class="cat">Portrait</div><div class="ttl">Studio</div></div>
       </a>
-      <a href="#kontakt" class="tile wide reveal"><img class="tile-img" src="${workPhoto(slug, 7, 1200, 750)}" alt="" loading="lazy">
+      <a href="#kontakt" class="tile wide reveal"><img class="tile-img" src="${workPhoto(spec, slug, 7, 1200, 750)}" alt="" loading="lazy">
         <div class="tile-caption"><div class="cat">Marke</div><div class="ttl">Imagefilm</div></div>
       </a>
     </div>

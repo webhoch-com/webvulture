@@ -2,6 +2,7 @@
 
 namespace App\Domain\Storage;
 
+use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -21,14 +22,13 @@ use Illuminate\Support\Facades\Storage;
  *     claude-input.json
  *     claude-output.json
  *
- * All paths are relative to storage/app (Laravel local disk).
- * Swap Storage::disk('local') → Storage::disk('s3') later without changing callers.
+ * Backed by the 'leads' filesystem disk (set LEADS_DISK=local|s3 in .env).
  */
 class LeadStorageService
 {
-    protected function disk(): \Illuminate\Contracts\Filesystem\Filesystem
+    protected function disk(): Filesystem
     {
-        return Storage::disk('local');
+        return Storage::disk('leads');
     }
 
     // ─── Path helpers ─────────────────────────────────────────────────────────
@@ -71,6 +71,7 @@ class LeadStorageService
     {
         $path = $this->rawPath($leadId, $filename);
         $this->disk()->put($path, $content);
+
         return $path;
     }
 
@@ -78,15 +79,17 @@ class LeadStorageService
     {
         $path = $this->extractedPath($leadId);
         $this->disk()->put($path, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+
         return $path;
     }
 
     public function readExtracted(int $leadId): ?array
     {
         $path = $this->extractedPath($leadId);
-        if (!$this->disk()->exists($path)) {
+        if (! $this->disk()->exists($path)) {
             return null;
         }
+
         return json_decode($this->disk()->get($path), true);
     }
 
@@ -94,15 +97,17 @@ class LeadStorageService
     {
         $path = $this->generationPath($leadId, $filename);
         $this->disk()->put($path, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+
         return $path;
     }
 
     public function readGeneration(int $leadId, string $filename): ?array
     {
         $path = $this->generationPath($leadId, $filename);
-        if (!$this->disk()->exists($path)) {
+        if (! $this->disk()->exists($path)) {
             return null;
         }
+
         return json_decode($this->disk()->get($path), true);
     }
 
@@ -128,8 +133,14 @@ class LeadStorageService
     public function deleteAll(int $leadId): void
     {
         $root = $this->root($leadId);
-        if ($this->disk()->exists($root)) {
-            $this->disk()->deleteDirectory($root);
+        if (! $this->disk()->exists($root)) {
+            return;
+        }
+        if (! $this->disk()->deleteDirectory($root)) {
+            throw new \RuntimeException(
+                "LeadStorageService::deleteAll failed for lead {$leadId} (path {$root}). "
+                ."Files may remain on disk — Job will retry."
+            );
         }
     }
 
@@ -137,14 +148,39 @@ class LeadStorageService
 
     public function deletePrototypeFiles(array $versionIds): void
     {
-        $projectsDir = env('PROJECTS_DIR', '/tmp/wv-projects');
-        $artifactsDir = env('ARTIFACTS_DIR', '/tmp/wv-artifacts');
+        $projectsDir = (string) config('services.storage.projects_dir', '/tmp/wv-projects');
+        $artifactsDir = (string) config('services.storage.artifacts_dir', '/tmp/wv-artifacts');
 
+        $missingCount = 0;
+        $deletedCount = 0;
         foreach ($versionIds as $id) {
-            $project  = "{$projectsDir}/prototype-{$id}";
+            $project = "{$projectsDir}/prototype-{$id}";
             $artifact = "{$artifactsDir}/{$id}";
-            if (is_dir($project))  $this->rmrf($project);
-            if (is_dir($artifact)) $this->rmrf($artifact);
+            $foundAny = false;
+            if (is_dir($project)) {
+                $this->rmrf($project);
+                $foundAny = true;
+            }
+            if (is_dir($artifact)) {
+                $this->rmrf($artifact);
+                $foundAny = true;
+            }
+            if ($foundAny) {
+                $deletedCount++;
+            } else {
+                $missingCount++;
+            }
+        }
+
+        if (! empty($versionIds) && $deletedCount === 0) {
+            \Illuminate\Support\Facades\Log::warning(
+                'LeadStorageService::deletePrototypeFiles found no files for any version — possible config drift',
+                ['version_ids' => $versionIds, 'projects_dir' => $projectsDir, 'artifacts_dir' => $artifactsDir]
+            );
+        } elseif ($missingCount > 0) {
+            \Illuminate\Support\Facades\Log::info(
+                "LeadStorageService::deletePrototypeFiles deleted {$deletedCount}, {$missingCount} versions had no files"
+            );
         }
     }
 
@@ -165,9 +201,10 @@ class LeadStorageService
     public function listScreenshots(int $leadId): array
     {
         $dir = "{$this->root($leadId)}/screenshots";
-        if (!$this->disk()->exists($dir)) {
+        if (! $this->disk()->exists($dir)) {
             return [];
         }
+
         return array_map(
             fn ($f) => ['path' => $f, 'name' => basename($f)],
             $this->disk()->files($dir),

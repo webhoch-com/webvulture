@@ -5,17 +5,54 @@ import { mkdirSync } from 'node:fs';
 import { orchestrate } from './orchestrator.js';
 import { scaffoldAstroProject } from './scaffolder.js';
 import { buildAstroProject } from './build.js';
-import { callWebhook } from './webhook.js';
+import { callWebhook, verifyIncoming } from './webhook.js';
 import type { GenerateRequest, BuildRequest } from './types.js';
+
+declare module 'fastify' {
+  interface FastifyRequest {
+    rawBody?: string;
+  }
+}
 
 const app = Fastify({ logger: true });
 
+// Capture raw body BEFORE JSON parsing so HMAC verification matches exactly
+// what Laravel signed (byte-for-byte). Otherwise Fastify re-stringifies
+// the parsed object and the hash differs.
+app.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, done) => {
+  (req as any).rawBody = body as string;
+  if (body === '') {
+    done(null, {});
+    return;
+  }
+  try {
+    done(null, JSON.parse(body as string));
+  } catch (err) {
+    done(err as Error, undefined);
+  }
+});
+
+// HMAC verification for incoming Laravel-originated requests.
+// Skip /health (used by GeneratorHealthProbe) and /preview (static artifacts;
+// behind firewall on 127.0.0.1 only — see deploy notes).
+app.addHook('preHandler', async (req, reply) => {
+  if (req.url === '/health' || req.url.startsWith('/preview')) {
+    return;
+  }
+  const rawBody = req.rawBody ?? '';
+  const ok = verifyIncoming(rawBody, {
+    'x-wv-timestamp': req.headers['x-wv-timestamp'] as string | undefined,
+    'x-wv-signature': req.headers['x-wv-signature'] as string | undefined,
+  });
+  if (!ok) {
+    return reply.status(401).send({ error: 'Unauthorized' });
+  }
+});
+
 const ARTIFACTS_DIR = process.env.ARTIFACTS_DIR ?? '/tmp/wv-artifacts';
 
-// Ensure dir exists before @fastify/static registers (plugin fails if root missing)
 mkdirSync(ARTIFACTS_DIR, { recursive: true });
 
-// ─── Static preview serving ─────────────────────────────────────────────────
 await app.register(fastifyStatic, {
   root: ARTIFACTS_DIR,
   prefix: '/preview',
@@ -23,29 +60,25 @@ await app.register(fastifyStatic, {
   index: ['index.html'],
 });
 
-// ─── Health ────────────────────────────────────────────────────────────────
 app.get('/health', async () => ({ ok: true }));
 
-// ─── Generate ──────────────────────────────────────────────────────────────
 app.post<{ Body: GenerateRequest }>('/generate', async (req, reply) => {
-  const { prototype_version_id, rebuild_package, webhook_url } = req.body;
+  const { prototype_version_id, slug, rebuild_package, webhook_url } = req.body;
 
-  if (!prototype_version_id || !rebuild_package || !webhook_url) {
+  if (!prototype_version_id || !slug || !rebuild_package || !webhook_url) {
     return reply.status(400).send({ error: 'Missing required fields' });
   }
 
-  // Ack immediately — generation is async
   reply.status(202).send({ job_id: `gen-${prototype_version_id}-${Date.now()}` });
 
-  // Run in background
   setImmediate(async () => {
     try {
-      app.log.info(`[gen] starting v${prototype_version_id}`);
+      app.log.info(`[gen] starting v${prototype_version_id} (slug=${slug})`);
 
       const { siteSpec, model, inputTokens, outputTokens, costCents } =
         await orchestrate(rebuild_package);
 
-      const astroProjectPath = await scaffoldAstroProject(prototype_version_id, siteSpec);
+      const astroProjectPath = await scaffoldAstroProject(prototype_version_id, siteSpec, slug);
 
       app.log.info(`[gen] scaffolded → ${astroProjectPath}`);
 
@@ -76,11 +109,10 @@ app.post<{ Body: GenerateRequest }>('/generate', async (req, reply) => {
   });
 });
 
-// ─── Build ─────────────────────────────────────────────────────────────────
 app.post<{ Body: BuildRequest }>('/build', async (req, reply) => {
-  const { prototype_version_id, astro_project_path, webhook_url } = req.body;
+  const { prototype_version_id, slug, astro_project_path, webhook_url } = req.body;
 
-  if (!prototype_version_id || !astro_project_path || !webhook_url) {
+  if (!prototype_version_id || !slug || !astro_project_path || !webhook_url) {
     return reply.status(400).send({ error: 'Missing required fields' });
   }
 
@@ -88,11 +120,12 @@ app.post<{ Body: BuildRequest }>('/build', async (req, reply) => {
 
   setImmediate(async () => {
     try {
-      app.log.info(`[build] starting v${prototype_version_id}`);
+      app.log.info(`[build] starting v${prototype_version_id} (slug=${slug})`);
 
       const { artifactPath, artifactHash, previewUrl } = await buildAstroProject(
         prototype_version_id,
         astro_project_path,
+        slug,
       );
 
       await callWebhook(webhook_url, {
@@ -119,9 +152,8 @@ app.post<{ Body: BuildRequest }>('/build', async (req, reply) => {
   });
 });
 
-// ─── Boot ──────────────────────────────────────────────────────────────────
 const port = Number(process.env.PORT ?? 4000);
-const host = process.env.HOST ?? '0.0.0.0';
+const host = process.env.HOST ?? '127.0.0.1';
 
 app.listen({ port, host }, (err) => {
   if (err) {

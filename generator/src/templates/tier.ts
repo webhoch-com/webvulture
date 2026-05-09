@@ -7,6 +7,8 @@
  */
 
 import type { SiteSpec } from '../types.js';
+import { renderSeoHead } from './_seo.js';
+import { getGalleryImage } from './_media.js';
 
 function escapeHtml(s: string): string {
   return String(s)
@@ -14,8 +16,8 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-function petPhoto(slug: string, idx: number, w = 800, h = 600): string {
-  return `https://picsum.photos/seed/${encodeURIComponent(slug)}-pet-${idx}/${w}/${h}`;
+function petPhoto(spec: SiteSpec, slug: string, idx: number, w = 800, h = 600): string {
+  return getGalleryImage(spec, slug, idx, w, h);
 }
 
 import { avatarPlaceholder, SYMBOLIC_TAG_CSS } from './_avatar.js';
@@ -61,17 +63,11 @@ export function renderTierPage(spec: SiteSpec, slug: string): string {
   ];
 
   return `---
-const spec = ${JSON.stringify(spec, null, 2)};
 ---
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${businessName} — ${escapeHtml(tagline)}</title>
-  <meta name="description" content="${escapeHtml(tagline)}" />
-  <meta name="robots" content="noindex, nofollow" />
-  <meta name="theme-color" content="#c0633e" />
+  ${renderSeoHead(spec, { slug, schemaKind: 'VeterinaryCare' })}
   <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
   <link href="https://fonts.bunny.net/css?family=fraunces:400,500,600|caveat:500,700|nunito:400,500,600,700&display=swap" rel="stylesheet">
   <style>
@@ -176,6 +172,7 @@ const spec = ${JSON.stringify(spec, null, 2)};
     }
     .nav-cta { background: var(--primary); color: #fff; padding: 0.85rem 1.6rem; border-radius: 999px; font-weight: 700; font-size: 0.92rem; transition: background .2s, transform .2s; box-shadow: 0 6px 16px -8px var(--primary); }
     .nav-cta:hover { background: var(--primary-deep); transform: translateY(-1px); }
+    @media (max-width: 879px) { .nav-cta { display: none; } }
 
     /* ─── Hero — split with photo ────────────────────────── */
     .hero { padding: clamp(3rem, 6vw, 5.5rem) 1.5rem clamp(4rem, 7vw, 6rem); position: relative; overflow: hidden; }
@@ -369,8 +366,8 @@ const spec = ${JSON.stringify(spec, null, 2)};
     footer .legal { display: flex; gap: 1.5rem; justify-content: center; margin-top: 1rem; flex-wrap: wrap; }
     footer .legal a:hover { color: var(--accent); }
 
-    .reveal { opacity: 0; transform: translateY(20px); transition: opacity .8s ease, transform .8s ease; }
-    .reveal.is-visible { opacity: 1; transform: translateY(0); }
+    .reveal { opacity: 1; transform: none; }
+    /* visible by default */
     @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1 !important; transform: none !important; } }
   </style>
 </head>
@@ -420,7 +417,7 @@ const spec = ${JSON.stringify(spec, null, 2)};
     </div>
 
     <div class="hero-photo reveal">
-      <img src="${petPhoto(slug, 1, 800, 1000)}" alt="" loading="eager">
+      <img src="${petPhoto(spec, slug, 1, 800, 1000)}" alt="" loading="eager">
       <div class="hero-photo-badge">
         <div class="ic">🐾</div>
         <div>
