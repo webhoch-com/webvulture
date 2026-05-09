@@ -87,4 +87,33 @@ class Lead extends Model
     {
         return $this->hasOne(Prototype::class)->latestOfMany();
     }
+
+    /**
+     * Aggregate cost across all morphable types associated with this lead.
+     * SearchRun cost is shared evenly across the leads it produced.
+     */
+    public function totalCostCents(): int
+    {
+        $leadCost = (int) $this->costLogs()->sum('cost_cents');
+
+        $versionIds = PrototypeVersion::whereIn(
+            'prototype_id',
+            Prototype::where('lead_id', $this->id)->select('id'),
+        )->pluck('id');
+
+        $prototypeCost = (int) CostLog::where('costable_type', PrototypeVersion::class)
+            ->whereIn('costable_id', $versionIds)
+            ->sum('cost_cents');
+
+        $searchRunCost = 0;
+        if ($this->search_run_id) {
+            $runTotal = (int) CostLog::where('costable_type', SearchRun::class)
+                ->where('costable_id', $this->search_run_id)
+                ->sum('cost_cents');
+            $shareCount = max(1, Lead::where('search_run_id', $this->search_run_id)->count());
+            $searchRunCost = (int) floor($runTotal / $shareCount);
+        }
+
+        return $leadCost + $prototypeCost + $searchRunCost;
+    }
 }

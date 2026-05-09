@@ -599,6 +599,72 @@ new class extends Component {
                         </dl>
                     </x-card>
 
+                    <x-card title="Brand & Assets" shadow>
+                        <dl class="divide-y divide-base-300/60 text-sm">
+                            <div class="py-2 flex justify-between items-center gap-2">
+                                <span class="text-base-content/60">Logo (lokal)</span>
+                                @if($a->logo_path)
+                                    <img src="{{ str_replace(['http://localhost','https://localhost'], request()->getSchemeAndHttpHost(), \Illuminate\Support\Facades\Storage::disk('public')->url($a->logo_path)) }}"
+                                         alt="Logo"
+                                         style="max-height:40px; max-width:160px; object-fit:contain;"
+                                         class="bg-base-200 rounded p-1" />
+                                @else
+                                    <span class="text-base-content/40">—</span>
+                                @endif
+                            </div>
+                            <div class="py-2 flex justify-between items-center gap-2">
+                                <span class="text-base-content/60">Vereinsfarben</span>
+                                <div class="flex items-center gap-2 flex-wrap justify-end">
+                                    @foreach(array_filter([$a->primary_color, $a->secondary_color, $a->accent_color]) as $hex)
+                                        <span class="inline-flex items-center gap-1 text-xs font-mono">
+                                            <span class="inline-block w-4 h-4 rounded border border-base-300" style="background:{{ $hex }}"></span>
+                                            {{ $hex }}
+                                        </span>
+                                    @endforeach
+                                    @if(empty(array_filter([$a->primary_color, $a->secondary_color, $a->accent_color])))
+                                        <span class="text-base-content/40">—</span>
+                                    @endif
+                                </div>
+                            </div>
+                            <div class="py-2 flex justify-between gap-2">
+                                <span class="text-base-content/60">Heading-Schrift</span>
+                                <span class="font-medium">{{ $a->heading_font_family ?: '—' }}</span>
+                            </div>
+                            <div class="py-2 flex justify-between gap-2">
+                                <span class="text-base-content/60">Body-Schrift</span>
+                                <span class="font-medium">{{ $a->body_font_family ?: '—' }}</span>
+                            </div>
+                            <div class="py-2 flex justify-between gap-2">
+                                <span class="text-base-content/60">Hero-Bilder</span>
+                                <span class="font-medium">{{ count((array) $a->hero_images) }}</span>
+                            </div>
+                            <div class="py-2 flex justify-between gap-2">
+                                <span class="text-base-content/60">Galerie-Bilder</span>
+                                <span class="font-medium">{{ count((array) $a->gallery_images) }}</span>
+                            </div>
+                            <div class="py-2 flex justify-between gap-2">
+                                <span class="text-base-content/60">Heruntergeladene Assets</span>
+                                <span class="font-medium">{{ count((array) $a->downloaded_assets) }}</span>
+                            </div>
+                        </dl>
+
+                        @if($a->downloaded_assets && count((array) $a->downloaded_assets))
+                            <div class="mt-3">
+                                <div class="text-xs text-base-content/60 uppercase tracking-wider mb-2">Asset-Vorschau</div>
+                                <div class="grid grid-cols-4 gap-2">
+                                    @foreach(array_slice((array) $a->downloaded_assets, 0, 8) as $asset)
+                                        @if(!empty($asset['public_url']))
+                                            <img src="{{ str_replace(['http://localhost','https://localhost'], request()->getSchemeAndHttpHost(), $asset['public_url']) }}"
+                                                 alt="{{ $asset['alt'] ?? '' }}"
+                                                 style="aspect-ratio: 1/1; object-fit: cover; width: 100%;"
+                                                 class="rounded border border-base-300" />
+                                        @endif
+                                    @endforeach
+                                </div>
+                            </div>
+                        @endif
+                    </x-card>
+
                     <div class="space-y-4">
                         @if($a->contact)
                             <x-card title="Kontaktdaten" shadow>

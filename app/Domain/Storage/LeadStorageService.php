@@ -31,11 +31,48 @@ class LeadStorageService
         return Storage::disk('leads');
     }
 
+    protected function publicDisk(): Filesystem
+    {
+        return Storage::disk('public');
+    }
+
     // ─── Path helpers ─────────────────────────────────────────────────────────
 
     public function root(int $leadId): string
     {
         return "leads/{$leadId}";
+    }
+
+    /**
+     * Public-asset path (image cache for the preview pipeline). Lives under the
+     * `public` disk so the rendered Astro mockups can `<img src=…>` it directly
+     * without auth and without CORS friction.
+     */
+    public function publicAssetPath(int $leadId, string $filename): string
+    {
+        return "{$this->root($leadId)}/assets/{$filename}";
+    }
+
+    public function writePublicAsset(int $leadId, string $filename, string $contents): string
+    {
+        // Path-traversal guard: only allow restricted filenames (alphanumeric + . _ -)
+        $safe = basename($filename);
+        if ($safe !== $filename || !preg_match('/^[A-Za-z0-9._-]{1,128}$/', $safe)) {
+            throw new \InvalidArgumentException("Invalid asset filename: {$filename}");
+        }
+        $path = $this->publicAssetPath($leadId, $safe);
+        $this->publicDisk()->put($path, $contents);
+        return $path;
+    }
+
+    public function publicAssetUrl(string $relativePath): string
+    {
+        return $this->publicDisk()->url($relativePath);
+    }
+
+    public function publicAssetExists(int $leadId, string $filename): bool
+    {
+        return $this->publicDisk()->exists($this->publicAssetPath($leadId, $filename));
     }
 
     public function rawPath(int $leadId, string $filename): string

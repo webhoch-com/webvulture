@@ -28,21 +28,21 @@
     --color-base-300: oklch(95% 0 0);
     --color-base-content: #002a42;
     --color-primary: #ec65ba;
-    --color-primary-content: oklch(98% 0.003 247.858);
+    --color-primary-content: #ffffff;
     --color-secondary: #4bc8e7;
-    --color-secondary-content: oklch(94% 0.028 342.258);
+    --color-secondary-content: #002a42;
     --color-accent: #f9c1e1;
-    --color-accent-content: oklch(98% 0.003 247.858);
+    --color-accent-content: #002a42;
     --color-neutral: #002a42;
-    --color-neutral-content: oklch(98% 0.003 247.858);
+    --color-neutral-content: #ffffff;
     --color-info: #ec65ba;
-    --color-info-content: oklch(98% 0.003 247.858);
+    --color-info-content: #ffffff;
     --color-success: oklch(76% 0.177 163.223);
-    --color-success-content: oklch(100% 0 0);
+    --color-success-content: #ffffff;
     --color-warning: oklch(82% 0.189 84.429);
-    --color-warning-content: oklch(98% 0.003 247.858);
+    --color-warning-content: #002a42;
     --color-error: oklch(71% 0.194 13.428);
-    --color-error-content: oklch(98% 0.003 247.858);
+    --color-error-content: #ffffff;
     --radius-selector: 0.25rem;
     --radius-field: 0.5rem;
     --radius-box: 1rem;
@@ -79,4 +79,56 @@
     --radius-field: 0.625rem;
     --radius-box: 1rem;
     --border: 1px;
+}
+
+/* Badge-Kontrast-Hardening — wirkt auch wenn DaisyUI-Theme veraltet kompiliert wurde */
+.badge.badge-primary {
+    background-color: #ec65ba;
+    color: #ffffff;
+    border-color: #ec65ba;
+    font-weight: 600;
+}
+.badge.badge-info {
+    background-color: #ec65ba;
+    color: #ffffff;
+    border-color: #ec65ba;
+    font-weight: 600;
+}
+.badge.badge-secondary {
+    background-color: #4bc8e7;
+    color: #002a42;
+    border-color: #4bc8e7;
+    font-weight: 600;
+}
+.badge.badge-accent {
+    background-color: #f9c1e1;
+    color: #002a42;
+    border-color: #f9c1e1;
+    font-weight: 600;
+}
+.badge.badge-success {
+    background-color: oklch(76% 0.177 163.223);
+    color: #ffffff;
+    font-weight: 600;
+}
+.badge.badge-error {
+    background-color: oklch(71% 0.194 13.428);
+    color: #ffffff;
+    font-weight: 600;
+}
+.badge.badge-warning {
+    background-color: oklch(82% 0.189 84.429);
+    color: #002a42;
+    font-weight: 600;
+}
+.badge.badge-neutral {
+    background-color: #002a42;
+    color: #ffffff;
+    font-weight: 600;
+}
+.badge.badge-ghost {
+    background-color: transparent;
+    color: #002a42;
+    border-color: rgba(0, 42, 66, 0.2);
+    font-weight: 600;
 }

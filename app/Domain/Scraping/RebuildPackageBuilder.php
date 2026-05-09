@@ -4,6 +4,7 @@ namespace App\Domain\Scraping;
 
 use App\Domain\Storage\LeadStorageService;
 use App\Models\Lead;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Assembles the structured rebuild package that Claude receives for prototype generation.
@@ -74,6 +75,24 @@ class RebuildPackageBuilder
             'logo_url' => $mirroredLogo,       // mirrored URL on our domain (or null)
             'favicon_url' => $mirroredFavicon, // mirrored URL on our domain (or null)
             'brand_colors' => $analysis?->brand_colors ?? [],
+            'brand' => [
+                'logo_url' => $analysis?->logo_url,
+                'logo_public_url' => $analysis?->logo_path
+                    ? Storage::disk('public')->url($analysis->logo_path)
+                    : $mirroredLogo,
+                'primary_color' => $analysis?->primary_color,
+                'secondary_color' => $analysis?->secondary_color,
+                'accent_color' => $analysis?->accent_color,
+                'heading_font_family' => $analysis?->heading_font_family,
+                'body_font_family' => $analysis?->body_font_family,
+                'font_imports' => $analysis?->font_imports ?? [],
+            ],
+            'images' => [
+                'hero' => $analysis?->hero_images ?? [],
+                'gallery' => $analysis?->gallery_images ?? [],
+                'all_local' => $analysis?->downloaded_assets ?? [],
+                'screenshots' => $screenshots,
+            ],
             'screenshots' => $screenshots,
             'generation_params' => [
                 'niche' => $enrichment?->niche,

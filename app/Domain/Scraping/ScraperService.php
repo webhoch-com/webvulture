@@ -15,6 +15,7 @@ class ScraperService
     public function __construct(
         protected HomepageExtractor $extractor,
         protected LeadStorageService $store,
+        protected AssetDownloader $assets,
     ) {}
 
     public function scrape(Lead $lead): WebsiteAnalysis
@@ -61,6 +62,23 @@ class ScraperService
                 }
             }
 
+            // ── Download assets (logo + content/hero/gallery images) ─────────
+            $logoAsset = $this->assets->downloadLogo($lead->id, $extracted['logo_url'] ?? null, $finalUrl);
+
+            $imagesToDownload = [];
+            foreach ($extracted['hero_images'] ?? [] as $img) {
+                $imagesToDownload[] = ['src' => $img['src'], 'alt' => $img['alt'] ?? '', 'role' => 'hero'];
+            }
+            foreach ($extracted['gallery_images'] ?? [] as $img) {
+                $imagesToDownload[] = ['src' => $img['src'], 'alt' => $img['alt'] ?? '', 'role' => 'gallery'];
+            }
+            foreach ($extracted['images'] ?? [] as $img) {
+                $imagesToDownload[] = ['src' => $img['src'], 'alt' => $img['alt'] ?? '', 'role' => 'content'];
+            }
+            $downloadedAssets = $this->assets->downloadAll($lead->id, $imagesToDownload, $finalUrl);
+            $heroDownloaded = array_values(array_filter($downloadedAssets, fn ($a) => $a['role'] === 'hero'));
+            $galleryDownloaded = array_values(array_filter($downloadedAssets, fn ($a) => $a['role'] === 'gallery'));
+
             // ── Persist extracted JSON ────────────────────────────────────────
             $metadata = [
                 'scraped_at' => now()->toIso8601String(),
@@ -68,6 +86,8 @@ class ScraperService
                 'final_url' => $finalUrl,
                 'http_status' => $status,
                 'nav_pages_crawled' => $navPages,
+                'logo_asset' => $logoAsset,
+                'downloaded_assets_count' => count($downloadedAssets),
             ];
             $extractedPath = $this->store->writeExtracted($lead->id, array_merge($metadata, $extracted));
 
@@ -81,12 +101,23 @@ class ScraperService
                     'title' => $extracted['title'],
                     'meta_description' => $extracted['meta_description'],
                     'logo_url' => $extracted['logo_url'],
+                    'logo_path' => $logoAsset['local_path'] ?? null,
+                    'logo_mime' => $logoAsset['mime'] ?? null,
                     'favicon_url' => $extracted['favicon_url'] ?? null,
                     'contact' => $extracted['contact'],
                     'services' => $extracted['services'],
                     'images' => $extracted['images'],
+                    'hero_images' => $heroDownloaded,
+                    'gallery_images' => $galleryDownloaded,
+                    'downloaded_assets' => $downloadedAssets,
                     'socials' => $extracted['socials'],
                     'brand_colors' => $extracted['brand_colors'] ?? [],
+                    'primary_color' => $extracted['primary_color'] ?? null,
+                    'secondary_color' => $extracted['secondary_color'] ?? null,
+                    'accent_color' => $extracted['accent_color'] ?? null,
+                    'heading_font_family' => $extracted['heading_font_family'] ?? null,
+                    'body_font_family' => $extracted['body_font_family'] ?? null,
+                    'font_imports' => $extracted['font_imports'] ?? [],
                     'text_content' => $extracted['text_content'],
                     'sections' => $extracted['sections'] ?? [],
                     'raw_html_path' => $htmlPath,

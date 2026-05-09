@@ -10,6 +10,8 @@ class HomepageExtractor
     public function extract(string $html, string $baseUrl): array
     {
         $crawler = new Crawler($html, $baseUrl);
+        $colors = $this->extractColorsAdvanced($html);
+        $fonts = $this->extractFonts($html);
 
         return [
             'title' => $this->title($crawler),
@@ -19,9 +21,17 @@ class HomepageExtractor
             'contact' => $this->contact($crawler),
             'services' => $this->services($crawler),
             'images' => $this->images($crawler, $baseUrl),
+            'hero_images' => $this->extractHeroImages($crawler, $baseUrl),
+            'gallery_images' => $this->extractGalleryImages($crawler, $baseUrl),
             'socials' => $this->socials($crawler),
             'nav_links' => $this->navLinks($crawler, $baseUrl),
             'brand_colors' => $this->brandColors($html),
+            'primary_color' => $colors['primary'] ?? null,
+            'secondary_color' => $colors['secondary'] ?? null,
+            'accent_color' => $colors['accent'] ?? null,
+            'heading_font_family' => $fonts['heading'] ?? null,
+            'body_font_family' => $fonts['body'] ?? null,
+            'font_imports' => $fonts['imports'] ?? [],
             'text_content' => $this->textContent($crawler),
             // Real section structure pulled from H2/H3 headings + the
             // paragraphs that follow. Used by templates to render a
@@ -29,6 +39,192 @@ class HomepageExtractor
             // generic template — matching their actual content scaffolding.
             'sections' => $this->sections($crawler),
         ];
+    }
+
+    // ─── Brand extraction helpers (additive) ──────────────────────────────────
+
+    /**
+     * Extract structured primary/secondary/accent from CSS variables and
+     * Tailwind config. Falls back to brandColors() ordering.
+     */
+    protected function extractColorsAdvanced(string $html): array
+    {
+        $result = ['primary' => null, 'secondary' => null, 'accent' => null];
+
+        $patterns = [
+            'primary'   => '/--(?:color-)?(?:primary|brand|main)(?:-(?:color|500|600))?\s*:\s*([^;}\s]+)/i',
+            'secondary' => '/--(?:color-)?secondary(?:-(?:color|500|600))?\s*:\s*([^;}\s]+)/i',
+            'accent'    => '/--(?:color-)?accent(?:-(?:color|500|600))?\s*:\s*([^;}\s]+)/i',
+        ];
+
+        foreach ($patterns as $key => $pattern) {
+            if (preg_match($pattern, $html, $m)) {
+                if ($hex = $this->normalizeColor(trim($m[1]))) {
+                    $result[$key] = $hex;
+                }
+            }
+        }
+
+        if (!$result['primary'] || !$result['secondary'] || !$result['accent']) {
+            $colors = $this->brandColors($html);
+            $result['primary']   ??= $colors[0] ?? null;
+            $result['secondary'] ??= $colors[1] ?? null;
+            $result['accent']    ??= $colors[2] ?? null;
+        }
+
+        return $result;
+    }
+
+    protected function normalizeColor(string $value): ?string
+    {
+        $value = trim($value);
+        if (preg_match('/^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/', $value)) {
+            return strtolower($value);
+        }
+        if (preg_match('/^rgba?\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i', $value, $m)) {
+            return sprintf('#%02x%02x%02x', (int) $m[1], (int) $m[2], (int) $m[3]);
+        }
+        return null;
+    }
+
+    /**
+     * Extract font-family declarations and Google Fonts imports.
+     *
+     * @return array{heading: ?string, body: ?string, imports: array<int, string>}
+     */
+    protected function extractFonts(string $html): array
+    {
+        $imports = [];
+
+        if (preg_match_all('/<link[^>]*href="(https:\/\/fonts\.googleapis\.com\/[^"]+)"[^>]*>/i', $html, $m)) {
+            foreach ($m[1] as $href) {
+                $imports[] = html_entity_decode($href);
+            }
+        }
+
+        if (preg_match_all('/@import\s+url\(["\']?(https:\/\/fonts\.googleapis\.com\/[^"\')\s]+)/i', $html, $m)) {
+            foreach ($m[1] as $href) {
+                $imports[] = $href;
+            }
+        }
+
+        $imports = array_values(array_unique($imports));
+
+        $heading = $this->guessFontFor($html, ['h1', 'h2', 'h3', 'heading', 'display', 'hero']);
+        $body = $this->guessFontFor($html, ['body', 'p', 'main', 'article']);
+
+        if (!$heading && $imports) {
+            $heading = $this->guessHeadingFromImports($imports);
+        }
+
+        return [
+            'heading' => $heading,
+            'body'    => $body,
+            'imports' => array_slice($imports, 0, 5),
+        ];
+    }
+
+    protected function guessFontFor(string $html, array $needles): ?string
+    {
+        foreach ($needles as $needle) {
+            $pattern = '/'.preg_quote($needle, '/').'[^{}]*\{[^}]*?font-family\s*:\s*([^;}\n]+)/i';
+            if (preg_match($pattern, $html, $m)) {
+                $family = trim($m[1], "\"'\t\n\r ");
+                $first = trim(explode(',', $family)[0], "\"'\t\n\r ");
+                if ($first && strlen($first) < 60) {
+                    return $first;
+                }
+            }
+        }
+        return null;
+    }
+
+    protected function guessHeadingFromImports(array $imports): ?string
+    {
+        foreach ($imports as $url) {
+            if (preg_match('/family=([A-Za-z0-9+_-]+)/', $url, $m)) {
+                return str_replace('+', ' ', $m[1]);
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Extract hero images: og:image, first <img> in hero/banner sections.
+     *
+     * @return array<int, array{src: string, alt: string}>
+     */
+    protected function extractHeroImages(Crawler $c, string $baseUrl): array
+    {
+        $hero = [];
+
+        try {
+            $og = $c->filter('meta[property="og:image"]')->first()->attr('content');
+            if ($og) {
+                $hero[] = ['src' => $this->resolveUrl($og, $baseUrl), 'alt' => 'Hero'];
+            }
+        } catch (\Throwable) {}
+
+        $heroSelectors = [
+            '[class*="hero"] img',
+            '[class*="banner"] img',
+            'header img',
+            'section:first-of-type img',
+            'main img:first-of-type',
+        ];
+
+        foreach ($heroSelectors as $sel) {
+            try {
+                $c->filter($sel)->each(function (Crawler $img) use (&$hero, $baseUrl) {
+                    if (count($hero) >= 3) return;
+                    $src = $img->attr('src');
+                    if (!$src || str_starts_with($src, 'data:')) return;
+                    $resolved = $this->resolveUrl($src, $baseUrl);
+                    foreach ($hero as $existing) {
+                        if ($existing['src'] === $resolved) return;
+                    }
+                    $hero[] = ['src' => $resolved, 'alt' => $img->attr('alt') ?? ''];
+                });
+            } catch (\Throwable) {}
+            if (count($hero) >= 3) break;
+        }
+
+        return $hero;
+    }
+
+    /**
+     * Extract gallery images.
+     *
+     * @return array<int, array{src: string, alt: string}>
+     */
+    protected function extractGalleryImages(Crawler $c, string $baseUrl): array
+    {
+        $gallery = [];
+
+        $gallerySelectors = [
+            '[class*="gallery"] img',
+            '[class*="galerie"] img',
+            '[class*="fotos"] img',
+            '[class*="bilder"] img',
+            '[class*="impressionen"] img',
+            '[id*="gallery"] img',
+        ];
+
+        foreach ($gallerySelectors as $sel) {
+            try {
+                $c->filter($sel)->each(function (Crawler $img) use (&$gallery, $baseUrl) {
+                    $src = $img->attr('src');
+                    if (!$src || str_starts_with($src, 'data:')) return;
+                    $resolved = $this->resolveUrl($src, $baseUrl);
+                    foreach ($gallery as $existing) {
+                        if ($existing['src'] === $resolved) return;
+                    }
+                    $gallery[] = ['src' => $resolved, 'alt' => $img->attr('alt') ?? ''];
+                });
+            } catch (\Throwable) {}
+        }
+
+        return array_slice($gallery, 0, 20);
     }
 
     /**

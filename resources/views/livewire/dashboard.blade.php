@@ -1,12 +1,17 @@
 <?php
 
+use App\Domain\Cost\CostAggregator;
 use App\Models\CostLog;
 use App\Models\Lead;
 use App\Models\SearchRun;
 use App\Support\CostGuard;
+use Livewire\Attributes\Url;
 use Livewire\Volt\Component;
 
 new class extends Component {
+    #[Url]
+    public string $period = '7d';
+
     public function with(): array
     {
         // Volt's with() does not auto-resolve DI in its arguments — must
@@ -14,6 +19,10 @@ new class extends Component {
         $cost = app(CostGuard::class);
         $costToday = (int) CostLog::whereDate('created_at', today())->sum('cost_cents');
         $capCents = $cost->dailyCapCents();
+
+        $periodMeta = CostAggregator::periodFor($this->period);
+        $breakdown = CostAggregator::breakdown($this->period);
+        $totalForPeriod = array_sum($breakdown);
 
         return [
             'leadsTotal' => Lead::count(),
@@ -24,6 +33,11 @@ new class extends Component {
             'costPercent' => $capCents > 0 ? min(100, (int) round($costToday / $capCents * 100)) : 0,
             'recentRuns' => SearchRun::latest()->limit(5)->get(),
             'leadsApproved' => Lead::whereIn('status', ['approved', 'sent', 'replied'])->count(),
+            'periodLabel' => $periodMeta['label'],
+            'breakdown' => $breakdown,
+            'totalForPeriod' => $totalForPeriod,
+            'totalAllTime' => (int) CostLog::sum('cost_cents'),
+            'topLeads' => CostAggregator::topLeads($this->period, 10),
         ];
     }
 }; ?>
@@ -102,6 +116,89 @@ new class extends Component {
             @endif
         </article>
     </section>
+
+    {{-- Cost-Aufschlüsselung pro Aktivität --}}
+    <section class="dash-activity">
+        <div class="dash-section-head">
+            <div>
+                <span class="dash-section-eyebrow">Kosten</span>
+                <h2 class="dash-section-title">Aufschlüsselung — {{ $periodLabel }}</h2>
+            </div>
+            <select wire:model.live="period" class="dash-period-select">
+                <option value="today">Heute</option>
+                <option value="7d">Letzte 7 Tage</option>
+                <option value="30d">Letzte 30 Tage</option>
+                <option value="all">Gesamt</option>
+            </select>
+        </div>
+
+        <div class="dash-breakdown">
+            <article class="dash-bd-card" style="--bd-color:#06b6d4;">
+                <span class="dash-bd-label">Maps-Suche</span>
+                <strong class="dash-bd-value">{{ number_format($breakdown['maps'] / 100, 2, ',', '.') }} €</strong>
+                <span class="dash-bd-hint">Lead-Discovery via Google Places</span>
+            </article>
+            <article class="dash-bd-card" style="--bd-color:#8b5cf6;">
+                <span class="dash-bd-label">Anreicherung</span>
+                <strong class="dash-bd-value">{{ number_format($breakdown['enrichment'] / 100, 2, ',', '.') }} €</strong>
+                <span class="dash-bd-hint">Niche · Headline · Tonalität</span>
+            </article>
+            <article class="dash-bd-card" style="--bd-color:#ec65ba;">
+                <span class="dash-bd-label">Vorschau-Generierung</span>
+                <strong class="dash-bd-value">{{ number_format($breakdown['prototype'] / 100, 2, ',', '.') }} €</strong>
+                <span class="dash-bd-hint">Beispiel-Webseiten (Claude)</span>
+            </article>
+            <article class="dash-bd-card" style="--bd-color:#10b981;">
+                <span class="dash-bd-label">Sonstiges</span>
+                <strong class="dash-bd-value">{{ number_format($breakdown['other'] / 100, 2, ',', '.') }} €</strong>
+                <span class="dash-bd-hint">Storage · Scraping · etc.</span>
+            </article>
+        </div>
+        <p class="dash-breakdown-total">
+            Summe Gesamtkosten (alle Zeit):
+            <strong>{{ number_format($totalAllTime / 100, 2, ',', '.') }} €</strong>
+            · {{ $periodLabel }}: <strong>{{ number_format($totalForPeriod / 100, 2, ',', '.') }} €</strong>
+        </p>
+    </section>
+
+    {{-- Top-Leads nach Kosten --}}
+    @if (!empty($topLeads))
+        <section class="dash-activity">
+            <div class="dash-section-head">
+                <div>
+                    <span class="dash-section-eyebrow">Top-10 nach Kosten</span>
+                    <h2 class="dash-section-title">Teuerste Leads — {{ $periodLabel }}</h2>
+                </div>
+            </div>
+            <div class="dash-top-leads">
+                <table class="dash-leads-table">
+                    <thead>
+                        <tr>
+                            <th>Lead</th>
+                            <th class="num">Suche</th>
+                            <th class="num">Anreicherung</th>
+                            <th class="num">Vorschau</th>
+                            <th class="num gesamt">Gesamt</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach ($topLeads as $row)
+                            <tr>
+                                <td>
+                                    <a href="{{ route('leads.show', $row['lead_id']) }}" class="dash-leads-link">{{ $row['name'] }}</a>
+                                    <span class="dash-leads-city">{{ $row['city'] }}</span>
+                                </td>
+                                <td class="num">{{ number_format($row['search_cents'] / 100, 4, ',', '.') }} €</td>
+                                <td class="num">{{ number_format($row['enrichment_cents'] / 100, 4, ',', '.') }} €</td>
+                                <td class="num">{{ number_format($row['prototype_cents'] / 100, 4, ',', '.') }} €</td>
+                                <td class="num gesamt">{{ number_format($row['total_cents'] / 100, 4, ',', '.') }} €</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    @endif
 
     {{-- Activity / recent runs --}}
     <section class="dash-activity">
@@ -478,4 +575,109 @@ new class extends Component {
     }
     .dash-empty p { margin: 0 0 1.5rem; font-size: 0.95rem; }
     .dash-empty .dash-btn { margin: 0 auto; }
+
+    /* ─── Cost-Breakdown ────────────────────────────────────── */
+    .dash-period-select {
+        font: inherit;
+        font-size: 0.85rem;
+        font-weight: 600;
+        padding: 0.5rem 0.85rem;
+        border-radius: 8px;
+        border: 1px solid rgba(0,0,0,0.12);
+        background: #ffffff;
+        color: #0a0a0a;
+        cursor: pointer;
+    }
+    .dash-period-select:focus { outline: 2px solid #ec65ba; outline-offset: 2px; }
+    .dash-breakdown {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
+        gap: 0.85rem;
+    }
+    @media (min-width: 720px) { .dash-breakdown { grid-template-columns: repeat(4, 1fr); } }
+    .dash-bd-card {
+        padding: 1.1rem 1.25rem;
+        border-radius: 14px;
+        background: rgba(0,0,0,0.025);
+        border: 1px solid rgba(0,0,0,0.06);
+        border-left: 3px solid var(--bd-color, #ec65ba);
+    }
+    .dash-bd-label {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.7rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: rgba(10,10,10,0.55);
+        font-weight: 600;
+    }
+    .dash-bd-value {
+        display: block;
+        font-family: 'Fraunces', Georgia, serif;
+        font-size: 1.6rem;
+        font-weight: 500;
+        line-height: 1;
+        color: #0a0a0a;
+        margin: 0.55rem 0 0.35rem;
+        letter-spacing: -0.01em;
+    }
+    .dash-bd-hint {
+        font-size: 0.78rem;
+        color: rgba(10,10,10,0.5);
+    }
+    .dash-breakdown-total {
+        margin: 1rem 0 0;
+        font-size: 0.88rem;
+        color: rgba(10,10,10,0.6);
+    }
+    .dash-breakdown-total strong {
+        font-family: 'JetBrains Mono', monospace;
+        color: #0a0a0a;
+        font-weight: 600;
+    }
+
+    /* ─── Top-Leads-Tabelle ─────────────────────────────────── */
+    .dash-top-leads { overflow-x: auto; border-radius: 12px; }
+    .dash-leads-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.92rem;
+        min-width: 580px;
+    }
+    .dash-leads-table thead th {
+        text-align: left;
+        padding: 0.7rem 1rem;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.7rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: rgba(10,10,10,0.55);
+        font-weight: 600;
+        border-bottom: 1px solid rgba(0,0,0,0.08);
+    }
+    .dash-leads-table thead th.num { text-align: right; }
+    .dash-leads-table tbody td {
+        padding: 0.85rem 1rem;
+        border-bottom: 1px solid rgba(0,0,0,0.05);
+        color: rgba(10,10,10,0.78);
+    }
+    .dash-leads-table tbody td.num {
+        text-align: right;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.85rem;
+    }
+    .dash-leads-table tbody td.num.gesamt {
+        font-weight: 700;
+        color: #0a0a0a;
+    }
+    .dash-leads-link {
+        color: #0a0a0a;
+        font-weight: 600;
+        text-decoration: none;
+    }
+    .dash-leads-link:hover { color: #ec65ba; }
+    .dash-leads-city {
+        font-size: 0.78rem;
+        color: rgba(10,10,10,0.5);
+        margin-left: 0.5rem;
+    }
 </style>
