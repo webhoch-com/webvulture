@@ -275,7 +275,8 @@ new class extends Component {
     #[Computed]
     public function totalCost(): string
     {
-        return number_format($this->lead->costLogs->sum('cost_cents') / 100, 2, ',', '.').' €';
+        // Aggregate: lead-direct + via PrototypeVersion + anteilig SearchRun
+        return number_format($this->lead->totalCostCents() / 100, 2, ',', '.').' €';
     }
 }; ?>
 
