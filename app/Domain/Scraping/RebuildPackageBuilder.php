@@ -175,6 +175,12 @@ class RebuildPackageBuilder
                     continue 2;
                 }
             }
+            // Jimdo CDN small-image pattern — Verbands-/Bezirks-Badges are
+            // typically uploaded as ~200px logos via Jimdo's
+            // "dimension=NNNxMMM" sizing convention.
+            if ($originalSrc && preg_match('/jimcdn\.com.*dimension=(\d+)x/', $originalSrc, $m)) {
+                if ((int) $m[1] < 350) continue;
+            }
             $filtered[] = [
                 'src' => $src,
                 'original_src' => is_array($img) ? (string) ($img['original_src'] ?? '') : '',

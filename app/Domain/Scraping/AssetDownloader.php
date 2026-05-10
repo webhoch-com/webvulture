@@ -143,7 +143,11 @@ class AssetDownloader
             $height = is_array($dims) ? (int) ($dims[1] ?? 0) : 0;
             if ($prefix !== 'logo') {
                 if ($width > 0 && $height > 0) {
-                    if ($width < 200 || $height < 200) {
+                    // Min 400x300 for content/gallery: smaller assets are usually
+                    // sponsor/Verbands-Logos (Jimdo's "dimension=201x10000" pattern
+                    // produces ~200px wide rasterized association badges). Real
+                    // Vereinsfotos are at least 600+ wide.
+                    if ($width < 400 || $height < 300) {
                         Log::debug("AssetDownloader: dropped small {$width}x{$height} {$resolved}");
                         return null;
                     }
@@ -217,6 +221,14 @@ class AssetDownloader
             // (German for "ground/floor"). Not a Vereinsbild.
             'boden', 'wand.jpg', 'floor.', 'wall.',
         ];
+        // Jimdo CDN dimension=NNNxMMM small-image pattern — typically a
+        // ~200px logo upload that gets rendered as Verbands-/Bezirks-Badge.
+        if (preg_match('/jimcdn\.com.*dimension=(\d+)x/', $url, $m)) {
+            $w = (int) $m[1];
+            if ($w > 0 && $w < 350) {
+                return true;
+            }
+        }
         foreach ($needles as $n) {
             if (str_contains($lower, $n)) return true;
         }
