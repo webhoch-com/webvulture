@@ -148,7 +148,11 @@ class AssetDownloader
                         return null;
                     }
                     $aspect = $width / $height;
-                    if ($aspect > 4 || $aspect < 0.25) {
+                    // Wider than 3:1 = banner/hero strip, doesn't crop to a square
+                    // gallery tile without losing the subject. Taller than 1:3 = vertical
+                    // banner, equally bad. We keep moderate landscape (3:2, 16:9) and
+                    // moderate portrait (3:4) which are common photo aspects.
+                    if ($aspect > 3 || $aspect < 0.33) {
                         Log::debug("AssetDownloader: dropped extreme-aspect {$width}x{$height} {$resolved}");
                         return null;
                     }
@@ -204,6 +208,14 @@ class AssetDownloader
             'arrow-', 'chevron', 'bullet',
             'wp-includes/images/', 'jimdo-static/static/imageicon',
             'favicon',
+            // Banner/Hero/Theme-decoration assets — usually wide hero strips
+            // that look terrible cropped to gallery tiles. Producers commonly
+            // upload these as "slide_*", "banner_*", "header.jpg", etc.
+            '/slide_', '/slide-', '/banner_', '/banner-', '/banner/',
+            '/header_', '/header-', 'wallpaper', 'background.jpg',
+            // Floor/wall pattern photos — appeared as "slide_boden.jpg"
+            // (German for "ground/floor"). Not a Vereinsbild.
+            'boden', 'wand.jpg', 'floor.', 'wall.',
         ];
         foreach ($needles as $n) {
             if (str_contains($lower, $n)) return true;
