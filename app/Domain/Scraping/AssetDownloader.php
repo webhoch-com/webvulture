@@ -96,6 +96,14 @@ class AssetDownloader
             if (!$this->isHttpUrl($resolved)) {
                 return null;
             }
+            // Pre-flight URL-blocklist: kick out obvious icon/sprite/placeholder
+            // assets BEFORE we make a network request. Saves bandwidth + avoids
+            // ugly Windows-icon-style "gallery images" and Marmor-Boden background
+            // tiles that bled into earlier deploys.
+            if ($this->urlLooksLikeNonContentAsset($resolved)) {
+                Log::debug("AssetDownloader: skipped non-content URL {$resolved}");
+                return null;
+            }
             if (!$this->isPublicHost($resolved)) {
                 Log::debug("AssetDownloader: rejected non-public host for {$resolved}");
                 return null;
@@ -127,6 +135,31 @@ class AssetDownloader
                 return null;
             }
 
+            // Dimension-based filter: drop tiny icons, banner-strips, and
+            // extreme aspect ratios (likely sprites/decorations rather than
+            // real photos). Logos are exempted because we want them small.
+            $dims = @getimagesizefromstring($contents);
+            $width = is_array($dims) ? (int) ($dims[0] ?? 0) : 0;
+            $height = is_array($dims) ? (int) ($dims[1] ?? 0) : 0;
+            if ($prefix !== 'logo') {
+                if ($width > 0 && $height > 0) {
+                    if ($width < 200 || $height < 200) {
+                        Log::debug("AssetDownloader: dropped small {$width}x{$height} {$resolved}");
+                        return null;
+                    }
+                    $aspect = $width / $height;
+                    if ($aspect > 4 || $aspect < 0.25) {
+                        Log::debug("AssetDownloader: dropped extreme-aspect {$width}x{$height} {$resolved}");
+                        return null;
+                    }
+                }
+            } else {
+                // Logo: allow small dimensions but reject literal icons (<48px).
+                if ($width > 0 && $height > 0 && ($width < 48 || $height < 48)) {
+                    return null;
+                }
+            }
+
             $hash = substr(sha1($resolved.'|'.$bytes), 0, 16);
             $filename = ($prefix ? $prefix.'-' : '').$hash.'.'.$ext;
 
@@ -138,6 +171,8 @@ class AssetDownloader
                 'local_path' => $localPath,
                 'bytes' => $bytes,
                 'mime' => $mime ?: null,
+                'width' => $width ?: null,
+                'height' => $height ?: null,
             ];
         } catch (\Throwable $e) {
             Log::debug("AssetDownloader: failed for {$url}: {$e->getMessage()}");
@@ -149,6 +184,36 @@ class AssetDownloader
     {
         $scheme = parse_url($url, PHP_URL_SCHEME);
         return in_array($scheme, ['http', 'https'], true);
+    }
+
+    /**
+     * URL-pattern blocklist for assets that shouldn't end up in the gallery —
+     * icons, sprites, placeholders, tracking pixels, theme decorations.
+     *
+     * Catches the cases that produced "Drucker-/Dokument-Icon"-tiles, tiled
+     * background patterns (Marmor-Boden), spacer pixels and similar.
+     */
+    private function urlLooksLikeNonContentAsset(string $url): bool
+    {
+        $lower = strtolower($url);
+        $needles = [
+            'icon', 'sprite', 'spacer', 'pixel', 'tracking',
+            'placeholder', 'transparent', 'blank',
+            'logo-thumbnail', 'thumb', 'avatar', 'emoji',
+            'background-pattern', 'pattern.', 'texture',
+            'arrow-', 'chevron', 'bullet',
+            'wp-includes/images/', 'jimdo-static/static/imageicon',
+            'favicon',
+        ];
+        foreach ($needles as $n) {
+            if (str_contains($lower, $n)) return true;
+        }
+        // Filename consists only of digits or single chars (often UI elements)
+        $path = parse_url($url, PHP_URL_PATH) ?? '';
+        $name = pathinfo($path, PATHINFO_FILENAME);
+        if (strlen($name) <= 2) return true;
+
+        return false;
     }
 
     /**

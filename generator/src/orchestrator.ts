@@ -45,21 +45,43 @@ export async function orchestrate(pkg: RebuildPackage): Promise<OrchestrationRes
 
   const tagline = niche || headlineFromEnrich || metaDesc.split(/[\.!?]/, 1)[0] || category || 'Tradition. Qualität. Region.';
   // Hero headline: keep under ~45 chars or it overflows the oversized
-  // display-serif typography in branch templates. Skip the city-suffix
-  // when niche already mentions the city (avoids "X Vöcklabruck · Vöcklabruck").
+  // display-serif typography in branch templates. NEVER append the city —
+  // it produced ugly "Verein · Stadt" suffixes that read like a slug.
   let headline: string;
   if (headlineFromEnrich) {
     headline = headlineFromEnrich;
-  } else if (niche) {
-    const nicheLower = niche.toLowerCase();
-    const cityLower = (city || '').toLowerCase();
-    const cityAlreadyInNiche = cityLower !== '' && nicheLower.includes(cityLower);
-    const withCity = (city && !cityAlreadyInNiche) ? `${niche} · ${city}` : niche;
-    headline = withCity.length <= 45 ? withCity : (niche.length <= 45 ? niche : businessName);
+  } else if (niche && niche.length <= 45) {
+    headline = niche;
   } else {
     headline = businessName;
   }
-  const subheadline = valueProp || metaDesc || firstSentences(textContent, 2) || `${businessName}${city ? ` aus ${city}` : ''}.`;
+
+  // Subheadline: block generic LLM filler that bleeds across every
+  // Verein ("Gemeinsam Musik machen, Freundschaften pflegen ..." appeared
+  // verbatim on three different clubs — clearly a model default).
+  const isGenericFiller = (s: string): boolean => {
+    const lower = s.toLowerCase();
+    const fillerNeedles = [
+      'gemeinsam musik machen',
+      'freundschaften pflegen',
+      'musikalische ausbildung des nachwuchses',
+      'verbinden sie sich mit einer aktiven musikgemeinschaft',
+      'erleben sie traditionelle blasmusik',
+      'für alle altersgruppen und spielniveaus',
+    ];
+    return fillerNeedles.some((n) => lower.includes(n));
+  };
+  let subheadline: string;
+  if (valueProp && !isGenericFiller(valueProp)) {
+    subheadline = valueProp;
+  } else if (metaDesc && !isGenericFiller(metaDesc)) {
+    subheadline = metaDesc;
+  } else {
+    const scraped = firstSentences(textContent, 2);
+    subheadline = (scraped && !isGenericFiller(scraped))
+      ? scraped
+      : (city ? `${businessName} aus ${city}.` : businessName);
+  }
 
   // About body: prefer enrichment value_prop > meta description > scraped sentences.
   // Scraped sentences are last-resort because they often contain page chrome.

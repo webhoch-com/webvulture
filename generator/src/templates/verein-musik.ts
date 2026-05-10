@@ -217,10 +217,12 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
     .hero-eyebrow .crest { width: 18px; height: 18px; border-radius: 50%; background: var(--accent); }
     .hero h1 {
       font-family: var(--display); font-weight: 500;
-      font-size: clamp(2.25rem, 8vw, 6rem); line-height: 1.05;
-      letter-spacing: -0.025em; max-width: 14ch;
+      font-size: clamp(2rem, 6.5vw, 5rem); line-height: 1.05;
+      letter-spacing: -0.025em; max-width: 18ch;
       text-wrap: balance;
-      overflow-wrap: break-word; word-break: break-word; hyphens: auto;
+      /* Don't auto-hyphenate inside compound words like "Blasmusik" — produced
+         the visible "Blas-/musik" break that looked broken. */
+      overflow-wrap: normal; word-break: normal; hyphens: manual;
     }
     .hero h1 em { font-style: italic; color: var(--accent); font-weight: 500; }
     .hero p { color: rgba(255,255,255,0.92); font-size: 1.2rem; margin-top: 2rem; max-width: 56ch; line-height: 1.65; font-family: var(--serif); }
@@ -682,7 +684,7 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
       ${events.length > 0 ? '<a href="#termine">Termine</a>' : ''}
       ${spec.about?.body ? '<a href="#ueber-uns">Über uns</a>' : ''}
       ${(membership && membership.description) ? '<a href="#mitglied">Mitglied werden</a>' : ''}
-      ${galleryCount(spec) >= 2 ? '<a href="#bilder">Bilder</a>' : ''}
+      ${galleryCount(spec) >= 3 ? '<a href="#bilder">Bilder</a>' : ''}
       <a href="#kontakt">Kontakt</a>
     </nav>
     <a href="#kontakt" class="nav-cta">${ctaText}</a>
@@ -816,7 +818,7 @@ ${board.length > 0 ? `
 </section>
 ` : ''}
 
-${galleryCount(spec) >= 2 ? `
+${galleryCount(spec) >= 3 ? `
 <section id="bilder" class="section">
   <div class="container">
     <div class="section-head center reveal">
@@ -922,7 +924,7 @@ ${address ? `
         <ul>
           ${events.length > 0 ? '<li><a href="#termine">Termine</a></li>' : ''}
           ${spec.about?.body ? '<li><a href="#ueber-uns">Über uns</a></li>' : ''}
-          ${galleryCount(spec) >= 2 ? '<li><a href="#bilder">Bilder</a></li>' : ''}
+          ${galleryCount(spec) >= 3 ? '<li><a href="#bilder">Bilder</a></li>' : ''}
           ${(membership && membership.description) ? '<li><a href="#mitglied">Mitglied werden</a></li>' : ''}
           <li><a href="#kontakt">Kontakt</a></li>
         </ul>
