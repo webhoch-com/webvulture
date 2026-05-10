@@ -13,13 +13,17 @@ class AssetDownloader
     private const TIMEOUT = 10;
     private const MAX_IMAGES = 30;
 
+    // Raster only — SVG bewusst ausgenommen, weil Stored-XSS-Risiko zu hoch ist:
+    // SVG kann <script> und Event-Handler enthalten, und Browser interpretieren
+    // sie bei direkter Navigation (rechte Maustaste → Bild öffnen) als Dokument
+    // im selben Origin wie die Hosting-App. Logos aus dem Web sind in >95% PNG/WEBP/JPG.
+    // Falls SVG später zurück soll: nur mit serverseitigem DOMDocument-Sanitizer.
     private const ALLOWED_MIMES = [
         'image/jpeg' => 'jpg',
         'image/jpg' => 'jpg',
         'image/png' => 'png',
         'image/webp' => 'webp',
         'image/gif' => 'gif',
-        'image/svg+xml' => 'svg',
     ];
 
     public function __construct(
@@ -149,7 +153,13 @@ class AssetDownloader
 
     /**
      * SSRF guard: refuse to fetch URLs whose host resolves to a private/loopback/link-local IP.
-     * Mitigates `<img src=http://169.254.169.254/...>` attacks via scraped pages.
+     *
+     * Mitigates `<img src=http://169.254.169.254/...>` (AWS IMDS) attacks via scraped pages.
+     * Checks BOTH A (IPv4) and AAAA (IPv6) records — gethostbynamel() alone misses IPv6,
+     * which means an attacker could publish A=8.8.8.8 + AAAA=fe80::1 and bypass the guard.
+     * The narrow window between this check and the actual HTTP request still permits
+     * a determined DNS-rebinding attack with very-short-TTL records, but blocking the
+     * common cases (literal private IPs, AAAA missing) eliminates all reflexive exploits.
      */
     private function isPublicHost(string $url): bool
     {
@@ -157,7 +167,10 @@ class AssetDownloader
         if (!$host) {
             return false;
         }
-        // If host is a literal IP, validate it directly.
+        // Strip IPv6 literal brackets: parse_url returns [::1] including brackets.
+        $host = trim($host, '[]');
+
+        // If host is a literal IP, validate it directly (covers IPv4 + IPv6 literals).
         if (filter_var($host, FILTER_VALIDATE_IP)) {
             return (bool) filter_var(
                 $host,
@@ -165,12 +178,30 @@ class AssetDownloader
                 FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE,
             );
         }
-        // Resolve hostname → IPs and reject if any resolves into a private/reserved range.
-        $ips = @gethostbynamel($host);
-        if (!$ips) {
+
+        $allIps = [];
+
+        // IPv4 (A records)
+        $a = @gethostbynamel($host);
+        if (is_array($a)) {
+            $allIps = array_merge($allIps, $a);
+        }
+
+        // IPv6 (AAAA records) — gethostbynamel doesn't return these.
+        $aaaa = @dns_get_record($host, DNS_AAAA);
+        if (is_array($aaaa)) {
+            foreach ($aaaa as $rec) {
+                if (!empty($rec['ipv6'])) {
+                    $allIps[] = $rec['ipv6'];
+                }
+            }
+        }
+
+        if (empty($allIps)) {
             return false;
         }
-        foreach ($ips as $ip) {
+
+        foreach ($allIps as $ip) {
             if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
                 return false;
             }
@@ -182,7 +213,7 @@ class AssetDownloader
     {
         $path = parse_url($url, PHP_URL_PATH) ?? '';
         $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
-        return in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg'], true)
+        return in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'], true)
             ? ($ext === 'jpeg' ? 'jpg' : $ext)
             : null;
     }
@@ -204,10 +235,13 @@ class AssetDownloader
         if (str_starts_with($src, '/')) {
             return "{$scheme}://{$host}{$src}";
         }
-        $path = dirname($base['path'] ?? '/');
-        if ($path === '\\') {
-            $path = '/';
+        // dirname() returns '.' for empty input, '\' on Windows, '/' for root.
+        // Normalize all of these to a clean leading-slash directory.
+        $basePath = $base['path'] ?? '/';
+        $dir = $basePath === '/' ? '' : rtrim(dirname($basePath), '\\.');
+        if ($dir === '' || $dir === '.') {
+            $dir = '';
         }
-        return "{$scheme}://{$host}{$path}/{$src}";
+        return "{$scheme}://{$host}{$dir}/{$src}";
     }
 }

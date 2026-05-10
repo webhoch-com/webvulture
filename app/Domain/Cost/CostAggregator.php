@@ -92,6 +92,14 @@ class CostAggregator
     {
         ['from' => $from, 'to' => $to] = self::periodFor($period);
 
+        // Hard cap on 'all' to keep the dashboard responsive on large histories:
+        // load no more than the last 90 days, otherwise the wire:model.live re-fires
+        // would balloon memory once history grows.
+        if ($period === 'all') {
+            $from = \Illuminate\Support\Carbon::today()->subDays(89);
+            $to = \Illuminate\Support\Carbon::tomorrow();
+        }
+
         // Pull all relevant cost logs in the window once and aggregate in PHP.
         // Select only the columns we need to keep memory bounded on large result sets.
         $query = CostLog::query()
@@ -140,14 +148,20 @@ class CostAggregator
 
             // SearchRun cost is shared across the leads the run produced.
             // Use meta.lead_id if present, else divide evenly using the pre-resolved map.
+            // Remainder is distributed to the first N leads (sorted by id) so the per-lead
+            // sums match the global breakdown — same algorithm as Lead::totalCostCents().
             if ($log->costable_type === SearchRun::class) {
                 if (is_array($meta) && isset($meta['lead_id'])) {
                     $leadId = (int) $meta['lead_id'];
                 } else {
                     $leadIds = $searchRunToLeads[$log->costable_id] ?? [];
                     if (!$leadIds) continue;
-                    $share = (int) floor($cents / max(1, count($leadIds)));
-                    foreach ($leadIds as $lid) {
+                    sort($leadIds, SORT_NUMERIC);
+                    $count = count($leadIds);
+                    $base = intdiv($cents, $count);
+                    $remainder = $cents - $base * $count;
+                    foreach ($leadIds as $idx => $lid) {
+                        $share = $base + ($idx < $remainder ? 1 : 0);
                         $byLead[$lid]['search_cents'] = ($byLead[$lid]['search_cents'] ?? 0) + $share;
                         $byLead[$lid]['total_cents'] = ($byLead[$lid]['total_cents'] ?? 0) + $share;
                     }

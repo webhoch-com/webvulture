@@ -110,8 +110,17 @@ class Lead extends Model
             $runTotal = (int) CostLog::where('costable_type', SearchRun::class)
                 ->where('costable_id', $this->search_run_id)
                 ->sum('cost_cents');
-            $shareCount = max(1, Lead::where('search_run_id', $this->search_run_id)->count());
-            $searchRunCost = (int) floor($runTotal / $shareCount);
+            $shareCount = (int) Lead::where('search_run_id', $this->search_run_id)->count();
+            if ($shareCount > 0 && $runTotal > 0) {
+                // Even share + deterministic remainder distribution to first N leads (by id ASC).
+                // Eliminates the penny-loss between Dashboard breakdown (full sum) and per-lead totals.
+                $base = intdiv($runTotal, $shareCount);
+                $remainder = $runTotal - $base * $shareCount;
+                $myRank = (int) Lead::where('search_run_id', $this->search_run_id)
+                    ->where('id', '<=', $this->id)
+                    ->count();
+                $searchRunCost = $base + ($myRank <= $remainder ? 1 : 0);
+            }
         }
 
         return $leadCost + $prototypeCost + $searchRunCost;

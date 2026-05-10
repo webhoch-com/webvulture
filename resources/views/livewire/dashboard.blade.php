@@ -188,10 +188,10 @@ new class extends Component {
                                     <a href="{{ route('leads.show', $row['lead_id']) }}" class="dash-leads-link">{{ $row['name'] }}</a>
                                     <span class="dash-leads-city">{{ $row['city'] }}</span>
                                 </td>
-                                <td class="num">{{ number_format($row['search_cents'] / 100, 4, ',', '.') }} €</td>
-                                <td class="num">{{ number_format($row['enrichment_cents'] / 100, 4, ',', '.') }} €</td>
-                                <td class="num">{{ number_format($row['prototype_cents'] / 100, 4, ',', '.') }} €</td>
-                                <td class="num gesamt">{{ number_format($row['total_cents'] / 100, 4, ',', '.') }} €</td>
+                                <td class="num">{{ number_format($row['search_cents'] / 100, 2, ',', '.') }} €</td>
+                                <td class="num">{{ number_format($row['enrichment_cents'] / 100, 2, ',', '.') }} €</td>
+                                <td class="num">{{ number_format($row['prototype_cents'] / 100, 2, ',', '.') }} €</td>
+                                <td class="num gesamt">{{ number_format($row['total_cents'] / 100, 2, ',', '.') }} €</td>
                             </tr>
                         @endforeach
                     </tbody>

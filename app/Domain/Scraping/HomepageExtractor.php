@@ -67,9 +67,12 @@ class HomepageExtractor
 
         if (!$result['primary'] || !$result['secondary'] || !$result['accent']) {
             $colors = $this->brandColors($html);
-            $result['primary']   ??= $colors[0] ?? null;
-            $result['secondary'] ??= $colors[1] ?? null;
-            $result['accent']    ??= $colors[2] ?? null;
+            // Defense-in-depth: brandColors() comes from a regex that may capture
+            // hex tokens followed by CSS-breaking characters. Re-normalize before
+            // we hand the value to a Blade template that uses it in style="…".
+            $result['primary']   ??= $this->normalizeColor((string) ($colors[0] ?? ''));
+            $result['secondary'] ??= $this->normalizeColor((string) ($colors[1] ?? ''));
+            $result['accent']    ??= $this->normalizeColor((string) ($colors[2] ?? ''));
         }
 
         return $result;
