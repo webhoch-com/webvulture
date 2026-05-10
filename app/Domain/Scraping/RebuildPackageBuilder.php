@@ -137,11 +137,23 @@ class RebuildPackageBuilder
             '/1x1/i',
             '/google-analytics/i',
             '/facebook\.com\/tr/i',
+            // Banner-Slides + Theme-Decoration. The mirrored URL hides these
+            // patterns (it's our own /storage/.../HASH.jpg path), so we must
+            // also check `original_src` further down.
+            '/icon/i', '/spacer/i', '/placeholder/i', '/transparent/i',
+            '/banner_/i', '/banner-/i', '/banner\//i',
+            '/slide_/i', '/slide-/i', '/header_/i', '/header-/i',
+            '/wallpaper/i', '/background\.jpg/i',
+            // Common floor/wall pattern photos that bled into Verein galleries
+            '/boden/i', '/floor\./i', '/wall\./i',
+            // wp-includes admin assets, jimdo theme icons
+            '/wp-includes\/images/i', '/jimdo-static/i', '/favicon/i',
         ];
 
         $filtered = [];
         foreach ($images as $img) {
             $src = is_array($img) ? ($img['src'] ?? null) : null;
+            $originalSrc = is_array($img) ? ($img['original_src'] ?? '') : '';
             if (! is_string($src) || strlen($src) === 0 || strlen($src) > 2048) {
                 continue;
             }
@@ -155,8 +167,11 @@ class RebuildPackageBuilder
             if (preg_match('/["\'<>\\\\\s`]/', $src)) {
                 continue;
             }
+            // Apply skip patterns to BOTH the mirrored URL and the original URL,
+            // because the mirror's HASH.jpg path hides telltale strings like
+            // "/banner/slide_boden.jpg" that should disqualify an asset.
             foreach ($skipPatterns as $pattern) {
-                if (preg_match($pattern, $src)) {
+                if (preg_match($pattern, $src) || ($originalSrc && preg_match($pattern, $originalSrc))) {
                     continue 2;
                 }
             }
