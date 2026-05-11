@@ -120,7 +120,18 @@ class AssetDownloader
             // assets BEFORE we make a network request. Saves bandwidth + avoids
             // ugly Windows-icon-style "gallery images" and Marmor-Boden background
             // tiles that bled into earlier deploys.
-            if ($this->urlLooksLikeNonContentAsset($resolved)) {
+            //
+            // EXCEPTION: when downloading the logo specifically, skip the
+            // URL-blocklist if the URL contains a "logo"/"wappen" hint. Drupal
+            // sites like Puchkirchen serve their real logo at
+            // "sites/all/themes/<x>/image/header-logo.png" — the generic
+            // "header-" needle would otherwise drop a legitimate logo.
+            $isLogoDownload = $prefix === 'logo';
+            $hasLogoHint = $isLogoDownload && (
+                str_contains(strtolower($resolved), 'logo') ||
+                str_contains(strtolower($resolved), 'wappen')
+            );
+            if (!$hasLogoHint && $this->urlLooksLikeNonContentAsset($resolved)) {
                 Log::debug("AssetDownloader: skipped non-content URL {$resolved}");
                 return null;
             }
