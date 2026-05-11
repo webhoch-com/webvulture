@@ -83,15 +83,74 @@ export async function orchestrate(pkg: RebuildPackage): Promise<OrchestrationRes
       : (city ? `${businessName} aus ${city}.` : businessName);
   }
 
-  // About body: prefer enrichment value_prop > meta description > scraped sentences.
-  // Scraped sentences are last-resort because they often contain page chrome.
-  let aboutBody = '';
-  if (valueProp && valueProp.length > 40) {
-    aboutBody = valueProp;
-  } else if (metaDesc && metaDesc.length > 40) {
-    aboutBody = metaDesc;
-  } else {
-    aboutBody = firstSentences(textContent, 4);
+  // About body: build a substantive paragraph by stitching together enrichment
+  // value_prop (concise pitch) + scraped sentences (real authoritative content).
+  // The previous logic returned just the 130-char meta_desc → the About section
+  // collapsed to a single line and the page felt empty. We now aim for ≥ 280 chars
+  // by appending scraped sentences whose normalised form does NOT already appear
+  // in subheadline or about. Junk sentences are filtered upstream by `firstSentences`.
+  //
+  // Substring guard: we compare normalised candidates against the running
+  // normalised buffer (not just per-sentence). This catches the realistic
+  // overlap where value_prop = "Wir sind ein Musikverein." and scraped3
+  // starts with "Wir sind ein Musikverein aus Linz und ...".
+  const norm = (s: string) => s.toLowerCase().replace(/[\s.,;:!?…—-]+/g, ' ').trim();
+  const subheadNorm = norm(subheadline);
+  const parts: string[] = [];
+  let runningNorm = subheadNorm; // includes the hero subhead so we don't repeat it
+  const pushUnique = (raw: string) => {
+    const trimmed = raw.trim();
+    if (!trimmed) return;
+    const key = norm(trimmed);
+    if (key.length < 30) return;
+    if (!key) return;
+    // Reject if the candidate is already contained in the running buffer
+    // OR contains the running buffer entirely (would duplicate the prefix).
+    if (runningNorm.length > 0 && (runningNorm.includes(key) || key.includes(runningNorm))) {
+      // If the new candidate is a strict superset of what we have, swap it in.
+      if (key.length > runningNorm.length + 40 && key.includes(runningNorm)) {
+        // Drop the old parts whose normalised form is fully covered by the new candidate.
+        for (let i = parts.length - 1; i >= 0; i--) {
+          if (key.includes(norm(parts[i]))) parts.splice(i, 1);
+        }
+        parts.push(trimmed);
+        runningNorm = norm(parts.join(' '));
+      }
+      return;
+    }
+    parts.push(trimmed);
+    runningNorm = norm(parts.join(' '));
+  };
+
+  if (valueProp && valueProp.length > 40) pushUnique(valueProp);
+  if (metaDesc && metaDesc.length > 40) pushUnique(metaDesc);
+  // Try to enrich with multiple scraped sentences. firstSentences already
+  // filters out cookies/skip-links/etc.
+  const scraped3 = firstSentences(textContent, 3);
+  if (scraped3) pushUnique(scraped3);
+  // If still thin, REPLACE with a longer cut (don't append — would duplicate
+  // the first sentences) when the longer version is significantly bigger.
+  if (parts.join(' ').length < 200) {
+    const scraped6 = firstSentences(textContent, 6);
+    if (scraped6 && scraped6.length > parts.join(' ').length + 80) {
+      // Discard previous scraped3-derived parts to avoid prefix duplication,
+      // keep enrichment-sourced parts (value_prop / meta_desc).
+      const scraped3Norm = scraped3 ? norm(scraped3) : '';
+      if (scraped3Norm) {
+        for (let i = parts.length - 1; i >= 0; i--) {
+          if (norm(parts[i]) === scraped3Norm) parts.splice(i, 1);
+        }
+      }
+      runningNorm = norm([subheadNorm, ...parts.map(norm)].join(' '));
+      pushUnique(scraped6);
+    }
+  }
+  let aboutBody = parts.join(' ').trim();
+  // Last-resort: if all paths above came up dry (very thin scrape), emit a
+  // neutral placeholder rather than an empty section. Better than a 1-line block.
+  if (!aboutBody && (city || category)) {
+    aboutBody = [businessName, city ? `aus ${city}` : '', category ? `· ${category}` : '']
+      .filter(Boolean).join(' ').trim() + '.';
   }
 
   const services = mapServicesFromScrape(pkg.extracted?.services ?? []);
@@ -146,9 +205,15 @@ export async function orchestrate(pkg: RebuildPackage): Promise<OrchestrationRes
   const taglineLower = baseSpec.tagline.toLowerCase();
   const aboutLower = baseSpec.about.body.slice(0, 80).toLowerCase();
   const seenTitles = new Set<string>();
+  // Page-chrome titles. Mirrors the PHP-side junk filter in RebuildPackageBuilder
+  // so a future direct-from-test path can't push skip-links into editorial slots.
+  const JUNK_TITLE_RE = /^(zum inhalt|skip to|cookie|menü|menu|navigation|impressum|datenschutz|agb|kontakt|footer|kontaktformular|search|suche)\b/i;
   const redesigned = (pkg.extracted?.sections ?? [])
     .filter((s) => {
       if (!s?.title || !s?.body) return false;
+      if (JUNK_TITLE_RE.test(s.title)) return false;
+      // Body too short → almost always page chrome ("Mehr lesen" etc.).
+      if (s.body.trim().length < 30) return false;
       const t = s.title.toLowerCase();
       if (seenTitles.has(t)) return false;
       seenTitles.add(t);
@@ -212,7 +277,15 @@ function isJunkSentence(s: string): boolean {
 function firstSentences(text: string, n: number): string {
   if (!text) return '';
   const matches = text.match(/[^.!?]+[.!?]+/g);
-  if (!matches) return text.slice(0, 280);
+  if (!matches) {
+    // Single long no-punctuation blob (common on JS-rendered landing pages where
+    // DomCrawler concatenates nav into text_content). Previously we returned
+    // the raw 280-char slice — bypassing isJunkSentence and pushing chrome
+    // (Cookie/Impressum/Skip-Link strings) into about.body. Apply the same
+    // junk filter as the punctuated path; return '' when the blob is junk.
+    const slice = text.slice(0, 280).trim();
+    return isJunkSentence(slice) ? '' : slice;
+  }
   const clean = matches
     .map((s) => s.trim())
     .filter((s) => !isJunkSentence(s));
@@ -334,7 +407,13 @@ function pickMedia(pkg: RebuildPackage): SiteSpec['media'] {
   const seen = new Set<string>();
   if (logo) seen.add(logo);
 
-  const SCORE_THRESHOLD = 50;
+  // Lower threshold from 50 to 30: real Verein-pages often only have a handful
+  // of borderline-keyword images (Stiftungsfeier-202x.jpg, IMG_1234.jpg). The
+  // strict 50-threshold caused completely empty galleries on multiple
+  // music-club previews — better to keep one borderline image than render an
+  // empty page. SPONSOR_RE etc. inside `scoreImage` still subtract enough
+  // for true junk to fall below 30.
+  const SCORE_THRESHOLD = 30;
   const scored = raw
     .map((img) => ({
       src: img.src,

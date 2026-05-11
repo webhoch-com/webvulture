@@ -204,7 +204,13 @@ class RebuildPackageBuilder
      */
     protected function cleanSections(array $raw): array
     {
+        // Junk-title patterns (page chrome). Section is dropped when the title
+        // matches: these end up looking ridiculous as full "Aus Ihrer Webseite"
+        // editorial blocks ("Zum Inhalt springen" as a giant H2 etc.).
+        $junkTitleRe = '/^(zum inhalt|skip to|cookie|menü|menu|navigation|impressum|datenschutz|agb|kontakt|footer|kontaktformular|search|suche)\b/i';
+
         $clean = [];
+        $seenTitles = [];
         foreach ($raw as $entry) {
             if (! is_array($entry)) {
                 continue;
@@ -225,10 +231,33 @@ class RebuildPackageBuilder
             $title = strip_tags($title);
             $body = strip_tags($body);
 
+            // Drop common page-chrome titles. Without this the redesign block
+            // happily renders "Zum Inhalt springen" as a giant editorial
+            // headline on Vereinen with skip-link H2s.
+            if (preg_match($junkTitleRe, $title)) {
+                continue;
+            }
+            // Body that's just a few words is page chrome too (read more, more info).
+            if (mb_strlen($body) < 30) {
+                continue;
+            }
+            // De-dupe by lowercase title — some sites repeat a section verbatim
+            // in header + main + footer. When titles collide, keep the entry
+            // with the LONGER body: nav-link "Über uns" (short) vs main-body
+            // "Über uns" (the real content) — we want the body version.
+            $titleKey = mb_strtolower($title);
             $title = mb_substr($title, 0, 120);
             $body = mb_substr($body, 0, 1600);
 
+            if (isset($seenTitles[$titleKey])) {
+                $existingIdx = $seenTitles[$titleKey];
+                if (mb_strlen($body) > mb_strlen($clean[$existingIdx]['body'])) {
+                    $clean[$existingIdx] = ['title' => $title, 'level' => $level, 'body' => $body];
+                }
+                continue;
+            }
             $clean[] = ['title' => $title, 'level' => $level, 'body' => $body];
+            $seenTitles[$titleKey] = array_key_last($clean);
             if (count($clean) >= 8) {
                 break;
             }

@@ -684,7 +684,7 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
       ${events.length > 0 ? '<a href="#termine">Termine</a>' : ''}
       ${spec.about?.body ? '<a href="#ueber-uns">Über uns</a>' : ''}
       ${(membership && membership.description) ? '<a href="#mitglied">Mitglied werden</a>' : ''}
-      ${galleryCount(spec) >= 3 ? '<a href="#bilder">Bilder</a>' : ''}
+      ${galleryCount(spec) >= 1 ? '<a href="#bilder">Bilder</a>' : ''}
       <a href="#kontakt">Kontakt</a>
     </nav>
     <a href="#kontakt" class="nav-cta">${ctaText}</a>
@@ -818,7 +818,7 @@ ${board.length > 0 ? `
 </section>
 ` : ''}
 
-${galleryCount(spec) >= 3 ? `
+${galleryCount(spec) >= 1 ? `
 <section id="bilder" class="section">
   <div class="container">
     <div class="section-head center reveal">
@@ -835,16 +835,33 @@ ${galleryCount(spec) >= 3 ? `
 ` : ''}
 
 ${(() => {
-  const candidateQuote = spec.about?.body ? firstSentence(spec.about.body) : tagline;
-  // Skip mission-section if quote would be junk OR is identical to hero subhead
-  // / about body (avoid reading the same sentence 3× across hero/about/mission).
+  // Find a quote that's distinct from the subhead AND the about-body's lead
+  // sentence. Walk through every sentence in about.body and pick the first
+  // one not already shown above. This is what made the mission-section
+  // disappear on thin Verein-pages: the first sentence equalled the subhead.
   const norm = (s: string) => s.toLowerCase().replace(/[\s.,;:!?…—-]+/g, ' ').trim();
-  const isJunk = !candidateQuote ||
-    candidateQuote.length < 30 ||
-    /zum inhalt|skip|cookie|folgen sie|instagram|facebook|impressum/i.test(candidateQuote) ||
-    norm(candidateQuote) === norm(spec.hero?.subheadline || '') ||
-    norm(candidateQuote) === norm(spec.about?.body || '');
-  if (isJunk) return '';
+  const subheadN = norm(spec.hero?.subheadline || '');
+  const aboutLeadN = norm(firstSentence(spec.about?.body || ''));
+  const allSentences = (spec.about?.body || '').match(/[^.!?]+[.!?]+/g) || [];
+  let candidateQuote = '';
+  for (const raw of allSentences) {
+    const s = raw.trim();
+    if (s.length < 30) continue;
+    if (/zum inhalt|skip|cookie|folgen sie|instagram|facebook|impressum/i.test(s)) continue;
+    const n = norm(s);
+    if (n === subheadN) continue;
+    if (n === aboutLeadN && allSentences.length > 1) continue;
+    candidateQuote = s;
+    break;
+  }
+  // Final fallback: only emit if the tagline is distinct enough.
+  if (!candidateQuote) {
+    const tagN = norm(tagline);
+    if (tagN.length >= 30 && tagN !== subheadN && tagN !== aboutLeadN) {
+      candidateQuote = tagline;
+    }
+  }
+  if (!candidateQuote || candidateQuote.length < 30) return '';
   return `
 <section class="mission-section">
   <div class="container">
@@ -924,7 +941,7 @@ ${address ? `
         <ul>
           ${events.length > 0 ? '<li><a href="#termine">Termine</a></li>' : ''}
           ${spec.about?.body ? '<li><a href="#ueber-uns">Über uns</a></li>' : ''}
-          ${galleryCount(spec) >= 3 ? '<li><a href="#bilder">Bilder</a></li>' : ''}
+          ${galleryCount(spec) >= 1 ? '<li><a href="#bilder">Bilder</a></li>' : ''}
           ${(membership && membership.description) ? '<li><a href="#mitglied">Mitglied werden</a></li>' : ''}
           <li><a href="#kontakt">Kontakt</a></li>
         </ul>
