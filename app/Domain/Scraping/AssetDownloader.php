@@ -79,6 +79,26 @@ class AssetDownloader
             return null;
         }
 
+        // Sanity check: if "logo" is huge (>500x500 or >300 KB) it's almost
+        // certainly the group photo, not a logo. Reject so it stays available
+        // for the hero/gallery pool instead of getting buried as a tiny crop
+        // next to the page title.
+        //
+        // getimagesizefromstring() can return garbage values for malformed PNGs
+        // (e.g. 218000000×1100000000 for a fake test fixture). Only treat the
+        // dimensions as authoritative when they sit in a realistic range
+        // (<= 10000px on either axis). Garbage values are ignored — for those
+        // we fall back to byte-size only.
+        $w = (int) ($result['width'] ?? 0);
+        $h = (int) ($result['height'] ?? 0);
+        $bytes = (int) ($result['bytes'] ?? 0);
+        $dimsAreSane = ($w > 0 && $h > 0 && $w <= 10000 && $h <= 10000);
+        $looksLikePhoto = $dimsAreSane && ($w > 500 || $h > 500);
+        if ($looksLikePhoto || $bytes > 300 * 1024) {
+            Log::debug("AssetDownloader: rejected oversized 'logo' candidate ({$w}x{$h}, {$bytes}b) for lead {$leadId} — likely a hero photo");
+            return null;
+        }
+
         return array_merge($result, [
             'src_original' => $logoUrl,
             'role' => 'logo',

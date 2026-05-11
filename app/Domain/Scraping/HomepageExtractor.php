@@ -452,22 +452,61 @@ class HomepageExtractor
 
     protected function logo(Crawler $c, string $baseUrl): ?string
     {
-        $selectors = [
-            'img[class*="logo"]',
-            'img[id*="logo"]',
-            'a[class*="logo"] img',
-            'header img',
-            'nav img',
+        // Tier 1: strong logo hints — class/id/alt/src contains "logo" literally.
+        // These are the ONLY selectors we fully trust, because "header img" or
+        // "nav img" routinely matches the big group photo at the top of Verein-
+        // homepages (e.g. Gampern's Mannschaftsfoto sits in <header>).
+        $strongSelectors = [
+            'img[class*="logo" i]',
+            'img[id*="logo" i]',
+            'img[alt*="logo" i]',
+            'img[src*="logo" i]',
+            'a[class*="logo" i] img',
+            'a[id*="logo" i] img',
+            '.logo img',
+            '#logo img',
         ];
-
-        foreach ($selectors as $sel) {
+        foreach ($strongSelectors as $sel) {
             try {
                 $src = $c->filter($sel)->first()->attr('src');
-                if ($src) {
+                if ($src && !str_starts_with($src, 'data:')) {
                     return $this->resolveUrl($src, $baseUrl);
                 }
-            } catch (\Throwable $e) { \Log::debug("HomepageExtractor: extraction step failed", ["error" => $e->getMessage()]); 
-            }
+            } catch (\Throwable) {}
+        }
+
+        // Tier 2: fall back to the first image inside <header> / <nav> ONLY IF
+        // it carries plausible logo hints (typical filename, or the dimensions
+        // attribute looks logo-shaped). Otherwise it's almost certainly the big
+        // hero/group photo and we MUST NOT label it as logo — otherwise the
+        // hero renderer drops it from the gallery pool and the page ends up
+        // with a decoration-only hero.
+        $weakSelectors = ['header img', 'nav img', '.brand img', '.site-logo img'];
+        foreach ($weakSelectors as $sel) {
+            try {
+                $img = $c->filter($sel)->first();
+                $src = $img->attr('src');
+                if (!$src || str_starts_with($src, 'data:')) continue;
+
+                $alt = strtolower((string) $img->attr('alt'));
+                $cls = strtolower((string) $img->attr('class'));
+                $widthAttr = (int) $img->attr('width');
+                $heightAttr = (int) $img->attr('height');
+
+                // Accept if any obvious hint is present
+                $looksLikeLogo =
+                    str_contains(strtolower($src), 'logo') ||
+                    str_contains($alt, 'logo') ||
+                    str_contains($cls, 'logo') ||
+                    str_contains($alt, 'wappen') ||
+                    str_contains(strtolower($src), 'wappen') ||
+                    // Or shaped like a logo (narrow & short, <=200×120)
+                    ($widthAttr > 0 && $heightAttr > 0 && $widthAttr <= 200 && $heightAttr <= 120);
+
+                if ($looksLikeLogo) {
+                    return $this->resolveUrl($src, $baseUrl);
+                }
+            } catch (\Throwable) {}
         }
 
         return null;
