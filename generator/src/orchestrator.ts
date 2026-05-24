@@ -198,6 +198,71 @@ export async function orchestrate(pkg: RebuildPackage): Promise<OrchestrationRes
     baseSpec.brand.primary_color = scrapedColor;
   }
 
+  // ─── Forward the structured brand block from the PHP RebuildPackageBuilder ──
+  // Previously dropped on the floor: secondary + accent + fonts. Surfacing them
+  // lets each preview look like the real club instead of every Verein being
+  // hard-coded evergreen+Fraunces. Validate values defensively — these come
+  // from CSS parsing which can leak garbage when sites use obscure custom
+  // properties.
+  const pkgBrand = pkg.brand;
+  if (pkgBrand) {
+    const secondaryHex = pkgBrand.secondary_color ? normalizeHex(pkgBrand.secondary_color) : null;
+    const accentHex = pkgBrand.accent_color ? normalizeHex(pkgBrand.accent_color) : null;
+    if (secondaryHex) baseSpec.brand.secondary_color = secondaryHex;
+    if (accentHex) baseSpec.brand.accent_color = accentHex;
+
+    // Fonts: only accept reasonably shaped family names (alpha + spaces +
+    // hyphens) to keep CSS injection impossible. Length capped at 60.
+    const SAFE_FONT_RE = /^[A-Za-z0-9][\w\s\-]{0,59}$/;
+    if (pkgBrand.heading_font_family && SAFE_FONT_RE.test(pkgBrand.heading_font_family)) {
+      baseSpec.brand.heading_font_family = pkgBrand.heading_font_family;
+    }
+    if (pkgBrand.body_font_family && SAFE_FONT_RE.test(pkgBrand.body_font_family)) {
+      baseSpec.brand.body_font_family = pkgBrand.body_font_family;
+    }
+    // font_imports: must be absolute https URLs to fonts.googleapis.com,
+    // fonts.bunny.net, use.typekit.net or similar font-CDNs. Anything else
+    // gets dropped — a scraped `@import` from a hostile site could otherwise
+    // load arbitrary CSS into our previews.
+    const FONT_HOST_RE = /^https:\/\/(fonts\.googleapis\.com|fonts\.bunny\.net|use\.typekit\.net|use\.fontawesome\.com|fonts\.gstatic\.com)\//i;
+    const imports = (pkgBrand.font_imports ?? [])
+      .filter((u): u is string => typeof u === 'string' && u.length < 512 && FONT_HOST_RE.test(u))
+      .slice(0, 5);
+    if (imports.length > 0) {
+      baseSpec.brand.font_imports = imports;
+    }
+  }
+
+  // ─── Trust signals (Google Maps rating) ───────────────────────────────────
+  // Templates surface these only if rating ≥ 4.0 AND review_count ≥ 5 — anything
+  // weaker actively hurts. We still set the field so templates can decide.
+  if (typeof pkg.business?.rating === 'number' && typeof pkg.business?.review_count === 'number') {
+    baseSpec.business = {
+      rating: pkg.business.rating,
+      review_count: pkg.business.review_count,
+    };
+  }
+
+  // ─── Socials (top-level for footer-strip rendering) ───────────────────────
+  // Only accept entries whose URL is https:// to a known social host. Anything
+  // else is silently dropped (e.g. mailto:, tel:, javascript:).
+  const SOCIAL_HOST_RE = /^https?:\/\/(www\.)?(facebook|instagram|youtube|twitter|x|linkedin|tiktok|threads|whatsapp)\.com\//i;
+  const socials: Record<string, string> = {};
+  for (const [k, v] of Object.entries(pkg.extracted?.socials ?? {})) {
+    if (typeof v === 'string' && v.length < 256 && SOCIAL_HOST_RE.test(v)) {
+      socials[k] = v;
+    }
+  }
+  if (Object.keys(socials).length > 0) {
+    baseSpec.socials = socials;
+  }
+
+  // ─── Screenshots passthrough (fallback gallery / before-after) ───────────
+  if (pkg.screenshots && pkg.screenshots.length > 0) {
+    baseSpec.media = baseSpec.media || {};
+    baseSpec.media.screenshots = pkg.screenshots.slice(0, 4);
+  }
+
   // Pass through the *real* page sections from the prospect's site so the
   // template can render a premium redesign of their actual content. Strict
   // filter against duplicates of headline/about and against junk titles.

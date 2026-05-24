@@ -111,6 +111,7 @@ class ScraperService
                     'gallery_images' => $galleryDownloaded,
                     'downloaded_assets' => $downloadedAssets,
                     'socials' => $extracted['socials'],
+                    'nav_links' => $this->normalizeNavLinks($extracted['nav_links'] ?? []),
                     'brand_colors' => $extracted['brand_colors'] ?? [],
                     'primary_color' => $extracted['primary_color'] ?? null,
                     'secondary_color' => $extracted['secondary_color'] ?? null,
@@ -220,5 +221,41 @@ class ScraperService
                 }
             }
         }
+    }
+
+    /**
+     * Reshape the extractor's label-keyed nav-links into the [{label, href}]
+     * array shape the generator/templates consume, while filtering pure
+     * page-chrome labels and capping count + length.
+     *
+     * The extractor returns ['Über uns' => 'https://...', 'Kontakt' => '...'].
+     * Templates need a stable ordered list, with junk labels removed.
+     */
+    protected function normalizeNavLinks(array $raw): array
+    {
+        $junkRe = '/^(zum inhalt|skip to|cookie|toggle|search|suche|login|anmelden|menu|menü|navigation)\b/i';
+        $out = [];
+        foreach ($raw as $label => $href) {
+            if (! is_string($label) || ! is_string($href)) {
+                continue;
+            }
+            $label = trim($label);
+            $href = trim($href);
+            if ($label === '' || $href === '' || mb_strlen($label) > 40) {
+                continue;
+            }
+            if (! preg_match('#^https?://#i', $href)) {
+                continue;
+            }
+            if (preg_match($junkRe, $label)) {
+                continue;
+            }
+            $out[] = ['label' => $label, 'href' => $href];
+            if (count($out) >= 8) {
+                break;
+            }
+        }
+
+        return $out;
     }
 }

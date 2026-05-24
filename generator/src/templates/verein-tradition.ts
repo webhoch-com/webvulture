@@ -36,6 +36,18 @@ export function renderVereinTraditionPage(spec: SiteSpec, slug: string): string 
   const testimonials = spec.testimonials && spec.testimonials.length > 0 ? spec.testimonials.slice(0, 3) : [];
 
   const primary = spec.brand?.primary_color || '#7c2d12';
+  const secondary = spec.brand?.secondary_color || primary;
+  const accent = spec.brand?.accent_color || '#b89968';
+  const headingFont = spec.brand?.heading_font_family
+    ? `'${spec.brand.heading_font_family}', 'Cinzel', 'Times New Roman', serif`
+    : "'Cinzel', 'Times New Roman', serif";
+  const bodyFont = spec.brand?.body_font_family
+    ? `'${spec.brand.body_font_family}', 'Lora', Georgia, serif`
+    : "'Lora', Georgia, serif";
+  const fontImportTags = (spec.brand?.font_imports && spec.brand.font_imports.length > 0)
+    ? spec.brand.font_imports.map(u => `<link rel="stylesheet" href="${u}" crossorigin>`).join('\n  ')
+    : `<link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
+  <link href="https://fonts.bunny.net/css?family=cinzel:400,500,600,700|lora:400,500,600,700&display=swap" rel="stylesheet">`;
 
   return `---
 ---
@@ -43,14 +55,14 @@ export function renderVereinTraditionPage(spec: SiteSpec, slug: string): string 
 <html lang="de">
 <head>
   ${renderSeoHead(spec, { slug, schemaKind: 'LocalBusiness' })}
-  <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
-  <link href="https://fonts.bunny.net/css?family=cinzel:400,500,600,700|lora:400,500,600,700&display=swap" rel="stylesheet">
+  ${fontImportTags}
   <style is:global>
     :root {
       --primary: ${escapeHtml(primary)};
       --primary-deep: color-mix(in oklch, ${escapeHtml(primary)} 70%, black);
-      --gold: #b89968;
-      --gold-deep: #8b7142;
+      --secondary: ${escapeHtml(secondary)};
+      --gold: ${escapeHtml(accent)};
+      --gold-deep: color-mix(in oklch, ${escapeHtml(accent)} 70%, black);
       --bg: #faf6ed;
       --bg-2: #f0e9d6;
       --surface: #ffffff;
@@ -58,8 +70,8 @@ export function renderVereinTraditionPage(spec: SiteSpec, slug: string): string 
       --ink-2: #4a3a2c;
       --ink-3: #8a7c68;
       --rule: rgba(31,20,16,0.12);
-      --display: 'Cinzel', 'Times New Roman', serif;
-      --serif: 'Lora', Georgia, serif;
+      --display: ${headingFont};
+      --serif: ${bodyFont};
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html { scroll-behavior: smooth; }

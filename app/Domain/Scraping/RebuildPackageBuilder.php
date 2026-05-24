@@ -66,6 +66,7 @@ class RebuildPackageBuilder
                 'contact' => $analysis?->contact ?? [],
                 'services' => $analysis?->services ?? [],
                 'socials' => $analysis?->socials ?? [],
+                'nav_links' => $analysis?->nav_links ?? [],
                 'text_content' => $analysis?->text_content
                     ? mb_substr($analysis->text_content, 0, 6000)
                     : null,

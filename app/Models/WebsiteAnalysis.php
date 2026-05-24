@@ -20,6 +20,7 @@ class WebsiteAnalysis extends Model
         'gallery_images' => 'array',
         'downloaded_assets' => 'array',
         'socials' => 'array',
+        'nav_links' => 'array',
         'brand_colors' => 'array',
         'font_imports' => 'array',
         'screenshot_paths' => 'array',

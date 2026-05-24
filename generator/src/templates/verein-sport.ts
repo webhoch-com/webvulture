@@ -37,6 +37,18 @@ export function renderVereinSportPage(spec: SiteSpec, slug: string): string {
   const openingHours = spec.opening_hours && spec.opening_hours.length > 0 ? spec.opening_hours.slice(0, 7) : [];
 
   const primary = spec.brand?.primary_color || '#15803d';
+  const secondary = spec.brand?.secondary_color || primary;
+  const accent = spec.brand?.accent_color || '#facc15';
+  const headingFont = spec.brand?.heading_font_family
+    ? `'${spec.brand.heading_font_family}', 'Bricolage Grotesque', system-ui, sans-serif`
+    : "'Bricolage Grotesque', system-ui, sans-serif";
+  const bodyFont = spec.brand?.body_font_family
+    ? `'${spec.brand.body_font_family}', 'Inter', system-ui, sans-serif`
+    : "'Inter', system-ui, sans-serif";
+  const fontImportTags = (spec.brand?.font_imports && spec.brand.font_imports.length > 0)
+    ? spec.brand.font_imports.map(u => `<link rel="stylesheet" href="${u}" crossorigin>`).join('\n  ')
+    : `<link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
+  <link href="https://fonts.bunny.net/css?family=bricolage-grotesque:500,600,700,800|inter:400,500,600,700&display=swap" rel="stylesheet">`;
 
   return `---
 ---
@@ -44,13 +56,13 @@ export function renderVereinSportPage(spec: SiteSpec, slug: string): string {
 <html lang="de">
 <head>
   ${renderSeoHead(spec, { slug, schemaKind: 'SportsClub' })}
-  <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
-  <link href="https://fonts.bunny.net/css?family=bricolage-grotesque:500,600,700,800|inter:400,500,600,700&display=swap" rel="stylesheet">
+  ${fontImportTags}
   <style is:global>
     :root {
       --primary: ${escapeHtml(primary)};
       --primary-deep: color-mix(in oklch, ${escapeHtml(primary)} 70%, black);
-      --accent: #facc15;
+      --secondary: ${escapeHtml(secondary)};
+      --accent: ${escapeHtml(accent)};
       --bg: #f8fafc;
       --bg-2: #ecfdf5;
       --surface: #ffffff;
@@ -58,8 +70,8 @@ export function renderVereinSportPage(spec: SiteSpec, slug: string): string {
       --ink-2: #334155;
       --ink-3: #94a3b8;
       --rule: rgba(15,23,42,0.08);
-      --display: 'Bricolage Grotesque', system-ui, sans-serif;
-      --sans: 'Inter', system-ui, sans-serif;
+      --display: ${headingFont};
+      --sans: ${bodyFont};
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html { scroll-behavior: smooth; }

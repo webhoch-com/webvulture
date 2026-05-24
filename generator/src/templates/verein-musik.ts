@@ -22,6 +22,23 @@ function firstSentence(text: string): string {
 }
 
 /**
+ * Look for a founding year in the prospect's about-body. Most Vereinsseiten
+ * mention "seit 1923", "gegründet 1957", "Gründungsjahr: 1898" or similar
+ * — when we find one, the hero fallback adds a "SEIT YYYY · 102 Jahre" line
+ * that makes the page feel rooted instead of generic. Returns null when we
+ * can't be confident the match is a year (rejects years outside 1700–current).
+ */
+function extractFoundedYear(spec: SiteSpec): number | null {
+  const text = `${spec.about?.body ?? ''} ${spec.tagline ?? ''}`;
+  const m = text.match(/\b(?:seit|gegründet|gegruendet|gründungsjahr|gruendungsjahr|established|since)\s*(?:im\s+jahr\s+)?:?\s*(1[78]\d{2}|19\d{2}|20[0-2]\d)\b/i);
+  if (!m) return null;
+  const year = parseInt(m[1], 10);
+  const currentYear = new Date().getFullYear();
+  if (year < 1700 || year > currentYear) return null;
+  return year;
+}
+
+/**
  * Generate a rough lat/lon bounding box around an address-string for use in an
  * OpenStreetMap embed. We don't have a geocoder client-side, so we fall back
  * to a fixed bounding box around Austria (which Vöcklabruck etc. all sit in).
@@ -43,6 +60,32 @@ function vorstandPortrait(name: string): string {
   return avatarPlaceholder(name, '#2d4a32');
 }
 
+/**
+ * Inline SVG marks for the social-icon strip. Tiny, recognisable, mono-color
+ * (`currentColor`) so they recolour against any footer theme. Kept in this
+ * file (not _media.ts) because they're presentation-only and only the
+ * verein-* templates need them today; will move to _social.ts once a second
+ * template asks for them.
+ */
+const SOCIAL_ICONS: Record<string, string> = {
+  facebook: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M22 12c0-5.5-4.5-10-10-10S2 6.5 2 12c0 5 3.7 9.1 8.4 9.9v-7H7.9V12h2.5V9.8c0-2.5 1.5-3.9 3.8-3.9 1.1 0 2.2.2 2.2.2v2.4h-1.3c-1.2 0-1.6.8-1.6 1.6V12h2.7l-.4 2.9h-2.3v7c4.7-.8 8.5-4.9 8.5-9.9z"/></svg>',
+  instagram: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.4A4 4 0 1 1 12.6 8 4 4 0 0 1 16 11.4z"/><line x1="17.5" y1="6.5" x2="17.5" y2="6.5"/></svg>',
+  youtube: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M23 7.5s-.2-1.6-.9-2.3c-.8-.9-1.8-.9-2.2-1C16.7 4 12 4 12 4s-4.7 0-7.9.2c-.5.1-1.4.1-2.2 1C1.2 5.9 1 7.5 1 7.5S.8 9.4.8 11.3v1.4c0 1.9.2 3.8.2 3.8s.2 1.6.9 2.3c.8.9 1.9.9 2.4 1 1.8.2 7.7.2 7.7.2s4.7 0 7.9-.2c.5-.1 1.4-.1 2.2-1 .7-.7.9-2.3.9-2.3s.2-1.9.2-3.8v-1.4c0-1.9-.2-3.8-.2-3.8zM9.7 14.6V8.2l6.2 3.2-6.2 3.2z"/></svg>',
+  tiktok: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.6 6.3A4.85 4.85 0 0 1 17.7 3h-3.3v13.4a2.86 2.86 0 0 1-5.4 1.3 2.85 2.85 0 0 1 4-3.8V10.3a6.16 6.16 0 0 0-7.1 9.5 6.18 6.18 0 0 0 9.8.4 6.4 6.4 0 0 0 1.4-4V8.7a8.16 8.16 0 0 0 4.7 1.5V7a4.79 4.79 0 0 1-2.2-.7z"/></svg>',
+  linkedin: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM8.339 18v-8.59H5.667V18zm-1.34-9.764a1.55 1.55 0 1 0 0-3.099 1.55 1.55 0 0 0 0 3.1zM18 18v-4.708c0-2.575-1.395-3.77-3.255-3.77-1.502 0-2.175.825-2.55 1.404V9.41h-2.834c.037.798 0 8.59 0 8.59h2.834v-4.797c0-.255.018-.51.093-.692.205-.51.671-1.037 1.453-1.037 1.026 0 1.435.781 1.435 1.927V18z"/></svg>',
+  twitter: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>',
+};
+
+function renderSocialStrip(items: Array<{ platform: string; href: string; label: string }>): string {
+  if (items.length === 0) return '';
+  const links = items
+    .filter(i => SOCIAL_ICONS[i.platform])
+    .map(i => `<a href="${i.href}" target="_blank" rel="noopener nofollow" aria-label="${escapeHtml(i.label)}">${SOCIAL_ICONS[i.platform]}</a>`)
+    .join('');
+  if (!links) return '';
+  return `<div class="vf-socials">${links}</div>`;
+}
+
 export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
   const businessName = escapeHtml(spec.business_name);
   const tagline = spec.tagline;
@@ -53,6 +96,22 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
   const phone = spec.contact.phone ? escapeHtml(spec.contact.phone) : '';
   const email = spec.contact.email ? escapeHtml(spec.contact.email) : '';
   const address = spec.contact.address ? escapeHtml(spec.contact.address) : '';
+
+  // Trust pill — only shown when the rating is strong (≥4.0) and based on a
+  // meaningful sample (≥5 reviews). Weak ratings would hurt rather than help.
+  const ratingNum = typeof spec.business?.rating === 'number' ? spec.business.rating : null;
+  const reviewCount = typeof spec.business?.review_count === 'number' ? spec.business.review_count : 0;
+  const showRating = ratingNum !== null && ratingNum >= 4.0 && reviewCount >= 5;
+  const ratingFull = showRating ? Math.round(ratingNum!) : 0;
+  const ratingStars = showRating ? '★'.repeat(ratingFull) + '☆'.repeat(5 - ratingFull) : '';
+
+  // Social handles surfaced as an icon-strip in the footer. Filter on a hard
+  // allow-list of platforms we ship icons for (anything else would render as
+  // text, looks broken). Each entry: {platform, href, label}.
+  const SOCIAL_PLATFORMS = ['facebook', 'instagram', 'youtube', 'tiktok', 'linkedin', 'twitter'] as const;
+  const socialItems = Object.entries(spec.socials ?? {})
+    .filter(([k]) => (SOCIAL_PLATFORMS as readonly string[]).includes(k.toLowerCase()))
+    .map(([k, v]) => ({ platform: k.toLowerCase(), href: v as string, label: k }));
 
   // Only show events that came from real scraped data — never invent dates.
   const events = (spec.events && spec.events.length > 0) ? spec.events.slice(0, 4) : [];
@@ -67,31 +126,51 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
   // prospect's actual offering.
   const membership = spec.membership;
 
+  // Brand-token resolution: real scraped values override the template's
+  // hardcoded defaults. The CSS `color-mix()` calls derive `-soft` and `-deep`
+  // shades from whatever primary we end up with, so darker prospects get
+  // accordingly darker hover-states without us hand-tuning per club.
+  // Strict allow-list of font-family characters and font-import hosts is
+  // enforced upstream in the orchestrator — safe to interpolate raw here.
+  const PRIMARY = spec.brand?.primary_color || '#2d4a32';
+  const SECONDARY = spec.brand?.secondary_color || PRIMARY;
+  const ACCENT = spec.brand?.accent_color || '#b8893d';
+  const headingFont = spec.brand?.heading_font_family
+    ? `'${spec.brand.heading_font_family}', 'Fraunces', Georgia, serif`
+    : "'Fraunces', Georgia, serif";
+  const bodyFont = spec.brand?.body_font_family
+    ? `'${spec.brand.body_font_family}', 'Lora', Georgia, serif`
+    : "'Lora', Georgia, serif";
+  const fontImportTags = (spec.brand?.font_imports && spec.brand.font_imports.length > 0)
+    ? spec.brand.font_imports.map(u => `<link rel="stylesheet" href="${u}" crossorigin>`).join('\n  ')
+    : `<link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
+  <link href="https://fonts.bunny.net/css?family=fraunces:400,500,600,700|lora:400,500,600,700&display=swap" rel="stylesheet">`;
+
   return `---
 ---
 <!DOCTYPE html>
 <html lang="de">
 <head>
   ${renderSeoHead(spec, { slug, schemaKind: 'MusicGroup' })}
-  <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
-  <link href="https://fonts.bunny.net/css?family=fraunces:400,500,600,700|lora:400,500,600,700&display=swap" rel="stylesheet">
+  ${fontImportTags}
   <style is:global>
     :root {
       --bg: #fbf7ee;            /* warm cream */
       --bg-2: #f0e8d3;          /* deeper cream */
       --surface: #ffffff;
-      --primary: #2d4a32;       /* deep evergreen */
-      --primary-soft: #d8e2d2;
-      --primary-deep: #1c2f1f;
-      --accent: #b8893d;        /* brass / gold */
-      --accent-deep: #8a6628;
+      --primary: ${PRIMARY};
+      --primary-soft: color-mix(in oklch, ${PRIMARY} 18%, white);
+      --primary-deep: color-mix(in oklch, ${PRIMARY} 70%, black);
+      --secondary: ${SECONDARY};
+      --accent: ${ACCENT};
+      --accent-deep: color-mix(in oklch, ${ACCENT} 70%, black);
       --burgundy: #7c2d2d;      /* tradition red */
       --ink: #1f1a14;           /* warm dark brown */
       --ink-2: #4a4030;
       --ink-3: #877a64;
       --rule: rgba(31,26,20,0.10);
-      --display: 'Fraunces', Georgia, serif;
-      --serif: 'Lora', Georgia, serif;
+      --display: ${headingFont};
+      --serif: ${bodyFont};
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html { scroll-behavior: smooth; }
@@ -228,24 +307,47 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
     .hero p { color: rgba(255,255,255,0.92); font-size: 1.2rem; margin-top: 2rem; max-width: 56ch; line-height: 1.65; font-family: var(--serif); }
     .hero-cta-row { display: flex; gap: 1rem; margin-top: 2.5rem; flex-wrap: wrap; }
 
-    /* Hero with no scraped image: split layout, decorative crest fills right side */
-    .hero.hero-decor { display: grid; grid-template-columns: 1fr; align-items: center; gap: 2rem; }
-    @media (min-width: 980px) {
-      .hero.hero-decor { grid-template-columns: 1.05fr 1fr; padding: 4rem clamp(1.5rem, 4vw, 5rem); }
+    /* Rating pill — appears under the subhead only when rating ≥ 4.0 and ≥ 5
+       reviews. The stars are styled with a tighter letter-spacing so the row
+       reads as one badge, not five separate glyphs. */
+    .hero-rating {
+      display: inline-flex; align-items: center; gap: 0.7rem;
+      margin-top: 1.5rem; padding: 0.45rem 1rem;
+      background: rgba(255,255,255,0.10); border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 999px; backdrop-filter: blur(8px);
+      font-family: var(--display); font-size: 0.85rem; color: #fff;
     }
-    .hero-decor-mark { display: none; justify-content: center; align-items: center; padding: 1rem; }
-    @media (min-width: 980px) { .hero-decor-mark { display: flex; } }
-    .hero-crest-xl {
-      width: clamp(220px, 26vw, 360px); height: clamp(220px, 26vw, 360px);
-      border-radius: 50%;
-      background: radial-gradient(circle at 30% 30%, var(--accent) 0%, var(--accent-deep) 55%, var(--primary-deep) 100%);
-      display: grid; place-items: center;
-      font-family: var(--display); font-weight: 600;
-      font-size: clamp(5rem, 9vw, 8rem); color: rgba(255,255,255,0.92);
-      letter-spacing: 0.04em;
-      border: 4px solid rgba(184,137,61,0.55);
-      box-shadow: 0 30px 80px -20px rgba(0,0,0,0.5);
+    .hero-rating .stars { color: var(--accent); letter-spacing: 0.04em; font-size: 0.95rem; }
+    .hero-rating .meta { color: rgba(255,255,255,0.75); font-weight: 500; }
+    .hero-rating .meta strong { color: #fff; font-weight: 600; }
+
+    /* Hero with no scraped image: editorial big-type layout. The previous
+       gold-circle "crest" rendered like a placeholder bug — replaced with a
+       large display-serif wordmark of the club name plus 3 horizontal brand-
+       color stripes at the bottom. Intentionally loud, not apologetic. */
+    .hero.hero-decor { display: flex; flex-direction: column; justify-content: space-between; min-height: clamp(560px, 84vh, 740px); padding: 4rem clamp(1.5rem, 5vw, 5rem); position: relative; }
+    .hero-decor-bigtype {
+      font-family: var(--display); font-weight: 500;
+      font-size: clamp(3.5rem, 12vw, 11rem);
+      line-height: 0.92; letter-spacing: -0.035em;
+      color: rgba(255,255,255,0.95);
+      max-width: 14ch; text-wrap: balance;
+      margin-top: 4rem;
     }
+    .hero-decor-stripes {
+      display: flex; gap: 0; height: 8px; width: clamp(160px, 22vw, 280px);
+      margin-top: 2rem; border-radius: 4px; overflow: hidden;
+    }
+    .hero-decor-stripes span { flex: 1; }
+    .hero-decor-stripes .s-primary   { background: var(--primary); }
+    .hero-decor-stripes .s-secondary { background: var(--secondary); }
+    .hero-decor-stripes .s-accent    { background: var(--accent); }
+    .hero-decor-since {
+      font-family: var(--display); font-size: 0.95rem;
+      letter-spacing: 0.16em; text-transform: uppercase;
+      color: rgba(255,255,255,0.6); margin-top: 1rem;
+    }
+    .hero-decor-since strong { color: var(--accent); font-size: 1.1rem; letter-spacing: 0; font-weight: 600; }
     .btn-primary { background: var(--accent); color: var(--ink); padding: 1.05rem 2.2rem; border-radius: 6px; font-weight: 700; font-size: 0.96rem; font-family: var(--display); letter-spacing: 0.02em; transition: background .2s, transform .2s; box-shadow: 0 10px 28px -12px rgba(184,137,61,0.6); }
     .btn-primary:hover { background: var(--accent-deep); color: #fff; transform: translateY(-2px); }
     .btn-outline { background: transparent; color: #fff; border: 1.5px solid rgba(255,255,255,0.4); padding: 1rem 2rem; border-radius: 6px; font-weight: 600; font-size: 0.95rem; font-family: var(--display); transition: border-color .2s, background .2s; }
@@ -338,41 +440,10 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
     }
     .member-cta:hover { transform: translateY(-2px); box-shadow: 0 24px 50px -18px rgba(45,74,50,0.5); }
 
-    /* ─── Membership tiers (legacy — no longer rendered) ──── */
+    /* Members-Section is the simple CTA wrapper (.member-cta-wrap above).
+       The 3-tier-pricing block was removed: we never have verified per-tier
+       data and the placeholder rendered as obvious filler. */
     .members-section { background: var(--bg); }
-    .tiers {
-      display: grid; gap: 1.5rem; margin-top: 4rem;
-      grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
-    }
-    @media (min-width: 880px) { .tiers { grid-template-columns: repeat(3, 1fr); } }
-    .tier {
-      background: var(--surface); border-radius: 14px;
-      padding: 2.5rem 2rem;
-      border: 1px solid var(--rule);
-      display: flex; flex-direction: column;
-      transition: transform .2s, box-shadow .2s;
-    }
-    .tier.highlight {
-      background: var(--primary); color: #fff;
-      border-color: var(--accent);
-      box-shadow: 0 24px 60px -28px rgba(45,74,50,0.4);
-    }
-    .tier:hover { transform: translateY(-4px); box-shadow: 0 22px 48px -22px rgba(45,74,50,0.25); }
-    .tier-name { font-family: var(--display); font-size: 0.85rem; letter-spacing: 0.16em; text-transform: uppercase; font-weight: 600; color: var(--accent); margin-bottom: 0.5rem; }
-    .tier.highlight .tier-name { color: var(--accent); }
-    .tier-price { font-family: var(--display); font-size: 2rem; font-weight: 600; line-height: 1; color: var(--ink); margin-bottom: 0.4rem; }
-    .tier.highlight .tier-price { color: #fff; }
-    .tier-tagline { font-style: italic; color: var(--ink-3); margin-bottom: 1.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--rule); }
-    .tier.highlight .tier-tagline { color: rgba(255,255,255,0.75); border-bottom-color: rgba(255,255,255,0.18); }
-    .tier-features { list-style: none; padding: 0; margin: 0 0 2rem; flex-grow: 1; }
-    .tier-features li { padding: 0.5rem 0; color: var(--ink-2); font-size: 0.95rem; display: flex; align-items: flex-start; gap: 0.65rem; }
-    .tier.highlight .tier-features li { color: rgba(255,255,255,0.88); }
-    .tier-features li::before { content: "✓"; color: var(--primary); font-weight: 700; flex-shrink: 0; }
-    .tier.highlight .tier-features li::before { color: var(--accent); }
-    .tier-cta { background: var(--primary); color: #fff; padding: 0.95rem; border-radius: 6px; font-family: var(--display); font-weight: 700; font-size: 0.9rem; text-align: center; letter-spacing: 0.04em; transition: background .2s; }
-    .tier.highlight .tier-cta { background: var(--accent); color: var(--ink); }
-    .tier.highlight .tier-cta:hover { background: var(--accent-deep); color: #fff; }
-    .tier-cta:hover { background: var(--primary-deep); }
 
     /* ─── Board ──────────────────────────────────────────── */
     .board-section { background: var(--bg-2); }
@@ -410,18 +481,6 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
     }
     .gallery-item:hover img { transform: scale(1.06); }
 
-    /* ─── Probe-Einladung ────────────────────────────────── */
-    .probe-call {
-      background: linear-gradient(135deg, var(--primary), var(--primary-deep));
-      color: #fff; padding: clamp(4rem, 8vw, 6rem) 1.5rem;
-      text-align: center; position: relative; overflow: hidden;
-      border-top: 4px solid var(--accent); border-bottom: 4px solid var(--accent);
-    }
-    .probe-call h2 { font-family: var(--display); font-weight: 500; font-size: clamp(2rem, 4.5vw, 3rem); line-height: 1.2; margin-bottom: 1.5rem; color: #fff; }
-    .probe-call h2 em { font-style: italic; color: var(--accent); }
-    .probe-call p { color: rgba(255,255,255,0.85); font-size: 1.1rem; max-width: 640px; margin: 0 auto 2.5rem; line-height: 1.7; }
-    .probe-call .when { font-family: var(--display); font-weight: 500; font-size: 1.4rem; color: var(--accent); margin-bottom: 0.5rem; letter-spacing: 0.04em; }
-
     /* ─── Contact ────────────────────────────────────────── */
     .contact-section { background: var(--bg); }
     .contact-grid { max-width: 1100px; margin: 4rem auto 0; display: grid; gap: 1.25rem; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); }
@@ -442,87 +501,9 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
        compat with the JS query selector. */
     .reveal { opacity: 1; transform: none; }
 
-    /* ─── Ensembles / Klangkörper ───────────────────────────── */
-    .ensembles-section { background: var(--bg); }
-    .ensembles-grid {
-      display: grid; gap: 1.5rem; margin-top: 4rem;
-      grid-template-columns: 1fr;
-    }
-    @media (min-width: 880px) { .ensembles-grid { grid-template-columns: repeat(3, 1fr); } }
-    .ensemble {
-      background: var(--surface); padding: 2.5rem 2rem;
-      border-top: 3px solid var(--accent);
-      border-radius: 0;
-      box-shadow: 0 8px 24px -16px rgba(31,26,20,0.12);
-      transition: transform .3s, box-shadow .3s;
-    }
-    .ensemble:hover { transform: translateY(-4px); box-shadow: 0 20px 40px -20px rgba(31,26,20,0.2); }
-    .ensemble-num {
-      font-family: var(--display); font-weight: 600; font-size: 0.92rem;
-      color: var(--accent); letter-spacing: 0.18em; margin-bottom: 1.25rem;
-    }
-    .ensemble h3 {
-      font-family: var(--display); font-weight: 500; font-size: 1.6rem;
-      color: var(--ink); margin-bottom: 0.85rem; line-height: 1.25;
-    }
-    .ensemble p { color: var(--ink-2); font-size: 0.96rem; line-height: 1.7; margin-bottom: 1.5rem; }
-    .ensemble-meta { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.65rem; padding-top: 1.25rem; border-top: 1px solid var(--rule); }
-    .ensemble-meta li { font-size: 0.86rem; color: var(--ink-2); line-height: 1.5; }
-    .ensemble-meta strong { display: block; font-family: var(--display); font-size: 0.7rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent-deep); margin-bottom: 0.25rem; font-weight: 600; }
-
-    /* ─── Instrumente ─── */
-    .instruments-section { background: var(--bg-2); }
-    .instruments-grid {
-      display: grid; gap: 1rem; margin-top: 4rem;
-      grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr));
-    }
-    @media (min-width: 880px) { .instruments-grid { grid-template-columns: repeat(8, 1fr); } }
-    .instr {
-      background: var(--surface); padding: 1.5rem 1rem; text-align: center;
-      border: 1px solid var(--rule); border-radius: 0;
-      transition: transform .25s, box-shadow .25s;
-    }
-    .instr:hover { transform: translateY(-3px); box-shadow: 0 12px 24px -12px rgba(31,26,20,0.18); }
-    .instr-icon { display: block; font-size: 1.85rem; line-height: 1; margin-bottom: 0.6rem; filter: saturate(1.1); }
-    .instr strong { display: block; font-family: var(--display); font-weight: 500; font-size: 0.95rem; color: var(--ink); margin-bottom: 0.2rem; }
-    .instr span { font-size: 0.74rem; color: var(--ink-3); letter-spacing: 0.04em; }
-
-    /* ─── Meilensteine ─── */
-    .milestones-section { background: var(--bg); }
-    .milestones {
-      list-style: none; padding: 0; margin: 4rem 0 0;
-      max-width: 920px; margin-left: auto; margin-right: auto;
-      position: relative;
-    }
-    .milestones::before {
-      content: ''; position: absolute; left: 95px; top: 0; bottom: 0;
-      width: 2px; background: var(--accent); opacity: 0.3;
-    }
-    @media (max-width: 720px) { .milestones::before { left: 11px; } }
-    .milestone {
-      display: grid; gap: 1.25rem;
-      grid-template-columns: 110px 1fr;
-      padding: 1.85rem 0; position: relative;
-      border-bottom: 1px solid var(--rule);
-    }
-    @media (max-width: 720px) { .milestone { grid-template-columns: 30px 1fr; gap: 0.85rem; } }
-    .milestone:last-child { border-bottom: none; }
-    .milestone::before {
-      content: ''; position: absolute;
-      left: 89px; top: 2.45rem;
-      width: 14px; height: 14px;
-      border-radius: 50%; background: var(--accent);
-      border: 3px solid var(--bg);
-      z-index: 1;
-    }
-    @media (max-width: 720px) { .milestone::before { left: 5px; width: 12px; height: 12px; top: 2.6rem; } }
-    .ms-year {
-      font-family: var(--display); font-weight: 600; font-size: 1.5rem;
-      color: var(--accent-deep); line-height: 1; padding-top: 0.25rem;
-    }
-    @media (max-width: 720px) { .ms-year { font-size: 1.1rem; } }
-    .ms-body h4 { font-family: var(--display); font-weight: 500; font-size: 1.3rem; color: var(--ink); margin-bottom: 0.4rem; line-height: 1.3; }
-    .ms-body p { color: var(--ink-2); font-size: 0.96rem; line-height: 1.7; max-width: 60ch; }
+    /* Ensembles/Klangkörper, Instrumente and Meilensteine CSS blocks were
+       removed in 2026-05 — their markup was deleted earlier because we cannot
+       verify the data, leaving the styles as 280 lines of dead weight. */
 
     /* ─── Press / Auszeichnungen ─── */
     .press-section { background: var(--bg-2); }
@@ -644,6 +625,25 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
     .vf-credit a { color: rgba(255,255,255,0.6); font-weight: 500; border-bottom: 1px solid rgba(255,255,255,0.18); transition: all .25s; }
     .vf-credit a:hover { color: var(--accent); border-color: var(--accent); }
 
+    /* Social-icon strip — surfaces scraped Facebook/Instagram/etc. handles
+       as a discreet row in the footer. SVG-only (no external icon-fonts) to
+       keep the page weight unchanged. */
+    .vf-socials {
+      display: flex; gap: 0.65rem; align-items: center;
+      padding-top: 1.5rem; margin-top: 1.5rem;
+      border-top: 1px solid rgba(255,255,255,0.08);
+    }
+    .vf-socials a {
+      width: 40px; height: 40px; border-radius: 50%;
+      display: grid; place-items: center;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.10);
+      color: rgba(255,255,255,0.7);
+      transition: background .2s, color .2s, transform .2s;
+    }
+    .vf-socials a:hover { background: var(--accent); color: var(--ink); transform: translateY(-2px); }
+    .vf-socials svg { width: 18px; height: 18px; }
+
     /* ─── Redesigned-sections partial (premium re-rendering of the
        prospect's actual H2/H3 sections). The CSS uses --rd-* variables
        which we map to the verein-musik palette here so the partial
@@ -696,16 +696,30 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
     <span class="hero-eyebrow"><span class="crest"></span>${escapeHtml(tagline.slice(0, 70))}</span>
     <h1>${escapeHtml(headline.replace(/(\.|!|\?)([^.!?]*)$/, '|$1$2|')).replace(/\|([^|]+)\|/, '<em>$1</em>')}</h1>
     <p>${subhead}</p>
+    ${showRating ? `
+    <div class="hero-rating" role="img" aria-label="Google-Bewertung ${ratingNum!.toFixed(1)} von 5 Sternen, basierend auf ${reviewCount} Bewertungen">
+      <span class="stars" aria-hidden="true">${ratingStars}</span>
+      <span class="meta"><strong>${ratingNum!.toFixed(1).replace('.', ',')}</strong> · ${reviewCount} Google-Bewertungen</span>
+    </div>` : ''}
     <div class="hero-cta-row">
       <a href="#kontakt" class="btn-primary">${ctaText} →</a>
       ${events.length > 0 ? '<a href="#termine" class="btn-outline">Nächste Termine</a>' : ''}
     </div>
   </div>
-  ${hasHeroImage(spec) ? '' : `
-  <div class="hero-decor-mark" aria-hidden="true">
-    <span class="hero-crest-xl">${escapeHtml(spec.business_name.split(/\s+/).map(w => w[0] || '').slice(0, 2).join('').toUpperCase() || 'V')}</span>
-  </div>
-  `}
+  ${hasHeroImage(spec) ? '' : (() => {
+    const foundedYear = extractFoundedYear(spec);
+    const currentYear = new Date().getFullYear();
+    return `
+  <div class="hero-decor-bigtype" aria-hidden="true">${escapeHtml(businessName)}</div>
+  <div>
+    <div class="hero-decor-stripes" aria-hidden="true">
+      <span class="s-primary"></span>
+      <span class="s-secondary"></span>
+      <span class="s-accent"></span>
+    </div>
+    ${foundedYear ? `<div class="hero-decor-since">Seit <strong>${foundedYear}</strong> · ${currentYear - foundedYear} Jahre in der Region</div>` : ''}
+  </div>`;
+  })()}
 </section>
 
 ${events.length > 0 ? `
@@ -957,6 +971,7 @@ ${address ? `
         </ul>
       </div>
     </div>
+    ${renderSocialStrip(socialItems)}
     <div class="vf-bottom">
       <span>&copy; ${new Date().getFullYear()} ${businessName} · Alle Rechte vorbehalten.</span>
       <span class="vf-credit">Demo erstellt von <a href="https://webhoch.com" target="_blank" rel="noopener">Webagentur Hochmeir e.U.</a></span>

@@ -49,31 +49,45 @@ export function renderVereinPage(spec: SiteSpec, slug: string): string {
   // prospect's actual offering.
   const membership = spec.membership;
 
+  const PRIMARY = spec.brand?.primary_color || '#2d4a32';
+  const SECONDARY = spec.brand?.secondary_color || PRIMARY;
+  const ACCENT = spec.brand?.accent_color || '#b8893d';
+  const headingFont = spec.brand?.heading_font_family
+    ? `'${spec.brand.heading_font_family}', 'Fraunces', Georgia, serif`
+    : "'Fraunces', Georgia, serif";
+  const bodyFont = spec.brand?.body_font_family
+    ? `'${spec.brand.body_font_family}', 'Lora', Georgia, serif`
+    : "'Lora', Georgia, serif";
+  const fontImportTags = (spec.brand?.font_imports && spec.brand.font_imports.length > 0)
+    ? spec.brand.font_imports.map(u => `<link rel="stylesheet" href="${u}" crossorigin>`).join('\n  ')
+    : `<link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
+  <link href="https://fonts.bunny.net/css?family=fraunces:400,500,600,700|lora:400,500,600,700&display=swap" rel="stylesheet">`;
+
   return `---
 ---
 <!DOCTYPE html>
 <html lang="de">
 <head>
   ${renderSeoHead(spec, { slug, schemaKind: 'LocalBusiness' })}
-  <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
-  <link href="https://fonts.bunny.net/css?family=fraunces:400,500,600,700|lora:400,500,600,700&display=swap" rel="stylesheet">
+  ${fontImportTags}
   <style is:global>
     :root {
       --bg: #fbf7ee;            /* warm cream */
       --bg-2: #f0e8d3;          /* deeper cream */
       --surface: #ffffff;
-      --primary: #2d4a32;       /* deep evergreen */
-      --primary-soft: #d8e2d2;
-      --primary-deep: #1c2f1f;
-      --accent: #b8893d;        /* brass / gold */
-      --accent-deep: #8a6628;
+      --primary: ${PRIMARY};
+      --primary-soft: color-mix(in oklch, ${PRIMARY} 18%, white);
+      --primary-deep: color-mix(in oklch, ${PRIMARY} 70%, black);
+      --secondary: ${SECONDARY};
+      --accent: ${ACCENT};
+      --accent-deep: color-mix(in oklch, ${ACCENT} 70%, black);
       --burgundy: #7c2d2d;      /* tradition red */
       --ink: #1f1a14;           /* warm dark brown */
       --ink-2: #4a4030;
       --ink-3: #877a64;
       --rule: rgba(31,26,20,0.10);
-      --display: 'Fraunces', Georgia, serif;
-      --serif: 'Lora', Georgia, serif;
+      --display: ${headingFont};
+      --serif: ${bodyFont};
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html { scroll-behavior: smooth; }

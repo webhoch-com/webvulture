@@ -37,6 +37,7 @@ export interface RebuildPackage {
     contact?: Record<string, string>;
     services?: string[];
     socials?: Record<string, string>;
+    nav_links?: Array<{ label: string; href: string }>;
     text?: string;
     text_content?: string;
     images?: Array<{ src: string; alt?: string; original_src?: string }>;
@@ -51,6 +52,24 @@ export interface RebuildPackage {
   logo_url?: string;
   favicon_url?: string;
   brand_colors?: string[];
+  /**
+   * Structured brand block populated by the PHP RebuildPackageBuilder when
+   * the website-analysis pipeline has detected real CSS variables, fonts and
+   * a downloaded logo asset. Generator templates SHOULD prefer these values
+   * over their hardcoded theme defaults so each preview reflects the
+   * prospect's actual brand instead of looking template-identical.
+   */
+  brand?: {
+    logo_url?: string;
+    logo_public_url?: string;
+    primary_color?: string | null;
+    secondary_color?: string | null;
+    accent_color?: string | null;
+    heading_font_family?: string | null;
+    body_font_family?: string | null;
+    /** Raw `<link>`/`@import` URLs to load the original fonts at render time. */
+    font_imports?: string[];
+  };
   screenshots?: Array<{ name: string; path: string; slot: string }>;
   generation_params?: {
     niche?: string;
@@ -66,6 +85,16 @@ export interface SiteSpec {
   business_name: string;
   tagline: string;
   layout_kind?: LayoutKind;
+  /**
+   * Trust signals harvested from Google Maps / enrichment that templates can
+   * surface as social-proof pills (rating stars + review count) in the hero or
+   * near the CTA. Omitted when rating is < 4.0 or fewer than 5 reviews — we
+   * don't want to display "weak" signals that hurt rather than help.
+   */
+  business?: {
+    rating?: number;
+    review_count?: number;
+  };
   hero: {
     headline: string;
     subheadline: string;
@@ -90,12 +119,28 @@ export interface SiteSpec {
     address?: string;
     cta_text: string;
   };
+  /** Top-level social handles. Footers render as icon-strip; nav optionally uses them. */
+  socials?: Record<string, string>;
   footer: {
     tagline: string;
     links?: Array<{ label: string; href: string }>;
   };
   brand: {
     primary_color: string;
+    /**
+     * Real-page brand additions. When present, templates SHOULD use them as
+     * CSS custom properties so the rendered page mirrors the prospect's
+     * actual visual identity instead of the template's hardcoded theme.
+     * Falls back to template defaults when null/undefined.
+     */
+    secondary_color?: string;
+    accent_color?: string;
+    /** Heading typeface name as detected from `<style>`/`@font-face`. */
+    heading_font_family?: string;
+    /** Body typeface name. */
+    body_font_family?: string;
+    /** Raw `<link rel="stylesheet">`/`@import` URLs for the above fonts. */
+    font_imports?: string[];
     font_style: 'modern' | 'classic' | 'friendly' | 'bold';
     tone: string;
   };
@@ -110,6 +155,12 @@ export interface SiteSpec {
     favicon?: string;
     hero_image?: string;
     gallery?: string[];
+    /**
+     * Internal screenshot URLs of the prospect's actual homepage (desktop,
+     * mobile, above-the-fold). Templates may use these as a Gallery-fallback
+     * or in a "before / after" comparison block when no real photos exist.
+     */
+    screenshots?: Array<{ name: string; path: string; slot: string }>;
   };
 
   /**
