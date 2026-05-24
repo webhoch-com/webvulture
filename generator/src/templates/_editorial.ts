@@ -1,0 +1,558 @@
+/**
+ * Shared editorial-magazine helpers for the four verein-* templates.
+ *
+ * Centralises the Phase-3 redesign patterns (marquee, big-number anchors,
+ * pull-quote, per-section colour tones, XXL footer wordmark) plus the
+ * regex-based content extractors (founded year, board, events) so each
+ * branch template only has to import + invoke. Previously these lived
+ * inline in verein-musik.ts and would have been copy-pasted 4x across
+ * verein-musik/sport/tradition/verein.
+ *
+ * Convention: every render* function escapes its scraped inputs internally
+ * — callers should NEVER pre-escape. Extractors are pure (no side-effects)
+ * and return narrowly-typed results that templates can treat as already-
+ * validated.
+ *
+ * Security: helpers that build markup wrap all spec-derived text in
+ * `escapeHtml`. Tagline / body / business_name / address are
+ * attacker-influenced via the scrape; never reach the DOM raw.
+ */
+
+import type { SiteSpec } from '../types.js';
+
+export function escapeHtml(s: string): string {
+  return String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// ─── Extractors (pure) ────────────────────────────────────────────────────────
+
+/**
+ * Find a founding year in about-body / tagline. Supports both phrasings:
+ *   - trigger BEFORE year: "seit 1898", "gegründet im Jahr 1898", "since 1923"
+ *   - trigger AFTER year:  "1898 gegründet", "im Jahr 1898 ins Leben gerufen"
+ * Year range hard-bounded 1700–current to keep false positives down.
+ */
+export function extractFoundedYear(spec: SiteSpec): number | null {
+  const text = `${spec.about?.body ?? ''} ${spec.tagline ?? ''}`;
+  const beforeRe = /\b(?:seit|gegründet|gegruendet|gründungsjahr|gruendungsjahr|established|since|von)\s*(?:im\s+jahr\s+)?:?\s*(1[78]\d{2}|19\d{2}|20[0-2]\d)\b/i;
+  const afterRe  = /\b(?:im\s+jahr\s+)?(1[78]\d{2}|19\d{2}|20[0-2]\d)\s+(?:gegründet|gegruendet|ins\s+leben|established)\b/i;
+  const m = text.match(beforeRe) || text.match(afterRe);
+  if (!m) return null;
+  const year = parseInt(m[1], 10);
+  const currentYear = new Date().getFullYear();
+  if (year < 1700 || year > currentYear) return null;
+  return year;
+}
+
+/**
+ * Marquee items from real spec data. Returns at least 4 items by doubling
+ * a short source list so the CSS `translateX(-50%)` loop stays seamless;
+ * empty array when fewer than 2 distinct items exist (template skips
+ * the marquee section instead of rendering a stub).
+ */
+export function buildMarqueeItems(spec: SiteSpec, foundedYear: number | null): string[] {
+  const items: string[] = [];
+  if (foundedYear) items.push(`Seit ${foundedYear}`);
+  if (spec.contact?.address) {
+    // Compound Austrian municipalities (Bad Ischl, Sankt Johann am Wimberg).
+    const m = spec.contact.address.match(/\b\d{4,5}\s+([A-ZÄÖÜ][\wäöüÄÖÜß-]+(?:\s+(?:am|im|an|bei|ob|in|der|auf)\s+[A-ZÄÖÜ][\wäöüÄÖÜß-]+|\s+[A-ZÄÖÜ][\wäöüÄÖÜß-]+){0,3})/);
+    if (m) items.push(m[1].trim());
+  }
+  const taglineWords = (spec.tagline || '').match(/\b[A-ZÄÖÜ][a-zäöüß]{3,}\b/g) || [];
+  for (const w of taglineWords.slice(0, 4)) {
+    if (!items.includes(w)) items.push(w);
+  }
+  for (const s of (spec.services || []).slice(0, 3)) {
+    if (s.name && s.name.length < 24 && !items.includes(s.name)) items.push(s.name);
+  }
+  if (items.length < 2) return [];
+  return [...items, ...items];
+}
+
+/**
+ * Pick a substantive sentence from about.body that does NOT duplicate the
+ * hero subhead. Falls back to the tagline at threshold ≥40 chars so thin
+ * Vereinsseiten don't lose the editorial-quote section entirely.
+ */
+export function pickPullQuote(spec: SiteSpec): string | null {
+  const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
+  const subheadN = norm(spec.hero?.subheadline || '');
+  const body = spec.about?.body || '';
+  const sentences = body.match(/[^.!?]+[.!?]+/g) || [];
+  for (const raw of sentences) {
+    const s = raw.trim();
+    if (s.length < 50 || s.length > 220) continue;
+    const n = norm(s);
+    if (n === subheadN) continue;
+    if (/zum inhalt|cookie|folgen sie|impressum/i.test(s)) continue;
+    return s;
+  }
+  const tagline = (spec.tagline || '').trim();
+  if (tagline.length >= 40 && norm(tagline) !== subheadN) {
+    return tagline;
+  }
+  return null;
+}
+
+/**
+ * Find board members in scraped text. Looks for "Role: Name" patterns where
+ * Role is a German Vereins-Funktion. Returns up to 6 entries; empty if
+ * fewer than 2 valid matches (one match alone reads worse than none).
+ * Matches are bounded — Name must be 4–60 chars, alphabet/space/hyphen only.
+ */
+export function extractBoardMembers(spec: SiteSpec): Array<{ name: string; role: string }> {
+  const sources = [
+    spec.raw_text_excerpt ?? '',
+    spec.about?.body ?? '',
+    spec.tagline ?? '',
+    ...((spec.redesigned_sections ?? []).map(s => `${s.title}: ${s.body}`)),
+  ];
+  const text = sources.filter(Boolean).join('\n');
+
+  // Use matchAll instead of stateful .exec() — same result, no shared state risk.
+  const ROLE_RE = /\b(Obmann(?:[-\s]?Stellvertreter)?|Obfrau(?:[-\s]?Stellvertreter)?|Kapellmeister(?:[-\s]?Stellvertreter)?|Vorsitzender?|Vorstand|Schriftführer(?:in)?|Kassier(?:in)?|Trainer(?:in)?|Präsident(?:in)?|Stabführer(?:in)?|Jugendreferent(?:in)?)\b\s*[:\-—]\s*([A-ZÄÖÜ][a-zäöüß]+(?:[\s-][A-ZÄÖÜ][a-zäöüß]+){1,3})/g;
+
+  const seen = new Set<string>();
+  const out: Array<{ name: string; role: string }> = [];
+  for (const m of text.matchAll(ROLE_RE)) {
+    const role = m[1].trim();
+    const name = m[2].trim();
+    if (name.length < 4 || name.length > 60) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ name, role });
+    if (out.length >= 6) break;
+  }
+  // A single match is usually a false positive ("Kontakt: Webagentur") — only
+  // surface when at least two distinct people line up.
+  return out.length >= 2 ? out : [];
+}
+
+/**
+ * Find dated events in scraped text. Looks for German date patterns followed
+ * by event title context. Returns up to 4. Defensive: rejects past years,
+ * rejects items where the context is obviously chrome ("Stand vom", "Geändert
+ * am"), keeps the dedupe strict so the same fest doesn't show 3x.
+ */
+export function extractEvents(spec: SiteSpec): Array<{ date: string; title: string; description?: string }> {
+  const sources: string[] = [
+    spec.raw_text_excerpt ?? '',
+    spec.about?.body ?? '',
+    ...((spec.redesigned_sections ?? []).map(s => `${s.title}\n${s.body}`)),
+  ];
+  const text = sources.filter(Boolean).join('\n');
+
+  // DD.MM.YYYY or DD.MM. with optional title context after a colon/dash/newline.
+  // We deliberately don't try to handle written-out month names — too many
+  // false positives ("am 15. Geburtstag", "im 23. Jahrhundert").
+  const DATE_RE = /\b(\d{1,2})\.(\d{1,2})\.(\d{2,4})?(?:[\s,;:.\-—]+)([^.\n!?]{8,80})/g;
+
+  const currentYear = new Date().getFullYear();
+  const seen = new Set<string>();
+  const out: Array<{ date: string; title: string; description?: string }> = [];
+  for (const m of text.matchAll(DATE_RE)) {
+    const day = parseInt(m[1], 10);
+    const month = parseInt(m[2], 10);
+    if (day < 1 || day > 31 || month < 1 || month > 12) continue;
+    let year: number | null = null;
+    if (m[3]) {
+      year = parseInt(m[3], 10);
+      if (year < 100) year += 2000;
+      if (year < currentYear - 1 || year > currentYear + 3) continue;
+    }
+    const rawTitle = m[4].trim().replace(/\s+/g, ' ');
+    if (/stand vom|geändert|datenschutz|impressum|cookie|copyright|©/i.test(rawTitle)) continue;
+    const title = rawTitle.length > 70 ? rawTitle.slice(0, 70).replace(/\s+\S*$/, '') + '…' : rawTitle;
+    const dateStr = year
+      ? `${String(day).padStart(2, '0')}.${String(month).padStart(2, '0')}.${year}`
+      : `${String(day).padStart(2, '0')}.${String(month).padStart(2, '0')}.`;
+    const key = `${dateStr}|${title.toLowerCase().slice(0, 30)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ date: dateStr, title });
+    if (out.length >= 4) break;
+  }
+  return out;
+}
+
+// ─── Renderers (HTML output, all spec data is escaped here) ──────────────────
+
+export function renderMarquee(items: string[]): string {
+  if (items.length === 0) return '';
+  return `
+<div class="marquee" aria-hidden="true">
+  <div class="marquee-track">${items.map(i => `<span>${escapeHtml(i)}</span>`).join('')}</div>
+</div>
+`;
+}
+
+export function renderBigNumberAnchor(idx: number, onDark = false): string {
+  const padded = String(idx).padStart(2, '0');
+  const cls = onDark ? 'section-anchor-wrap on-dark' : 'section-anchor-wrap';
+  return `<div class="${cls}"><span class="section-anchor">${padded}</span></div>`;
+}
+
+export function renderPullQuote(quote: string | null, byline: string): string {
+  if (!quote) return '';
+  return `
+<section class="pullquote-section">
+  <div class="pullquote-inner">
+    <div class="pullquote-mark" aria-hidden="true">"</div>
+    <blockquote class="pullquote-text">${escapeHtml(quote)}</blockquote>
+    <div class="pullquote-byline">${escapeHtml(byline)}</div>
+  </div>
+</section>
+`;
+}
+
+export function renderStoriesGrid(sections: Array<{ title: string; body: string }> | undefined): string {
+  if (!sections || sections.length === 0) return '';
+  const cards = sections.slice(0, 5).map((s, i) => {
+    const body = s.body.length > 320
+      ? s.body.slice(0, 320).replace(/\s+\S*$/, '') + '…'
+      : s.body;
+    return `
+      <article class="story-card">
+        <span class="story-num">${String(i + 1).padStart(2, '0')} / ${String(Math.min(sections.length, 5)).padStart(2, '0')}</span>
+        <h3>${escapeHtml(s.title)}</h3>
+        <p>${escapeHtml(body)}</p>
+      </article>
+    `;
+  }).join('');
+  return `
+<section class="stories-section">
+  <div class="container">
+    <div class="section-head">
+      <span class="section-eyebrow">Aus Ihrer Webseite — neu interpretiert</span>
+      <h2 class="section-title">Was uns <em>ausmacht</em>.</h2>
+    </div>
+    <div class="stories-grid">${cards}</div>
+  </div>
+</section>
+`;
+}
+
+const SOCIAL_ICONS: Record<string, string> = {
+  facebook: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M22 12c0-5.5-4.5-10-10-10S2 6.5 2 12c0 5 3.7 9.1 8.4 9.9v-7H7.9V12h2.5V9.8c0-2.5 1.5-3.9 3.8-3.9 1.1 0 2.2.2 2.2.2v2.4h-1.3c-1.2 0-1.6.8-1.6 1.6V12h2.7l-.4 2.9h-2.3v7c4.7-.8 8.5-4.9 8.5-9.9z"/></svg>',
+  instagram: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.4A4 4 0 1 1 12.6 8 4 4 0 0 1 16 11.4z"/><line x1="17.5" y1="6.5" x2="17.5" y2="6.5"/></svg>',
+  youtube: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M23 7.5s-.2-1.6-.9-2.3c-.8-.9-1.8-.9-2.2-1C16.7 4 12 4 12 4s-4.7 0-7.9.2c-.5.1-1.4.1-2.2 1C1.2 5.9 1 7.5 1 7.5S.8 9.4.8 11.3v1.4c0 1.9.2 3.8.2 3.8s.2 1.6.9 2.3c.8.9 1.9.9 2.4 1 1.8.2 7.7.2 7.7.2s4.7 0 7.9-.2c.5-.1 1.4-.1 2.2-1 .7-.7.9-2.3.9-2.3s.2-1.9.2-3.8v-1.4c0-1.9-.2-3.8-.2-3.8zM9.7 14.6V8.2l6.2 3.2-6.2 3.2z"/></svg>',
+  tiktok: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.6 6.3A4.85 4.85 0 0 1 17.7 3h-3.3v13.4a2.86 2.86 0 0 1-5.4 1.3 2.85 2.85 0 0 1 4-3.8V10.3a6.16 6.16 0 0 0-7.1 9.5 6.18 6.18 0 0 0 9.8.4 6.4 6.4 0 0 0 1.4-4V8.7a8.16 8.16 0 0 0 4.7 1.5V7a4.79 4.79 0 0 1-2.2-.7z"/></svg>',
+  linkedin: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM8.339 18v-8.59H5.667V18zm-1.34-9.764a1.55 1.55 0 1 0 0-3.099 1.55 1.55 0 0 0 0 3.1zM18 18v-4.708c0-2.575-1.395-3.77-3.255-3.77-1.502 0-2.175.825-2.55 1.404V9.41h-2.834c.037.798 0 8.59 0 8.59h2.834v-4.797c0-.255.018-.51.093-.692.205-.51.671-1.037 1.453-1.037 1.026 0 1.435.781 1.435 1.927V18z"/></svg>',
+  twitter: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>',
+};
+
+const SOCIAL_PLATFORMS = ['facebook', 'instagram', 'youtube', 'tiktok', 'linkedin', 'twitter'] as const;
+
+export function renderSocialStrip(socials: Record<string, string> | undefined): string {
+  if (!socials) return '';
+  // Defense-in-depth: even though the orchestrator already restricts socials
+  // to known platforms over https://, we re-validate here so a future caller
+  // bypassing the orchestrator (tests, direct callers) can't produce
+  // javascript: hrefs or attribute-breakout payloads. Scheme allow-list +
+  // escapeHtml on the URL itself.
+  const safeHrefRe = /^https?:\/\//i;
+  const items = Object.entries(socials)
+    .filter(([k, v]) =>
+      typeof v === 'string'
+      && v.length < 512
+      && safeHrefRe.test(v)
+      && (SOCIAL_PLATFORMS as readonly string[]).includes(k.toLowerCase())
+    )
+    .map(([k, v]) => ({ platform: k.toLowerCase(), href: v, label: k }));
+  if (items.length === 0) return '';
+  const links = items
+    .filter(i => SOCIAL_ICONS[i.platform])
+    .map(i => `<a href="${escapeHtml(i.href)}" target="_blank" rel="noopener nofollow" aria-label="${escapeHtml(i.label)}">${SOCIAL_ICONS[i.platform]}</a>`)
+    .join('');
+  if (!links) return '';
+  return `<div class="vf-socials">${links}</div>`;
+}
+
+export function renderRatingPill(spec: SiteSpec): string {
+  const rating = typeof spec.business?.rating === 'number' ? spec.business.rating : null;
+  const reviewCount = typeof spec.business?.review_count === 'number' ? spec.business.review_count : 0;
+  if (rating === null || rating < 4.0 || reviewCount < 5) return '';
+  const full = Math.round(rating);
+  const stars = '★'.repeat(full) + '☆'.repeat(5 - full);
+  return `
+<div class="hero-rating" role="img" aria-label="Google-Bewertung ${rating.toFixed(1)} von 5 Sternen, basierend auf ${reviewCount} Bewertungen">
+  <span class="stars" aria-hidden="true">${stars}</span>
+  <span class="meta"><strong>${rating.toFixed(1).replace('.', ',')}</strong> · ${reviewCount} Google-Bewertungen</span>
+</div>`;
+}
+
+export function renderBoardSection(board: Array<{ name: string; role: string }>): string {
+  if (board.length === 0) return '';
+  const cards = board.map(m => {
+    const initials = m.name.split(/\s+/).map(w => w[0] || '').slice(0, 2).join('').toUpperCase();
+    return `
+      <article class="board-card">
+        <div class="board-monogram" aria-hidden="true">${escapeHtml(initials)}</div>
+        <h4>${escapeHtml(m.name)}</h4>
+        <div class="role">${escapeHtml(m.role)}</div>
+      </article>
+    `;
+  }).join('');
+  return `
+<section class="section board-section">
+  <div class="container">
+    <div class="section-head center">
+      <span class="section-eyebrow">Wer trägt den Verein</span>
+      <h2 class="section-title">Unser <em>Vorstand</em>.</h2>
+    </div>
+    <div class="board-grid">${cards}</div>
+  </div>
+</section>
+`;
+}
+
+export function renderEventsSection(events: Array<{ date: string; title: string; description?: string }>): string {
+  if (events.length === 0) return '';
+  const rows = events.map(ev => `
+    <article class="event-row">
+      <div class="when">${escapeHtml(ev.date)}</div>
+      <div class="what">${escapeHtml(ev.title)}</div>
+    </article>
+  `).join('');
+  return `
+<section class="section events-section">
+  <div class="container">
+    <div class="section-head center">
+      <span class="section-eyebrow">Termine</span>
+      <h2 class="section-title">Wann Sie uns <em>erleben können</em>.</h2>
+    </div>
+    <div class="events-extracted-list">${rows}</div>
+  </div>
+</section>
+`;
+}
+
+// ─── Shared editorial CSS (paste once per page) ──────────────────────────────
+
+/**
+ * One block of CSS that defines all editorial widgets (tone-switches,
+ * section-anchor numbers, marquee, pull-quote, stories-grid, vf-wordmark,
+ * board cards, events list, rating pill, social strip).
+ *
+ * Variables consumed: --primary, --primary-deep, --accent, --ink, --rule,
+ *                     --bg, --display, --serif.
+ * Each verein-* host template declares these — fallbacks are baked in for
+ * defensive rendering should a variable ever be missing.
+ */
+export const EDITORIAL_CSS = `
+.section.tone-cream  { background: var(--bg);    color: var(--ink); }
+.section.tone-tint   { background: color-mix(in oklch, var(--primary) 8%, white); color: var(--ink); }
+.section.tone-carbon {
+  background: linear-gradient(180deg, var(--primary-deep) 0%, #0c1410 100%);
+  color: #f3e9d3;
+}
+.section.tone-carbon .section-eyebrow { color: var(--accent); }
+.section.tone-carbon .section-eyebrow::before { background: var(--accent); }
+.section.tone-carbon .section-title { color: #fff; }
+.section.tone-carbon .section-title em { color: var(--accent); }
+.section.tone-carbon .section-lead { color: rgba(255,255,255,0.78); }
+
+.section-anchor-wrap {
+  max-width: 1400px; margin: 0 auto;
+  padding: clamp(2rem, 4vw, 3.5rem) clamp(1.5rem, 5vw, 5rem) 0;
+  pointer-events: none; overflow: hidden;
+}
+.section-anchor {
+  display: block;
+  font-family: var(--display, Georgia, serif); font-weight: 700;
+  font-size: clamp(6rem, 18vw, 16rem);
+  line-height: 0.85; letter-spacing: -0.04em;
+  -webkit-text-stroke: 1px var(--accent, #b8893d);
+  color: transparent;
+  opacity: 0.45;
+}
+.section-anchor-wrap.on-dark .section-anchor {
+  -webkit-text-stroke-color: rgba(255,255,255,0.35);
+}
+
+.marquee {
+  background: var(--primary-deep, #1c2f1f); color: var(--accent, #b8893d);
+  padding: 1.1rem 0; overflow: hidden; position: relative;
+  border-top: 1px solid color-mix(in oklch, var(--accent, #b8893d) 30%, transparent);
+  border-bottom: 1px solid color-mix(in oklch, var(--accent, #b8893d) 30%, transparent);
+}
+.marquee-track {
+  display: inline-flex; gap: 3rem; padding-left: 3rem;
+  white-space: nowrap; animation: wv-marquee 36s linear infinite;
+  font-family: var(--display, Georgia, serif); font-weight: 500;
+  font-size: clamp(1rem, 1.6vw, 1.35rem);
+  letter-spacing: 0.04em;
+}
+.marquee-track span::before {
+  content: "✦"; margin-right: 3rem; color: rgba(255,255,255,0.35);
+}
+.marquee:hover .marquee-track { animation-play-state: paused; }
+@keyframes wv-marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track { animation: none; }
+}
+
+.pullquote-section {
+  background: linear-gradient(135deg, var(--primary, #2d4a32) 0%, var(--primary-deep, #1c2f1f) 100%);
+  color: #fff; padding: clamp(5rem, 10vw, 9rem) 1.5rem;
+  border-top: 4px solid var(--accent, #b8893d);
+  border-bottom: 4px solid var(--accent, #b8893d);
+  position: relative;
+}
+.pullquote-inner { max-width: 1100px; margin: 0 auto; }
+.pullquote-mark {
+  font-family: var(--display, Georgia, serif); font-weight: 700;
+  font-size: clamp(6rem, 12vw, 10rem); line-height: 0.7;
+  color: var(--accent, #b8893d); opacity: 0.85;
+  margin-bottom: 1rem;
+}
+.pullquote-text {
+  font-family: var(--display, Georgia, serif); font-style: italic; font-weight: 400;
+  font-size: clamp(1.7rem, 4vw, 3.4rem);
+  line-height: 1.22; letter-spacing: -0.015em;
+  color: #fff; max-width: 28ch; text-wrap: balance;
+}
+.pullquote-byline {
+  margin-top: 2rem; display: inline-flex; align-items: center; gap: 1rem;
+  font-family: var(--display, Georgia, serif); font-size: 0.92rem;
+  letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--accent, #b8893d); font-weight: 600;
+}
+.pullquote-byline::before { content: ""; width: 36px; height: 1.5px; background: var(--accent, #b8893d); }
+
+.stories-section { padding: clamp(5rem, 9vw, 8rem) 1.5rem; background: var(--bg, #fff); }
+.stories-grid {
+  max-width: 1300px; margin: 4rem auto 0;
+  display: grid; gap: 3rem;
+  grid-template-columns: 1fr;
+}
+@media (min-width: 880px) {
+  .stories-grid { grid-template-columns: repeat(2, 1fr); gap: 4rem 3rem; }
+  .stories-grid > article:nth-child(3n+1) { grid-column: span 2; }
+}
+.story-card {
+  display: flex; flex-direction: column; gap: 1.25rem;
+  padding-bottom: 2rem; border-bottom: 1px solid var(--rule, rgba(0,0,0,0.1));
+}
+.story-card .story-num {
+  font-family: var(--display, Georgia, serif); font-size: 0.82rem;
+  color: var(--accent, #b8893d); letter-spacing: 0.22em;
+  text-transform: uppercase; font-weight: 600;
+}
+.story-card h3 {
+  font-family: var(--display, Georgia, serif); font-weight: 500;
+  font-size: clamp(1.8rem, 3.4vw, 2.6rem);
+  line-height: 1.1; letter-spacing: -0.015em;
+  color: var(--ink, #1f1a14);
+}
+.story-card h3 em { color: var(--primary, #2d4a32); font-style: italic; }
+.story-card p {
+  color: var(--ink-2, #4a4030); font-size: 1.02rem; line-height: 1.75;
+  font-family: var(--serif, Georgia, serif);
+}
+
+.vf-wordmark {
+  font-family: var(--display, Georgia, serif); font-weight: 600;
+  font-size: clamp(3rem, 12vw, 11rem); line-height: 0.92;
+  letter-spacing: -0.04em; color: #fff;
+  padding-bottom: clamp(2rem, 4vw, 3rem);
+  border-bottom: 1px solid rgba(255,255,255,0.10);
+  margin-bottom: clamp(2.5rem, 5vw, 4rem);
+  max-width: 100%; word-break: break-word;
+}
+.vf-wordmark .accent { color: var(--accent, #b8893d); }
+
+.hero-rating {
+  display: inline-flex; align-items: center; gap: 0.7rem;
+  margin-top: 1.5rem; padding: 0.45rem 1rem;
+  background: rgba(255,255,255,0.10); border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 999px; backdrop-filter: blur(8px);
+  font-family: var(--display, Georgia, serif); font-size: 0.85rem; color: #fff;
+}
+.hero-rating .stars { color: var(--accent, #b8893d); letter-spacing: 0.04em; font-size: 0.95rem; }
+.hero-rating .meta { color: rgba(255,255,255,0.75); font-weight: 500; }
+.hero-rating .meta strong { color: #fff; font-weight: 600; }
+
+.vf-socials {
+  display: flex; gap: 0.65rem; align-items: center;
+  padding-top: 1.5rem; margin-top: 1.5rem;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+.vf-socials a {
+  width: 40px; height: 40px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.10);
+  color: rgba(255,255,255,0.7);
+  transition: background .2s, color .2s, transform .2s;
+}
+.vf-socials a:hover { background: var(--accent, #b8893d); color: var(--ink, #1f1a14); transform: translateY(-2px); }
+.vf-socials svg { width: 18px; height: 18px; }
+
+.board-section { padding: clamp(5rem, 9vw, 8rem) 1.5rem; }
+.board-grid {
+  max-width: 1200px; margin: 4rem auto 0;
+  display: grid; gap: 2.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
+}
+.board-card { text-align: center; }
+.board-monogram {
+  width: clamp(80px, 12vw, 120px); height: clamp(80px, 12vw, 120px);
+  margin: 0 auto 1.5rem;
+  border-radius: 50%;
+  background: color-mix(in oklch, var(--primary, #2d4a32) 18%, white);
+  color: var(--primary, #2d4a32);
+  display: grid; place-items: center;
+  font-family: var(--display, Georgia, serif); font-weight: 600;
+  font-size: clamp(1.8rem, 3vw, 2.4rem);
+  letter-spacing: 0.04em;
+  border: 2px solid var(--primary, #2d4a32);
+}
+.board-card h4 {
+  font-family: var(--display, Georgia, serif); font-weight: 500;
+  font-size: 1.2rem; margin-bottom: 0.3rem;
+}
+.board-card .role {
+  font-family: var(--display, Georgia, serif); font-size: 0.78rem;
+  letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--accent, #b8893d); font-weight: 600;
+}
+
+/* All event-row rules are scoped to .events-extracted-list so they don't
+   collide with verein-sport's / verein-tradition's existing dark "Spielplan"
+   rows that use the same class name on a dark surface. */
+.events-extracted-list {
+  max-width: 1000px; margin: 4rem auto 0;
+  display: flex; flex-direction: column; gap: 1rem;
+}
+.events-extracted-list .event-row {
+  display: grid; gap: 1.5rem; align-items: center;
+  grid-template-columns: 1fr;
+  padding: 1.5rem 1.75rem;
+  background: var(--surface, #fff);
+  border: 1px solid var(--rule, rgba(0,0,0,0.08));
+  border-left: 3px solid var(--accent, #b8893d);
+  border-radius: 6px;
+  transition: transform .2s, box-shadow .2s;
+}
+@media (min-width: 720px) {
+  .events-extracted-list .event-row { grid-template-columns: 110px 1fr; }
+}
+.events-extracted-list .event-row:hover { transform: translateY(-2px); box-shadow: 0 12px 32px -18px rgba(0,0,0,0.18); }
+.events-extracted-list .event-row .when {
+  font-family: var(--display, Georgia, serif); font-weight: 600;
+  font-size: clamp(1.1rem, 2vw, 1.4rem);
+  color: var(--primary, #2d4a32); line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+.events-extracted-list .event-row .what {
+  font-family: var(--serif, Georgia, serif); font-size: 1rem;
+  line-height: 1.5; color: var(--ink-2, #4a4030);
+}
+`;

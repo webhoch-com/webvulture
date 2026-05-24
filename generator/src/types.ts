@@ -171,6 +171,14 @@ export interface SiteSpec {
    */
   redesigned_sections?: Array<{ title: string; body: string; level: number }>;
 
+  /**
+   * Untruncated excerpt (≤6000 chars) of the prospect's scraped text content.
+   * Powers regex-based extractors (board members, dated events, founding year)
+   * that need MORE than the 3-sentence summary that flows into about.body.
+   * Templates SHOULD NOT render this directly — it's an extractor-only source.
+   */
+  raw_text_excerpt?: string;
+
   // Branch-specific optional sections (rendered only if layout_kind matches)
   menu?: Array<{ category: string; items: Array<{ name: string; description?: string; price?: string }> }>;
   opening_hours?: Array<{ day: string; hours: string }>;

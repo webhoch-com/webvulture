@@ -13,12 +13,22 @@
 import type { SiteSpec } from '../types.js';
 import { getGalleryImage, getHeroImage, hasHeroImage, hasGalleryImages, galleryCount, getLogo, getFavicon } from './_media.js';
 import { renderSeoHead } from './_seo.js';
-
-function escapeHtml(s: string): string {
-  return String(s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
+import {
+  escapeHtml,
+  extractFoundedYear,
+  buildMarqueeItems,
+  pickPullQuote,
+  extractBoardMembers,
+  extractEvents,
+  renderMarquee,
+  renderPullQuote,
+  renderStoriesGrid,
+  renderSocialStrip,
+  renderRatingPill,
+  renderBoardSection,
+  renderEventsSection,
+  EDITORIAL_CSS,
+} from './_editorial.js';
 
 export function renderVereinSportPage(spec: SiteSpec, slug: string): string {
   const businessName = escapeHtml(spec.business_name);
@@ -31,10 +41,19 @@ export function renderVereinSportPage(spec: SiteSpec, slug: string): string {
   const email = spec.contact.email ? escapeHtml(spec.contact.email) : '';
   const address = spec.contact.address ? escapeHtml(spec.contact.address) : '';
 
-  const events = (spec.events && spec.events.length > 0) ? spec.events.slice(0, 5) : [];
+  // Real spec data → fall back to regex-extracted events when none provided.
+  const events = (spec.events && spec.events.length > 0)
+    ? spec.events.slice(0, 5)
+    : extractEvents(spec);
   const services = spec.services && spec.services.length > 0 ? spec.services.slice(0, 6) : [];
   const testimonials = spec.testimonials && spec.testimonials.length > 0 ? spec.testimonials.slice(0, 3) : [];
   const openingHours = spec.opening_hours && spec.opening_hours.length > 0 ? spec.opening_hours.slice(0, 7) : [];
+
+  // Editorial helpers (same as verein-musik).
+  const foundedYear = extractFoundedYear(spec);
+  const marqueeItems = buildMarqueeItems(spec, foundedYear);
+  const pullQuote = pickPullQuote(spec);
+  const board = extractBoardMembers(spec);
 
   const primary = spec.brand?.primary_color || '#15803d';
   const secondary = spec.brand?.secondary_color || primary;
@@ -243,6 +262,13 @@ export function renderVereinSportPage(spec: SiteSpec, slug: string): string {
     .reveal { opacity: 1; transform: none; }
     /* removed: see .reveal */
     @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } .gallery-tile img { transition: none; } }
+
+    /* Sport-template needs the same ink-2/--primary-soft tokens that the
+       _editorial CSS references — wire them through here so the shared
+       block doesn't need template-specific overrides. */
+    :root { --ink-2: var(--ink, #0f172a); }
+
+    ${EDITORIAL_CSS}
   </style>
 </head>
 <body>
@@ -279,12 +305,15 @@ export function renderVereinSportPage(spec: SiteSpec, slug: string): string {
       <span class="hero-eyebrow">${escapeHtml(tagline)}</span>
       <h1>${escapeHtml(headline)}</h1>
       <p class="hero-sub">${subhead}</p>
+      ${renderRatingPill(spec)}
       <div class="hero-actions">
         <a href="#kontakt" class="btn-primary">${ctaText}</a>
         ${services.length > 0 ? '<a href="#mannschaften" class="btn-ghost">Unsere Mannschaften</a>' : ''}
       </div>
     </div>
   </section>
+
+  ${renderMarquee(marqueeItems)}
 
   ${spec.about?.body ? `
   <section class="section about">
@@ -302,6 +331,12 @@ export function renderVereinSportPage(spec: SiteSpec, slug: string): string {
     </div>
   </section>
   ` : ''}
+
+  ${renderPullQuote(pullQuote, businessName)}
+
+  ${renderBoardSection(board)}
+
+  ${renderStoriesGrid(spec.redesigned_sections)}
 
   ${services.length > 0 ? `
   <section id="mannschaften" class="section services">
@@ -421,9 +456,13 @@ export function renderVereinSportPage(spec: SiteSpec, slug: string): string {
   </section>
 
   <footer class="footer">
-    <div class="footer-inner">
-      <div>© ${new Date().getFullYear()} ${businessName} · Alle Rechte vorbehalten</div>
-      <div>Demo erstellt von <a href="https://webhoch.com" target="_blank" rel="noopener">Webagentur Hochmeir e.U.</a></div>
+    <div class="footer-inner" style="flex-direction: column; align-items: flex-start;">
+      <div class="vf-wordmark" aria-hidden="true">${businessName}<span class="accent">.</span></div>
+      ${renderSocialStrip(spec.socials)}
+      <div style="display: flex; justify-content: space-between; width: 100%; flex-wrap: wrap; gap: 1rem; padding-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.08); margin-top: 1rem;">
+        <div>© ${new Date().getFullYear()} ${businessName} · Alle Rechte vorbehalten</div>
+        <div>Demo erstellt von <a href="https://webhoch.com" target="_blank" rel="noopener">Webagentur Hochmeir e.U.</a></div>
+      </div>
     </div>
   </footer>
 

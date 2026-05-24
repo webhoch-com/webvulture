@@ -9,96 +9,23 @@ import type { SiteSpec } from '../types.js';
 import { getGalleryImage, getHeroImage, hasHeroImage, hasGalleryImages, galleryCount, getLogo, getFavicon } from './_media.js';
 import { REDESIGNED_SECTIONS_CSS } from './_sections.js';
 import { renderSeoHead } from './_seo.js';
-
-function escapeHtml(s: string): string {
-  return String(s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
-
-/**
- * Look for a founding year in the prospect's about-body. Most Vereinsseiten
- * mention "seit 1923", "gegründet 1957", "Gründungsjahr: 1898" or similar
- * — when we find one, the hero fallback adds a "SEIT YYYY · 102 Jahre" line
- * that makes the page feel rooted instead of generic. Returns null when we
- * can't be confident the match is a year (rejects years outside 1700–current).
- */
-function extractFoundedYear(spec: SiteSpec): number | null {
-  const text = `${spec.about?.body ?? ''} ${spec.tagline ?? ''}`;
-  // Two-direction match: trigger BEFORE year ("seit 1898", "gründungsjahr: 1898",
-  // "established in 1898") OR trigger AFTER year ("im Jahr 1898 gegründet",
-  // "1898 gegründet", "von 1898"). Real Vereinsseiten phrase it both ways.
-  const beforeRe = /\b(?:seit|gegründet|gegruendet|gründungsjahr|gruendungsjahr|established|since|von)\s*(?:im\s+jahr\s+)?:?\s*(1[78]\d{2}|19\d{2}|20[0-2]\d)\b/i;
-  const afterRe  = /\b(?:im\s+jahr\s+)?(1[78]\d{2}|19\d{2}|20[0-2]\d)\s+(?:gegründet|gegruendet|gegründet|ins\s+leben|established)\b/i;
-  const m = text.match(beforeRe) || text.match(afterRe);
-  if (!m) return null;
-  const year = parseInt(m[1], 10);
-  const currentYear = new Date().getFullYear();
-  if (year < 1700 || year > currentYear) return null;
-  return year;
-}
-
-/**
- * Build the marquee text items from real spec data — never invented strings.
- * Order: founded year · city · category · scraped tagline-words · scraped
- * service names. Returns at least 4 items (duplicates the input twice to keep
- * the CSS `translateX(-50%)` loop continuous) when ≥ 2 distinct items exist;
- * otherwise returns an empty array → marquee section is skipped.
- */
-function buildMarqueeItems(spec: SiteSpec, foundedYear: number | null): string[] {
-  const items: string[] = [];
-  if (foundedYear) items.push(`Seit ${foundedYear}`);
-  if (spec.contact?.address) {
-    // Extract the city after the postcode. Supports compound names like
-    // "Bad Ischl", "Sankt Johann am Wimberg", "Klagenfurt-Wörthersee" — the
-    // previous regex stopped at the first whitespace and missed multi-word
-    // Austrian municipalities.
-    const m = spec.contact.address.match(/\b\d{4,5}\s+([A-ZÄÖÜ][\wäöüÄÖÜß-]+(?:\s+(?:am|im|an|bei|ob|in|der|auf)\s+[A-ZÄÖÜ][\wäöüÄÖÜß-]+|\s+[A-ZÄÖÜ][\wäöüÄÖÜß-]+){0,3})/);
-    if (m) items.push(m[1].trim());
-  }
-  // Tagline words (≥4 chars, capitalised) as identity tokens
-  const taglineWords = (spec.tagline || '').match(/\b[A-ZÄÖÜ][a-zäöüß]{3,}\b/g) || [];
-  for (const w of taglineWords.slice(0, 4)) {
-    if (!items.includes(w)) items.push(w);
-  }
-  for (const s of (spec.services || []).slice(0, 3)) {
-    if (s.name && s.name.length < 24 && !items.includes(s.name)) items.push(s.name);
-  }
-  if (items.length < 2) return [];
-  // Duplicate so the CSS marquee loops without a visible gap
-  return [...items, ...items];
-}
-
-/**
- * Find a substantive sentence from about.body that doesn't duplicate the
- * subhead — used as the editorial pull-quote between sections. Returns null
- * if no candidate ≥ 50 chars survives.
- */
-function pickPullQuote(spec: SiteSpec): string | null {
-  const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
-  const subheadN = norm(spec.hero?.subheadline || '');
-  const body = spec.about?.body || '';
-  const sentences = body.match(/[^.!?]+[.!?]+/g) || [];
-  for (const raw of sentences) {
-    const s = raw.trim();
-    if (s.length < 50 || s.length > 220) continue;
-    const n = norm(s);
-    if (n === subheadN) continue;
-    // Skip chrome
-    if (/zum inhalt|cookie|folgen sie|impressum/i.test(s)) continue;
-    return s;
-  }
-  // Thin-page fallback: the tagline often has 30–90 chars and reads well as
-  // an editorial quote. Only emit if it's distinct from the subhead and long
-  // enough to look intentional. Pages with no about.body still get a section
-  // here — closes a regression from the previous mission-section IIFE.
-  const tagline = (spec.tagline || '').trim();
-  const taglineN = norm(tagline);
-  if (tagline.length >= 40 && taglineN !== subheadN) {
-    return tagline;
-  }
-  return null;
-}
+import {
+  escapeHtml,
+  extractFoundedYear,
+  buildMarqueeItems,
+  pickPullQuote,
+  extractBoardMembers,
+  extractEvents,
+  renderMarquee,
+  renderBigNumberAnchor,
+  renderPullQuote,
+  renderStoriesGrid,
+  renderSocialStrip,
+  renderRatingPill,
+  renderBoardSection,
+  renderEventsSection,
+  EDITORIAL_CSS,
+} from './_editorial.js';
 
 /**
  * Generate a rough lat/lon bounding box around an address-string for use in an
@@ -122,32 +49,6 @@ function vorstandPortrait(name: string): string {
   return avatarPlaceholder(name, '#2d4a32');
 }
 
-/**
- * Inline SVG marks for the social-icon strip. Tiny, recognisable, mono-color
- * (`currentColor`) so they recolour against any footer theme. Kept in this
- * file (not _media.ts) because they're presentation-only and only the
- * verein-* templates need them today; will move to _social.ts once a second
- * template asks for them.
- */
-const SOCIAL_ICONS: Record<string, string> = {
-  facebook: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M22 12c0-5.5-4.5-10-10-10S2 6.5 2 12c0 5 3.7 9.1 8.4 9.9v-7H7.9V12h2.5V9.8c0-2.5 1.5-3.9 3.8-3.9 1.1 0 2.2.2 2.2.2v2.4h-1.3c-1.2 0-1.6.8-1.6 1.6V12h2.7l-.4 2.9h-2.3v7c4.7-.8 8.5-4.9 8.5-9.9z"/></svg>',
-  instagram: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.4A4 4 0 1 1 12.6 8 4 4 0 0 1 16 11.4z"/><line x1="17.5" y1="6.5" x2="17.5" y2="6.5"/></svg>',
-  youtube: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M23 7.5s-.2-1.6-.9-2.3c-.8-.9-1.8-.9-2.2-1C16.7 4 12 4 12 4s-4.7 0-7.9.2c-.5.1-1.4.1-2.2 1C1.2 5.9 1 7.5 1 7.5S.8 9.4.8 11.3v1.4c0 1.9.2 3.8.2 3.8s.2 1.6.9 2.3c.8.9 1.9.9 2.4 1 1.8.2 7.7.2 7.7.2s4.7 0 7.9-.2c.5-.1 1.4-.1 2.2-1 .7-.7.9-2.3.9-2.3s.2-1.9.2-3.8v-1.4c0-1.9-.2-3.8-.2-3.8zM9.7 14.6V8.2l6.2 3.2-6.2 3.2z"/></svg>',
-  tiktok: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.6 6.3A4.85 4.85 0 0 1 17.7 3h-3.3v13.4a2.86 2.86 0 0 1-5.4 1.3 2.85 2.85 0 0 1 4-3.8V10.3a6.16 6.16 0 0 0-7.1 9.5 6.18 6.18 0 0 0 9.8.4 6.4 6.4 0 0 0 1.4-4V8.7a8.16 8.16 0 0 0 4.7 1.5V7a4.79 4.79 0 0 1-2.2-.7z"/></svg>',
-  linkedin: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM8.339 18v-8.59H5.667V18zm-1.34-9.764a1.55 1.55 0 1 0 0-3.099 1.55 1.55 0 0 0 0 3.1zM18 18v-4.708c0-2.575-1.395-3.77-3.255-3.77-1.502 0-2.175.825-2.55 1.404V9.41h-2.834c.037.798 0 8.59 0 8.59h2.834v-4.797c0-.255.018-.51.093-.692.205-.51.671-1.037 1.453-1.037 1.026 0 1.435.781 1.435 1.927V18z"/></svg>',
-  twitter: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>',
-};
-
-function renderSocialStrip(items: Array<{ platform: string; href: string; label: string }>): string {
-  if (items.length === 0) return '';
-  const links = items
-    .filter(i => SOCIAL_ICONS[i.platform])
-    .map(i => `<a href="${i.href}" target="_blank" rel="noopener nofollow" aria-label="${escapeHtml(i.label)}">${SOCIAL_ICONS[i.platform]}</a>`)
-    .join('');
-  if (!links) return '';
-  return `<div class="vf-socials">${links}</div>`;
-}
-
 export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
   const businessName = escapeHtml(spec.business_name);
   const tagline = spec.tagline;
@@ -159,39 +60,25 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
   const email = spec.contact.email ? escapeHtml(spec.contact.email) : '';
   const address = spec.contact.address ? escapeHtml(spec.contact.address) : '';
 
-  // Trust pill — only shown when the rating is strong (≥4.0) and based on a
-  // meaningful sample (≥5 reviews). Weak ratings would hurt rather than help.
-  const ratingNum = typeof spec.business?.rating === 'number' ? spec.business.rating : null;
-  const reviewCount = typeof spec.business?.review_count === 'number' ? spec.business.review_count : 0;
-  const showRating = ratingNum !== null && ratingNum >= 4.0 && reviewCount >= 5;
-  const ratingFull = showRating ? Math.round(ratingNum!) : 0;
-  const ratingStars = showRating ? '★'.repeat(ratingFull) + '☆'.repeat(5 - ratingFull) : '';
-
-  // Social handles surfaced as an icon-strip in the footer. Filter on a hard
-  // allow-list of platforms we ship icons for (anything else would render as
-  // text, looks broken). Each entry: {platform, href, label}.
-  const SOCIAL_PLATFORMS = ['facebook', 'instagram', 'youtube', 'tiktok', 'linkedin', 'twitter'] as const;
-  const socialItems = Object.entries(spec.socials ?? {})
-    .filter(([k]) => (SOCIAL_PLATFORMS as readonly string[]).includes(k.toLowerCase()))
-    .map(([k, v]) => ({ platform: k.toLowerCase(), href: v as string, label: k }));
-
-  // Only show events that came from real scraped data — never invent dates.
-  const events = (spec.events && spec.events.length > 0) ? spec.events.slice(0, 4) : [];
-
-  // Board members are derived from spec.testimonials for now (since
-  // scraped vorstand-data isn't a first-class field). When empty → no
-  // section. We don't fabricate names.
-  const board: Array<{ name: string; role: string; since?: string }> = [];
+  // Pre-computed editorial data — all extractors are pure and module-shared.
+  const foundedYear = extractFoundedYear(spec);
+  const marqueeItems = buildMarqueeItems(spec, foundedYear);
+  const pullQuote = pickPullQuote(spec);
+  // Events: prefer explicit spec.events (rarely populated), fall back to
+  // regex extraction from text_content/sections. Both paths return [] when
+  // nothing usable found → section is skipped.
+  const events = (spec.events && spec.events.length > 0)
+    ? spec.events.slice(0, 4)
+    : extractEvents(spec);
+  // Board: extracted from "Obmann: Name" patterns. Empty unless ≥2 valid
+  // matches (single-match is usually a false-positive contact line).
+  const board = extractBoardMembers(spec);
 
   // Membership info comes from `spec.membership` only — we never invent
   // tiers/prices/features because we cannot verify them against the
   // prospect's actual offering.
   const membership = spec.membership;
 
-  // Phase-3 editorial data: pre-computed so the template body stays clean.
-  const foundedYear = extractFoundedYear(spec);
-  const marqueeItems = buildMarqueeItems(spec, foundedYear);
-  const pullQuote = pickPullQuote(spec);
   // Number anchors track section order so they read 01/02/03 vertically.
   let anchorIdx = 0;
   const nextAnchor = () => {
@@ -841,6 +728,7 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
       --rd-alt-bg: var(--bg-2);
     }
     ${REDESIGNED_SECTIONS_CSS}
+    ${EDITORIAL_CSS}
   </style>
 </head>
 <body>
@@ -881,11 +769,7 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
     <span class="hero-eyebrow"><span class="crest"></span>${escapeHtml(tagline.slice(0, 70))}</span>
     <h1>${escapeHtml(headline.replace(/(\.|!|\?)([^.!?]*)$/, '|$1$2|')).replace(/\|([^|]+)\|/, '<em>$1</em>')}</h1>
     <p>${subhead}</p>
-    ${showRating ? `
-    <div class="hero-rating" role="img" aria-label="Google-Bewertung ${ratingNum!.toFixed(1)} von 5 Sternen, basierend auf ${reviewCount} Bewertungen">
-      <span class="stars" aria-hidden="true">${ratingStars}</span>
-      <span class="meta"><strong>${ratingNum!.toFixed(1).replace('.', ',')}</strong> · ${reviewCount} Google-Bewertungen</span>
-    </div>` : ''}
+    ${renderRatingPill(spec)}
     <div class="hero-cta-row">
       <a href="#kontakt" class="btn-primary">${ctaText} →</a>
       ${events.length > 0 ? '<a href="#termine" class="btn-outline">Nächste Termine</a>' : ''}
@@ -915,34 +799,10 @@ ${marqueeItems.length > 0 ? `
 
 ${events.length > 0 ? `
 <div class="section-anchor-wrap on-dark"><span class="section-anchor">${nextAnchor()}</span></div>
-<section id="termine" class="section events tone-cream">
-  <div class="container">
-    <div class="section-head center reveal">
-      <span class="section-eyebrow">Nächste Termine</span>
-      <h2 class="section-title">Wann Sie uns <em>erleben können</em>.</h2>
-    </div>
-    <div class="events-list">
-      ${events.map(ev => {
-        const dateParts = (ev as any).date ? String((ev as any).date).match(/(\d{1,2})\.\s*(\w+)/) : null;
-        const day = dateParts ? dateParts[1] : '15';
-        const month = dateParts ? dateParts[2].slice(0, 3).toUpperCase() : 'MRZ';
-        return `
-        <article class="event reveal">
-          <div class="event-date">
-            <div class="day">${day}</div>
-            <div class="month">${month}</div>
-          </div>
-          <div class="event-info">
-            <h3>${escapeHtml((ev as any).title || (ev as any).name || 'Veranstaltung')}</h3>
-            <p>${escapeHtml((ev as any).description || (ev as any).body || '')}</p>
-          </div>
-          <a href="#kontakt" class="event-cta">Notieren →</a>
-        </article>
-      `;
-      }).join('')}
-    </div>
-  </div>
-</section>
+${renderEventsSection(events.map(ev => ({
+  date: (ev as any).date || '',
+  title: (ev as any).title || (ev as any).name || 'Veranstaltung',
+})))}
 ` : ''}
 
 ${spec.about?.body ? `
@@ -1034,24 +894,8 @@ ${membership && membership.description ? `
 ` : ''}
 
 ${board.length > 0 ? `
-<section id="vorstand" class="section board-section">
-  <div class="container">
-    <div class="section-head center reveal">
-      <span class="section-eyebrow">Vorstand</span>
-      <h2 class="section-title">Die Köpfe <em>hinter dem Klang</em>.</h2>
-    </div>
-    <div class="board-grid">
-      ${board.map((m, i) => `
-        <div class="board-member reveal">
-          <div class="board-photo avatar-symbolic-wrap"><img src="${vorstandPortrait(m.name)}" alt="${escapeHtml(m.name)}" loading="lazy"><span class="avatar-symbolic-tag">Symbolfoto</span></div>
-          <h4>${escapeHtml(m.name)}</h4>
-          <div class="board-role">${escapeHtml(m.role)}</div>
-          <div class="board-since">${escapeHtml(m.since || '')}</div>
-        </div>
-      `).join('')}
-    </div>
-  </div>
-</section>
+<div class="section-anchor-wrap"><span class="section-anchor">${nextAnchor()}</span></div>
+${renderBoardSection(board)}
 ` : ''}
 
 ${galleryCount(spec) >= 1 ? `
@@ -1156,7 +1000,7 @@ ${address ? `
         </ul>
       </div>
     </div>
-    ${renderSocialStrip(socialItems)}
+    ${renderSocialStrip(spec.socials)}
     <div class="vf-bottom">
       <span>&copy; ${new Date().getFullYear()} ${businessName} · Alle Rechte vorbehalten.</span>
       <span class="vf-credit">Demo erstellt von <a href="https://webhoch.com" target="_blank" rel="noopener">Webagentur Hochmeir e.U.</a></span>

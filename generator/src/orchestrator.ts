@@ -263,6 +263,16 @@ export async function orchestrate(pkg: RebuildPackage): Promise<OrchestrationRes
     baseSpec.media.screenshots = pkg.screenshots.slice(0, 4);
   }
 
+  // ─── Raw text excerpt for content-extractors ──────────────────────────────
+  // about.body is summarised to ~3 sentences for the editorial layout; the
+  // board-member and event extractors need much more text to work. Pass the
+  // PHP-side already-capped (6000 chars) text_content through untruncated so
+  // regex helpers can scan e.g. footer-listed Vorstand entries that didn't
+  // make it into the summary.
+  if (textContent) {
+    baseSpec.raw_text_excerpt = textContent.slice(0, 6000);
+  }
+
   // Pass through the *real* page sections from the prospect's site so the
   // template can render a premium redesign of their actual content. Strict
   // filter against duplicates of headline/about and against junk titles.
