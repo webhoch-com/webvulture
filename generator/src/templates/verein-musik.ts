@@ -7,18 +7,13 @@
 
 import type { SiteSpec } from '../types.js';
 import { getGalleryImage, getHeroImage, hasHeroImage, hasGalleryImages, galleryCount, getLogo, getFavicon } from './_media.js';
-import { REDESIGNED_SECTIONS_CSS, renderRedesignedSections } from './_sections.js';
+import { REDESIGNED_SECTIONS_CSS } from './_sections.js';
 import { renderSeoHead } from './_seo.js';
 
 function escapeHtml(s: string): string {
   return String(s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
-
-function firstSentence(text: string): string {
-  const m = text.match(/^[^.!?]+[.!?]/);
-  return (m ? m[0] : text).trim();
 }
 
 /**
@@ -30,12 +25,79 @@ function firstSentence(text: string): string {
  */
 function extractFoundedYear(spec: SiteSpec): number | null {
   const text = `${spec.about?.body ?? ''} ${spec.tagline ?? ''}`;
-  const m = text.match(/\b(?:seit|gegründet|gegruendet|gründungsjahr|gruendungsjahr|established|since)\s*(?:im\s+jahr\s+)?:?\s*(1[78]\d{2}|19\d{2}|20[0-2]\d)\b/i);
+  // Two-direction match: trigger BEFORE year ("seit 1898", "gründungsjahr: 1898",
+  // "established in 1898") OR trigger AFTER year ("im Jahr 1898 gegründet",
+  // "1898 gegründet", "von 1898"). Real Vereinsseiten phrase it both ways.
+  const beforeRe = /\b(?:seit|gegründet|gegruendet|gründungsjahr|gruendungsjahr|established|since|von)\s*(?:im\s+jahr\s+)?:?\s*(1[78]\d{2}|19\d{2}|20[0-2]\d)\b/i;
+  const afterRe  = /\b(?:im\s+jahr\s+)?(1[78]\d{2}|19\d{2}|20[0-2]\d)\s+(?:gegründet|gegruendet|gegründet|ins\s+leben|established)\b/i;
+  const m = text.match(beforeRe) || text.match(afterRe);
   if (!m) return null;
   const year = parseInt(m[1], 10);
   const currentYear = new Date().getFullYear();
   if (year < 1700 || year > currentYear) return null;
   return year;
+}
+
+/**
+ * Build the marquee text items from real spec data — never invented strings.
+ * Order: founded year · city · category · scraped tagline-words · scraped
+ * service names. Returns at least 4 items (duplicates the input twice to keep
+ * the CSS `translateX(-50%)` loop continuous) when ≥ 2 distinct items exist;
+ * otherwise returns an empty array → marquee section is skipped.
+ */
+function buildMarqueeItems(spec: SiteSpec, foundedYear: number | null): string[] {
+  const items: string[] = [];
+  if (foundedYear) items.push(`Seit ${foundedYear}`);
+  if (spec.contact?.address) {
+    // Extract the city after the postcode. Supports compound names like
+    // "Bad Ischl", "Sankt Johann am Wimberg", "Klagenfurt-Wörthersee" — the
+    // previous regex stopped at the first whitespace and missed multi-word
+    // Austrian municipalities.
+    const m = spec.contact.address.match(/\b\d{4,5}\s+([A-ZÄÖÜ][\wäöüÄÖÜß-]+(?:\s+(?:am|im|an|bei|ob|in|der|auf)\s+[A-ZÄÖÜ][\wäöüÄÖÜß-]+|\s+[A-ZÄÖÜ][\wäöüÄÖÜß-]+){0,3})/);
+    if (m) items.push(m[1].trim());
+  }
+  // Tagline words (≥4 chars, capitalised) as identity tokens
+  const taglineWords = (spec.tagline || '').match(/\b[A-ZÄÖÜ][a-zäöüß]{3,}\b/g) || [];
+  for (const w of taglineWords.slice(0, 4)) {
+    if (!items.includes(w)) items.push(w);
+  }
+  for (const s of (spec.services || []).slice(0, 3)) {
+    if (s.name && s.name.length < 24 && !items.includes(s.name)) items.push(s.name);
+  }
+  if (items.length < 2) return [];
+  // Duplicate so the CSS marquee loops without a visible gap
+  return [...items, ...items];
+}
+
+/**
+ * Find a substantive sentence from about.body that doesn't duplicate the
+ * subhead — used as the editorial pull-quote between sections. Returns null
+ * if no candidate ≥ 50 chars survives.
+ */
+function pickPullQuote(spec: SiteSpec): string | null {
+  const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
+  const subheadN = norm(spec.hero?.subheadline || '');
+  const body = spec.about?.body || '';
+  const sentences = body.match(/[^.!?]+[.!?]+/g) || [];
+  for (const raw of sentences) {
+    const s = raw.trim();
+    if (s.length < 50 || s.length > 220) continue;
+    const n = norm(s);
+    if (n === subheadN) continue;
+    // Skip chrome
+    if (/zum inhalt|cookie|folgen sie|impressum/i.test(s)) continue;
+    return s;
+  }
+  // Thin-page fallback: the tagline often has 30–90 chars and reads well as
+  // an editorial quote. Only emit if it's distinct from the subhead and long
+  // enough to look intentional. Pages with no about.body still get a section
+  // here — closes a regression from the previous mission-section IIFE.
+  const tagline = (spec.tagline || '').trim();
+  const taglineN = norm(tagline);
+  if (tagline.length >= 40 && taglineN !== subheadN) {
+    return tagline;
+  }
+  return null;
 }
 
 /**
@@ -125,6 +187,17 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
   // tiers/prices/features because we cannot verify them against the
   // prospect's actual offering.
   const membership = spec.membership;
+
+  // Phase-3 editorial data: pre-computed so the template body stays clean.
+  const foundedYear = extractFoundedYear(spec);
+  const marqueeItems = buildMarqueeItems(spec, foundedYear);
+  const pullQuote = pickPullQuote(spec);
+  // Number anchors track section order so they read 01/02/03 vertically.
+  let anchorIdx = 0;
+  const nextAnchor = () => {
+    anchorIdx += 1;
+    return String(anchorIdx).padStart(2, '0');
+  };
 
   // Brand-token resolution: real scraped values override the template's
   // hardcoded defaults. The CSS `color-mix()` calls derive `-soft` and `-deep`
@@ -364,6 +437,145 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
     .hero-stat strong { display: block; font-weight: 600; font-size: 2rem; color: var(--accent); line-height: 1; }
     .hero-stat span { display: block; font-size: 0.85rem; color: rgba(255,255,255,0.7); margin-top: 0.4rem; letter-spacing: 0.08em; text-transform: uppercase; }
 
+    /* ─── Editorial premium patterns (2026 redesign) ─────────
+       Section variants: --tone-cream | --tone-carbon | --tone-tint
+       — alternating background "switches" between sections so the
+       page reads as a magazine, not a single-tone wall of text. */
+    .section.tone-cream  { background: var(--bg);    color: var(--ink); }
+    .section.tone-tint   { background: color-mix(in oklch, var(--primary) 8%, white); color: var(--ink); }
+    .section.tone-carbon {
+      background: linear-gradient(180deg, var(--primary-deep) 0%, #0c1410 100%);
+      color: #f3e9d3;
+    }
+    .section.tone-carbon .section-eyebrow { color: var(--accent); }
+    .section.tone-carbon .section-eyebrow::before { background: var(--accent); }
+    .section.tone-carbon .section-title { color: #fff; }
+    .section.tone-carbon .section-title em { color: var(--accent); }
+    .section.tone-carbon .section-lead { color: rgba(255,255,255,0.78); }
+
+    /* Big-number anchor — outline-stroke numerals between sections,
+       2026 magazine pacing element. */
+    .section-anchor-wrap {
+      max-width: 1400px; margin: 0 auto;
+      padding: clamp(2rem, 4vw, 3.5rem) clamp(1.5rem, 5vw, 5rem) 0;
+      pointer-events: none; overflow: hidden;
+    }
+    .section-anchor {
+      display: block;
+      font-family: var(--display); font-weight: 700;
+      font-size: clamp(6rem, 18vw, 16rem);
+      line-height: 0.85; letter-spacing: -0.04em;
+      -webkit-text-stroke: 1px var(--accent);
+      color: transparent;
+      opacity: 0.45;
+    }
+    .section.tone-carbon + .section-anchor-wrap .section-anchor,
+    .section-anchor-wrap.on-dark .section-anchor {
+      -webkit-text-stroke-color: rgba(255,255,255,0.35);
+    }
+
+    /* Marquee strip — slow horizontal scroll of club values + dates.
+       Pause-on-hover for a11y. */
+    .marquee {
+      background: var(--primary-deep); color: var(--accent);
+      padding: 1.1rem 0; overflow: hidden; position: relative;
+      border-top: 1px solid color-mix(in oklch, var(--accent) 30%, transparent);
+      border-bottom: 1px solid color-mix(in oklch, var(--accent) 30%, transparent);
+    }
+    .marquee-track {
+      display: inline-flex; gap: 3rem; padding-left: 3rem;
+      white-space: nowrap; animation: wv-marquee 36s linear infinite;
+      font-family: var(--display); font-weight: 500;
+      font-size: clamp(1rem, 1.6vw, 1.35rem);
+      letter-spacing: 0.04em;
+    }
+    .marquee-track span::before {
+      content: "✦"; margin-right: 3rem; color: rgba(255,255,255,0.35);
+    }
+    .marquee:hover .marquee-track { animation-play-state: paused; }
+    @keyframes wv-marquee {
+      from { transform: translateX(0); }
+      to   { transform: translateX(-50%); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .marquee-track { animation: none; }
+    }
+
+    /* Pull-quote section — large editorial quote, deep brand background. */
+    .pullquote-section {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-deep) 100%);
+      color: #fff; padding: clamp(5rem, 10vw, 9rem) 1.5rem;
+      border-top: 4px solid var(--accent);
+      border-bottom: 4px solid var(--accent);
+      position: relative;
+    }
+    .pullquote-inner { max-width: 1100px; margin: 0 auto; }
+    .pullquote-mark {
+      font-family: var(--display); font-weight: 700;
+      font-size: clamp(6rem, 12vw, 10rem); line-height: 0.7;
+      color: var(--accent); opacity: 0.85;
+      margin-bottom: 1rem;
+    }
+    .pullquote-text {
+      font-family: var(--display); font-style: italic; font-weight: 400;
+      font-size: clamp(1.7rem, 4vw, 3.4rem);
+      line-height: 1.22; letter-spacing: -0.015em;
+      color: #fff; max-width: 28ch; text-wrap: balance;
+    }
+    .pullquote-byline {
+      margin-top: 2rem; display: inline-flex; align-items: center; gap: 1rem;
+      font-family: var(--display); font-size: 0.92rem;
+      letter-spacing: 0.16em; text-transform: uppercase;
+      color: var(--accent); font-weight: 600;
+    }
+    .pullquote-byline::before { content: ""; width: 36px; height: 1.5px; background: var(--accent); }
+
+    /* "Stories" cards — editorial magazine grid for redesigned_sections.
+       Replaces the previous linear sequence of equal-height blocks. */
+    .stories-section { padding: clamp(5rem, 9vw, 8rem) 1.5rem; background: var(--bg); }
+    .stories-grid {
+      max-width: 1300px; margin: 4rem auto 0;
+      display: grid; gap: 3rem;
+      grid-template-columns: 1fr;
+    }
+    @media (min-width: 880px) {
+      .stories-grid { grid-template-columns: repeat(2, 1fr); gap: 4rem 3rem; }
+      .stories-grid > article:nth-child(3n+1) { grid-column: span 2; }
+    }
+    .story-card {
+      display: flex; flex-direction: column; gap: 1.25rem;
+      padding-bottom: 2rem; border-bottom: 1px solid var(--rule);
+    }
+    .story-card .story-num {
+      font-family: var(--display); font-size: 0.82rem;
+      color: var(--accent); letter-spacing: 0.22em;
+      text-transform: uppercase; font-weight: 600;
+    }
+    .story-card h3 {
+      font-family: var(--display); font-weight: 500;
+      font-size: clamp(1.8rem, 3.4vw, 2.6rem);
+      line-height: 1.1; letter-spacing: -0.015em;
+      color: var(--ink);
+    }
+    .story-card h3 em { color: var(--primary); font-style: italic; }
+    .story-card p {
+      color: var(--ink-2); font-size: 1.02rem; line-height: 1.75;
+      font-family: var(--serif);
+    }
+
+    /* XXL footer wordmark variant — big-type club name as the main bottom
+       statement (Awwwards-2025 pattern). Sits ABOVE the existing vf-grid. */
+    .vf-wordmark {
+      font-family: var(--display); font-weight: 600;
+      font-size: clamp(3rem, 12vw, 11rem); line-height: 0.92;
+      letter-spacing: -0.04em; color: #fff;
+      padding-bottom: clamp(2rem, 4vw, 3rem);
+      border-bottom: 1px solid rgba(255,255,255,0.10);
+      margin-bottom: clamp(2.5rem, 5vw, 4rem);
+      max-width: 100%; word-break: break-word;
+    }
+    .vf-wordmark .accent { color: var(--accent); }
+
     /* ─── Section base ───────────────────────────────────── */
     .section { padding: clamp(5rem, 9vw, 8rem) 1.5rem; }
     .container { max-width: 1300px; margin: 0 auto; }
@@ -546,34 +758,7 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
       color: var(--accent);
     }
 
-    /* ─── Mission section (always-on, makes pages substantial) ─── */
-    .mission-section {
-      background: var(--bg-2);
-      padding: clamp(5rem, 9vw, 8rem) 1.5rem;
-      position: relative;
-    }
-    .mission-section::before, .mission-section::after {
-      content: ''; position: absolute; left: 50%; transform: translateX(-50%);
-      width: 60px; height: 1px; background: var(--accent);
-    }
-    .mission-section::before { top: 0; }
-    .mission-section::after { bottom: 0; }
-    .mission-inner { max-width: 920px; margin: 0 auto; text-align: center; }
-    .mission-quote {
-      font-family: var(--display); font-style: italic;
-      font-size: clamp(1.6rem, 3.4vw, 2.4rem);
-      line-height: 1.4; color: var(--ink); margin: 1.75rem 0;
-      max-width: 30ch; margin-left: auto; margin-right: auto;
-      position: relative;
-    }
-    .mission-quote .quote-mark {
-      font-size: 4.5rem; color: var(--accent); display: block;
-      line-height: 0.4; margin-bottom: 0.65rem; font-style: normal;
-    }
-    .mission-byline {
-      font-family: var(--display); font-size: 0.92rem; letter-spacing: 0.16em;
-      text-transform: uppercase; color: var(--accent); font-weight: 600;
-    }
+    /* Mission-section CSS removed — replaced by .pullquote-* above. */
 
     /* ─── Anfahrt-Section mit Map ─── */
     .anfahrt-section { padding: clamp(4.5rem, 8vw, 7rem) 1.5rem; background: var(--bg); }
@@ -722,8 +907,15 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
   })()}
 </section>
 
+${marqueeItems.length > 0 ? `
+<div class="marquee" aria-hidden="true">
+  <div class="marquee-track">${marqueeItems.map(i => `<span>${escapeHtml(i)}</span>`).join('')}</div>
+</div>
+` : ''}
+
 ${events.length > 0 ? `
-<section id="termine" class="section events">
+<div class="section-anchor-wrap on-dark"><span class="section-anchor">${nextAnchor()}</span></div>
+<section id="termine" class="section events tone-cream">
   <div class="container">
     <div class="section-head center reveal">
       <span class="section-eyebrow">Nächste Termine</span>
@@ -754,8 +946,8 @@ ${events.length > 0 ? `
 ` : ''}
 
 ${spec.about?.body ? `
-<div class="ornament-divider" aria-hidden="true"><span></span><span class="diamond">◆</span><span></span></div>
-<section id="ueber-uns" class="section">
+<div class="section-anchor-wrap"><span class="section-anchor">${nextAnchor()}</span></div>
+<section id="ueber-uns" class="section tone-tint">
   <div class="container">
     <div class="section-head">
       <span class="section-eyebrow">Wer wir sind</span>
@@ -768,6 +960,16 @@ ${spec.about?.body ? `
 </section>
 ` : ''}
 
+${pullQuote ? `
+<section class="pullquote-section">
+  <div class="pullquote-inner">
+    <div class="pullquote-mark" aria-hidden="true">"</div>
+    <blockquote class="pullquote-text">${escapeHtml(pullQuote)}</blockquote>
+    <div class="pullquote-byline">${escapeHtml(businessName)}</div>
+  </div>
+</section>
+` : ''}
+
 
 ${/* Klangkörper, Instrumente und Meilensteine wurden entfernt — diese
        Inhalte konnten nicht aus der gescrapten Quellseite verifiziert werden.
@@ -775,7 +977,8 @@ ${/* Klangkörper, Instrumente und Meilensteine wurden entfernt — diese
 
 
 ${spec.testimonials && spec.testimonials.length > 0 ? `
-<section class="section press-section">
+<div class="section-anchor-wrap"><span class="section-anchor">${nextAnchor()}</span></div>
+<section class="section press-section tone-tint">
   <div class="container">
     <div class="section-head center reveal">
       <span class="section-eyebrow">Stimmen</span>
@@ -794,7 +997,26 @@ ${spec.testimonials && spec.testimonials.length > 0 ? `
 </section>
 ` : ''}
 
-${renderRedesignedSections(spec.redesigned_sections, 'Aus Ihrer Webseite — neu interpretiert')}
+${(spec.redesigned_sections && spec.redesigned_sections.length > 0) ? `
+<div class="section-anchor-wrap"><span class="section-anchor">${nextAnchor()}</span></div>
+<section class="stories-section">
+  <div class="container">
+    <div class="section-head">
+      <span class="section-eyebrow">Aus Ihrer Webseite — neu interpretiert</span>
+      <h2 class="section-title">Was uns <em>ausmacht</em>.</h2>
+    </div>
+    <div class="stories-grid">
+      ${spec.redesigned_sections.slice(0, 5).map((s, i) => `
+      <article class="story-card">
+        <span class="story-num">${String(i + 1).padStart(2, '0')} / ${String(Math.min(spec.redesigned_sections!.length, 5)).padStart(2, '0')}</span>
+        <h3>${escapeHtml(s.title)}</h3>
+        <p>${escapeHtml(s.body.length > 320 ? s.body.slice(0, 320).replace(/\s+\S*$/, '') + '…' : s.body)}</p>
+      </article>
+      `).join('')}
+    </div>
+  </div>
+</section>
+` : ''}
 
 ${membership && membership.description ? `
 <section id="mitglied" class="section members-section">
@@ -833,7 +1055,8 @@ ${board.length > 0 ? `
 ` : ''}
 
 ${galleryCount(spec) >= 1 ? `
-<section id="bilder" class="section">
+<div class="section-anchor-wrap on-dark"><span class="section-anchor">${nextAnchor()}</span></div>
+<section id="bilder" class="section tone-carbon">
   <div class="container">
     <div class="section-head center reveal">
       <span class="section-eyebrow">Eindrücke</span>
@@ -848,48 +1071,8 @@ ${galleryCount(spec) >= 1 ? `
 </section>
 ` : ''}
 
-${(() => {
-  // Find a quote that's distinct from the subhead AND the about-body's lead
-  // sentence. Walk through every sentence in about.body and pick the first
-  // one not already shown above. This is what made the mission-section
-  // disappear on thin Verein-pages: the first sentence equalled the subhead.
-  const norm = (s: string) => s.toLowerCase().replace(/[\s.,;:!?…—-]+/g, ' ').trim();
-  const subheadN = norm(spec.hero?.subheadline || '');
-  const aboutLeadN = norm(firstSentence(spec.about?.body || ''));
-  const allSentences = (spec.about?.body || '').match(/[^.!?]+[.!?]+/g) || [];
-  let candidateQuote = '';
-  for (const raw of allSentences) {
-    const s = raw.trim();
-    if (s.length < 30) continue;
-    if (/zum inhalt|skip|cookie|folgen sie|instagram|facebook|impressum/i.test(s)) continue;
-    const n = norm(s);
-    if (n === subheadN) continue;
-    if (n === aboutLeadN && allSentences.length > 1) continue;
-    candidateQuote = s;
-    break;
-  }
-  // Final fallback: only emit if the tagline is distinct enough.
-  if (!candidateQuote) {
-    const tagN = norm(tagline);
-    if (tagN.length >= 30 && tagN !== subheadN && tagN !== aboutLeadN) {
-      candidateQuote = tagline;
-    }
-  }
-  if (!candidateQuote || candidateQuote.length < 30) return '';
-  return `
-<section class="mission-section">
-  <div class="container">
-    <div class="mission-inner reveal">
-      <span class="section-eyebrow">Was uns trägt</span>
-      <blockquote class="mission-quote">
-        <span class="quote-mark">"</span>
-        ${escapeHtml(candidateQuote)}
-      </blockquote>
-      <div class="mission-byline">— ${businessName}</div>
-    </div>
-  </div>
-</section>`;
-})()}
+${/* Old mission-section IIFE removed — replaced by the editorial
+       Pull-Quote-Section higher up the page (between About and Stories). */ ''}
 
 ${address ? `
 <div class="ornament-divider" aria-hidden="true"><span></span><span class="diamond">◆</span><span></span></div>
@@ -916,7 +1099,8 @@ ${address ? `
 </section>
 ` : ''}
 
-<section id="kontakt" class="section contact-section">
+<div class="section-anchor-wrap"><span class="section-anchor">${nextAnchor()}</span></div>
+<section id="kontakt" class="section contact-section tone-cream">
   <div class="container">
     <div class="section-head center reveal">
       <span class="section-eyebrow">Kontakt</span>
@@ -945,6 +1129,7 @@ ${address ? `
 
 <footer class="verein-footer">
   <div class="vf-inner">
+    <div class="vf-wordmark" aria-hidden="true">${escapeHtml(businessName)}<span class="accent">.</span></div>
     <div class="vf-grid">
       <div class="vf-col vf-brand">
         <h3>${businessName}</h3>
