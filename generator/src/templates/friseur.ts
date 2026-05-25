@@ -5,14 +5,21 @@
  */
 
 import type { SiteSpec } from '../types.js';
-import { getGalleryImage, getHeroImage } from './_media.js';
+import { getGalleryImage, getHeroImage, hasHeroImage, hasGalleryImages, galleryCount } from './_media.js';
 import { renderSeoHead } from './_seo.js';
-
-function escapeHtml(s: string): string {
-  return String(s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
+import { getBranchPreset } from './_branch_presets.js';
+import {
+  escapeHtml,
+  extractFoundedYear,
+  buildMarqueeItems,
+  pickPullQuote,
+  renderMarquee,
+  renderPullQuote,
+  renderRatingPill,
+  renderQuietFooter,
+  renderTrustBar,
+  EDITORIAL_CSS,
+} from './_editorial.js';
 
 function salonPhoto(spec: SiteSpec, slug: string, idx: number, w = 1200, h = 800): string {
   return getGalleryImage(spec, slug, idx, w, h);
@@ -25,11 +32,43 @@ function stylistAvatar(name: string): string {
 }
 
 export function renderFriseurPage(spec: SiteSpec, slug: string): string {
+  const PRESET = getBranchPreset('friseur');
+  const primary = spec.brand.primary_color || PRESET.primary;
+  const secondary = spec.brand.secondary_color || PRESET.secondary;
+  const accent = spec.brand.accent_color || PRESET.accent;
+  const headingFont = spec.brand.heading_font_family
+    ? `'${spec.brand.heading_font_family}', ${PRESET.display_font}`
+    : PRESET.display_font;
+  const bodyFont = spec.brand.body_font_family
+    ? `'${spec.brand.body_font_family}', ${PRESET.body_font}`
+    : PRESET.body_font;
+  const fontImports = (spec.brand?.font_imports && spec.brand.font_imports.length > 0)
+    ? spec.brand.font_imports
+    : PRESET.font_imports;
+  const fontImportTags = fontImports
+    .map(u => `<link rel="stylesheet" href="${escapeHtml(u)}" crossorigin>`).join('\n  ');
+
   const businessName = escapeHtml(spec.business_name);
   const tagline = spec.tagline;
   const headline = spec.hero.headline;
   const subhead = escapeHtml(spec.hero.subheadline);
-  const ctaText = escapeHtml(spec.hero.cta_text || 'Termin buchen');
+  const ctaText = escapeHtml(spec.hero.cta_text || PRESET.cta_text);
+  const hasHero = hasHeroImage(spec);
+  const hasGallery = hasGalleryImages(spec);
+  const heroImage = getHeroImage(spec, slug, 1800, 1100);
+
+  const foundedYear = extractFoundedYear(spec);
+  const marqueeItems = buildMarqueeItems(spec, foundedYear);
+  const pullQuote = pickPullQuote(spec);
+
+  const trustStats: Array<{ value: string; label: string }> = [];
+  if (foundedYear) {
+    const years = new Date().getFullYear() - foundedYear;
+    if (years > 0) trustStats.push({ value: `Seit ${foundedYear}`, label: `${years} Jahre Salon` });
+  }
+  if (spec.business?.rating && spec.business?.review_count && spec.business.review_count >= 5) {
+    trustStats.push({ value: `${spec.business.rating.toFixed(1).replace('.', ',')} ★`, label: `${spec.business.review_count} Kundenstimmen` });
+  }
 
   const services = spec.services && spec.services.length >= 3 ? spec.services : [
     { name: 'Damenhaarschnitt', description: 'Beratung, Waschen, Schnitt, Föhnen', price: 'ab 49 €' },
@@ -57,21 +96,23 @@ export function renderFriseurPage(spec: SiteSpec, slug: string): string {
 <html lang="de">
 <head>
   ${renderSeoHead(spec, { slug, schemaKind: 'BeautySalon' })}
-  <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
-  <link href="https://fonts.bunny.net/css?family=anton:400|inter:400,500,600,700&display=swap" rel="stylesheet">
+  ${fontImportTags}
   <style>
     :root {
-      --bg: #fff5f7;             /* very pale pink wash */
+      --bg: ${PRESET.bg};
       --surface: #ffffff;
-      --ink: #1a0d10;            /* near black with warmth */
+      --ink: ${PRESET.ink};
       --ink-2: #5b4046;
       --ink-3: #8a737a;
-      --primary: #ec4899;        /* hot pink */
-      --primary-dark: #be185d;
-      --accent: #ffe9f0;
+      --primary: ${escapeHtml(primary)};
+      --primary-deep: color-mix(in oklch, ${escapeHtml(primary)} 70%, black);
+      --primary-dark: color-mix(in oklch, ${escapeHtml(primary)} 70%, black);
+      --secondary: ${escapeHtml(secondary)};
+      --accent: ${escapeHtml(accent)};
       --rule: rgba(26,13,16,0.08);
-      --display: 'Anton', 'Impact', sans-serif;
-      --sans: 'Inter', system-ui, sans-serif;
+      --display: ${headingFont};
+      --serif: ${headingFont};
+      --sans: ${bodyFont};
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html { scroll-behavior: smooth; }
@@ -323,6 +364,8 @@ export function renderFriseurPage(spec: SiteSpec, slug: string): string {
     .reveal { opacity: 1; transform: none; }
     /* visible by default */
     @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1 !important; transform: none !important; } }
+
+    ${EDITORIAL_CSS}
   </style>
 </head>
 <body>
@@ -359,13 +402,21 @@ export function renderFriseurPage(spec: SiteSpec, slug: string): string {
     <span class="hero-eyebrow">${escapeHtml(tagline.slice(0, 60))}</span>
     <h1>${escapeHtml(headline.replace(/\.([^.]*)$/, '.$1')).replace(/(\S+)\.\s*$/, '<em>$1.</em>')}</h1>
     <p>${subhead}</p>
+    ${renderRatingPill(spec)}
     <div class="cta-row">
       <a href="#kontakt" class="btn-primary">${ctaText} →</a>
       <a href="#preise" class="btn-ghost">Leistungen ansehen</a>
     </div>
   </div>
-  <div class="hero-image" aria-hidden="true"></div>
+  ${hasHero
+    ? `<div class="hero-image" style="background-image: url('${escapeHtml(heroImage)}'); background-size: cover; background-position: center;" aria-hidden="true"></div>`
+    : `<div class="hero-image" aria-hidden="true" style="background: linear-gradient(135deg, var(--primary), var(--accent)); display: grid; place-items: center;"><span style="font-family: var(--display); font-size: clamp(4rem, 12vw, 11rem); line-height: 0.9; color: rgba(255,255,255,0.18); letter-spacing: -0.04em; padding: 1rem; text-align: center;">${businessName}</span></div>`
+  }
 </section>
+
+${renderMarquee(marqueeItems)}
+
+${renderTrustBar(trustStats)}
 
 <section class="booking-strip">
   <div class="booking-strip-inner">
@@ -417,6 +468,9 @@ export function renderFriseurPage(spec: SiteSpec, slug: string): string {
   </div>
 </section>
 
+${renderPullQuote(pullQuote, spec.business_name)}
+
+${hasGallery && galleryCount(spec) >= 1 ? `
 <section id="galerie" class="gallery">
   <div class="gallery-inner">
     <div class="gallery-head">
@@ -424,12 +478,13 @@ export function renderFriseurPage(spec: SiteSpec, slug: string): string {
       <h2 class="section-title"><em>Eindrücke</em> aus dem Salon.</h2>
     </div>
     <div class="gallery-grid">
-      ${[1,2,3,4,5,6].map(i => `
+      ${[1,2,3,4,5,6].slice(0, Math.min(galleryCount(spec), 6)).map(i => `
         <div class="gallery-img reveal"><img src="${salonPhoto(spec, slug, i, 600, 600)}" alt="" loading="lazy"></div>
       `).join('')}
     </div>
   </div>
 </section>
+` : ''}
 
 <section id="kontakt" class="cta-final">
   <h2>Termin <em>buchen</em>.</h2>
@@ -442,7 +497,14 @@ export function renderFriseurPage(spec: SiteSpec, slug: string): string {
   </div>
 </section>
 
-<footer>
+${renderQuietFooter({
+  businessName: spec.business_name,
+  tagline: spec.tagline,
+  ctaText,
+  ctaHref: '#kontakt',
+  socials: spec.socials,
+})}
+<footer style="display:none">
   <div class="brand">${businessName}</div>
   <div>${escapeHtml(tagline)}</div>
   <div class="legal">

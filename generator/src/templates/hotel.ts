@@ -7,24 +7,63 @@
 
 import type { SiteSpec } from '../types.js';
 import { renderSeoHead } from './_seo.js';
-import { getGalleryImage, getHeroImage } from './_media.js';
-
-function escapeHtml(s: string): string {
-  return String(s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
+import { getGalleryImage, getHeroImage, hasHeroImage, hasGalleryImages, galleryCount } from './_media.js';
+import { getBranchPreset } from './_branch_presets.js';
+import {
+  escapeHtml,
+  extractFoundedYear,
+  buildMarqueeItems,
+  pickPullQuote,
+  renderMarquee,
+  renderPullQuote,
+  renderRatingPill,
+  renderQuietFooter,
+  renderTrustBar,
+  EDITORIAL_CSS,
+} from './_editorial.js';
 
 function hotelPhoto(spec: SiteSpec, slug: string, idx: number, w = 1200, h = 800): string {
   return getGalleryImage(spec, slug, idx, w, h);
 }
 
 export function renderHotelPage(spec: SiteSpec, slug: string): string {
+  const PRESET = getBranchPreset('hotel');
+  const primary = spec.brand.primary_color || PRESET.primary;
+  const secondary = spec.brand.secondary_color || PRESET.secondary;
+  const accent = spec.brand.accent_color || PRESET.accent;
+  const headingFont = spec.brand.heading_font_family
+    ? `'${spec.brand.heading_font_family}', ${PRESET.display_font}`
+    : PRESET.display_font;
+  const bodyFont = spec.brand.body_font_family
+    ? `'${spec.brand.body_font_family}', ${PRESET.body_font}`
+    : PRESET.body_font;
+  const fontImports = (spec.brand?.font_imports && spec.brand.font_imports.length > 0)
+    ? spec.brand.font_imports
+    : PRESET.font_imports;
+  const fontImportTags = fontImports
+    .map(u => `<link rel="stylesheet" href="${escapeHtml(u)}" crossorigin>`).join('\n  ');
+
   const businessName = escapeHtml(spec.business_name);
   const tagline = spec.tagline;
   const headline = spec.hero.headline;
   const subhead = escapeHtml(spec.hero.subheadline);
-  const ctaText = escapeHtml(spec.hero.cta_text || 'Zimmer anfragen');
+  const ctaText = escapeHtml(spec.hero.cta_text || PRESET.cta_text);
+  const hasHero = hasHeroImage(spec);
+  const hasGallery = hasGalleryImages(spec);
+  const heroImage = getHeroImage(spec, slug, 1800, 1100);
+
+  const foundedYear = extractFoundedYear(spec);
+  const marqueeItems = buildMarqueeItems(spec, foundedYear);
+  const pullQuote = pickPullQuote(spec);
+
+  const trustStats: Array<{ value: string; label: string }> = [];
+  if (foundedYear) {
+    const years = new Date().getFullYear() - foundedYear;
+    if (years > 0) trustStats.push({ value: `Seit ${foundedYear}`, label: `${years} Jahre Gastgeber` });
+  }
+  if (spec.business?.rating && spec.business?.review_count && spec.business.review_count >= 5) {
+    trustStats.push({ value: `${spec.business.rating.toFixed(1).replace('.', ',')} ★`, label: `${spec.business.review_count} Gäste-Bewertungen` });
+  }
 
   const rooms = spec.services && spec.services.length >= 3 ? spec.services : [
     { name: 'Doppelzimmer Komfort', description: 'Bergblick, Holzboden, Dusche/WC, ab 95 €/Nacht inkl. Frühstück.', price: 'ab 95 €' },
@@ -42,21 +81,24 @@ export function renderHotelPage(spec: SiteSpec, slug: string): string {
 <html lang="de">
 <head>
   ${renderSeoHead(spec, { slug, schemaKind: 'LodgingBusiness' })}
-  <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
-  <link href="https://fonts.bunny.net/css?family=cormorant-garamond:400,500,600,700|inter:400,500,600&display=swap" rel="stylesheet">
+  ${fontImportTags}
   <style>
     :root {
-      --bg: #faf7f1;          /* warm cream */
-      --bg-2: #f0eadd;
+      --bg: ${PRESET.bg};
+      --bg-2: color-mix(in oklch, ${PRESET.bg} 60%, white);
       --surface: #ffffff;
-      --ink: #1c1410;
+      --ink: ${PRESET.ink};
       --ink-2: #5a4a40;
       --ink-3: #948374;
-      --accent: #b08d57;      /* warm bronze/gold */
-      --accent-dark: #8c6e3f;
+      --primary: ${escapeHtml(primary)};
+      --primary-deep: color-mix(in oklch, ${escapeHtml(primary)} 70%, black);
+      --secondary: ${escapeHtml(secondary)};
+      --accent: ${escapeHtml(accent)};
+      --accent-dark: color-mix(in oklch, ${escapeHtml(accent)} 70%, black);
       --rule: rgba(28,20,16,0.10);
-      --serif: 'Cormorant Garamond', Georgia, serif;
-      --sans: 'Inter', system-ui, sans-serif;
+      --display: ${headingFont};
+      --serif: ${headingFont};
+      --sans: ${bodyFont};
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html { scroll-behavior: smooth; }
@@ -303,6 +345,19 @@ export function renderHotelPage(spec: SiteSpec, slug: string): string {
     .reveal { opacity: 1; transform: none; }
     /* visible by default */
     @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1 !important; transform: none !important; } }
+
+    /* Hero fallback when no scraped photo */
+    .hero.hero-no-img { background: linear-gradient(135deg, #1c1410 0%, ${escapeHtml(primary)} 100%); }
+    .hero-no-img .hero-img { display: none; }
+    .hero-decor-bigtype {
+      position: absolute; bottom: clamp(4rem, 7vw, 8rem); right: clamp(2rem, 5vw, 6rem); z-index: 0;
+      font-family: var(--display); font-weight: 500;
+      font-size: clamp(4rem, 13vw, 13rem); line-height: 0.92; letter-spacing: -0.04em;
+      color: rgba(255,255,255,0.10); text-align: right; max-width: 80vw;
+      pointer-events: none;
+    }
+
+    ${EDITORIAL_CSS}
   </style>
 </head>
 <body>
@@ -334,12 +389,13 @@ export function renderHotelPage(spec: SiteSpec, slug: string): string {
   </div>
 </header>
 
-<section class="hero">
-  <div class="hero-img" style="background-image: url('${getHeroImage(spec, slug, 1800, 1200)}');"></div>
+<section class="hero ${hasHero ? '' : 'hero-no-img'}">
+  ${hasHero ? `<div class="hero-img" style="background-image: url('${escapeHtml(heroImage)}');"></div>` : `<div class="hero-decor-bigtype" aria-hidden="true">${businessName}</div>`}
   <div class="hero-text">
     <span class="eyebrow">${escapeHtml(tagline.slice(0, 60))}</span>
     <h1>${escapeHtml(headline.replace(/(\.|!|\?)([^.!?]*)$/, '|$1$2|')).replace(/\|([^|]+)\|/, '<em>$1</em>')}</h1>
     <p>${subhead}</p>
+    ${renderRatingPill(spec)}
   </div>
 
   <div class="booking-widget" role="search" aria-label="Demo-Anfrage senden">
@@ -349,6 +405,10 @@ export function renderHotelPage(spec: SiteSpec, slug: string): string {
     <a href="#kontakt" class="bw-cta">Demo-Anfrage senden →</a>
   </div>
 </section>
+
+${renderMarquee(marqueeItems)}
+
+${renderTrustBar(trustStats)}
 
 <section id="zimmer" class="section">
   <div class="container">
@@ -401,6 +461,9 @@ export function renderHotelPage(spec: SiteSpec, slug: string): string {
   </div>
 </section>
 
+${renderPullQuote(pullQuote, spec.business_name)}
+
+${hasGallery && galleryCount(spec) >= 1 ? `
 <section class="gallery">
   <div class="gallery-head reveal">
     <span class="section-eyebrow">Eindrücke</span>
@@ -408,11 +471,12 @@ export function renderHotelPage(spec: SiteSpec, slug: string): string {
     <p class="section-lead" style="margin-inline: auto;">Ein Auszug aus dem Haus, aus dem Garten und aus den Bergen.</p>
   </div>
   <div class="gallery-grid">
-    ${[51,52,53,54,55,56].map(i => `
+    ${[51,52,53,54,55,56].slice(0, Math.min(galleryCount(spec), 6)).map(i => `
       <div class="gallery-img reveal"><img src="${hotelPhoto(spec, slug, i, 700, 525)}" alt="" loading="lazy"></div>
     `).join('')}
   </div>
 </section>
+` : ''}
 
 <section class="advantage">
   <span class="section-eyebrow" style="color: var(--accent); display: block; margin-bottom: 1.5rem;">Direkt buchen</span>
@@ -464,7 +528,14 @@ export function renderHotelPage(spec: SiteSpec, slug: string): string {
   </div>
 </section>
 
-<footer>
+${renderQuietFooter({
+  businessName: spec.business_name,
+  tagline: spec.tagline,
+  ctaText,
+  ctaHref: '#kontakt',
+  socials: spec.socials,
+})}
+<footer style="display:none">
   <div class="brand">${businessName}</div>
   <div>${escapeHtml(tagline)}</div>
   <div class="legal">
