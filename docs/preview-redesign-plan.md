@@ -1,6 +1,32 @@
 # Verein-Vorschau Redesign — Plan
 
-**Datum:** 2026-05-11 · **Status:** Recherche fertig, Implementierung offen
+**Datum:** 2026-05-11 · **Status:** Phase 1-5 implementiert (lokal) — Production-Deploy ausstehend
+
+## Implementierungs-Status (2026-05-24)
+
+| Phase | Status | Commit |
+|---|---|---|
+| **1** — Data-Leakage schließen (echte Brand-Farben, Schriften, Socials, Rating-Badge, nav_links-Migration) | ✅ done | `6594c3e` |
+| **2** — Toten CSS löschen (~75 Z.) + Hero-Big-Type-Wordmark-Fallback (ersetzt Gold-Crest-Bug) | ✅ done | `6594c3e` |
+| **3** — Editorial-Premium-Patterns (Per-Section-Color-Switch, Big-Number-Anchors, Marquee, Pull-Quote, Stories-Grid, XXL-Wordmark-Footer) | ✅ done für verein-musik | `a3931bf` |
+| **4-lite** — Shared `_editorial.ts` Modul (560 LoC) + DRY refactor — verein-musik/sport/tradition nutzen jetzt alle das gleiche Modul | ✅ done | `f506b14` |
+| **5** — Smart-Heuristiken: extractFoundedYear, extractBoardMembers (Obmann/Kapellmeister regex), extractEvents (DD.MM.YYYY mit Future-Filter), buildMarqueeItems, pickPullQuote | ✅ done | `f506b14` |
+| **MEDIUM-Fixes** — extractEvents fordert Jahr (kein "stale events as upcoming"), renderRatingPill mit isFinite-Guard + Star-Clamp, Source-Set-Dedupe, CSS-Custom-Property-Contract dokumentiert | ✅ done | `a6f9287` |
+| **Production-Deploy** — rsync auf 185.51.10.235 + Generator-Restart + 5 Musikvereine neu rendern | ⏳ ausstehend (SSH-Auth blockiert in Sandbox) | — |
+
+**Was die Previews nach Deploy zeigen werden** (gemessen an Smoke-Tests):
+- Eigene Vereinsfarben (kein hardcoded Evergreen mehr)
+- Eigene Schriftart (kein hardcoded Fraunces/Lora mehr)
+- Trust-Pill mit Google-Rating ★★★★★ wenn ≥4.0/5 Bewertungen
+- Marquee-Strip mit "Seit YYYY · Stadt · Werte"
+- Per-Section-Background-Switch (cream/carbon/tint)
+- Big-Number-Anchors zwischen Sektionen (01/02/03)
+- Pull-Quote-Section mit editorial-Quote aus about.body
+- Stories-Grid statt linearem Editorial-Stream
+- Echte Vorstands-Cards (Obmann/Kapellmeister aus text_content extrahiert)
+- Echte Event-Cards (DD.MM.YYYY-Termine aus text_content extrahiert)
+- XXL-Wordmark-Footer mit Vereinsname in 12vw
+- Social-Icon-Strip (Facebook/Instagram/YouTube) im Footer
 
 ---
 

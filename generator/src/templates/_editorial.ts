@@ -133,8 +133,17 @@ export function extractBoardMembers(spec: SiteSpec): Array<{ name: string; role:
     if (out.length >= 6) break;
   }
   // A single match is usually a false positive ("Kontakt: Webagentur") — only
-  // surface when at least two distinct people line up.
-  return out.length >= 2 ? out : [];
+  // surface when at least two distinct people line up. Log when we found
+  // exactly one so operators can spot "should have rendered" patterns and
+  // tune the regex if it's a real Verein with only one named officer.
+  if (out.length === 1) {
+    // eslint-disable-next-line no-console
+    console.warn('[editorial.extractor] board_suppressed_below_threshold', JSON.stringify({
+      role: out[0].role, name_initial: out[0].name[0],
+    }));
+    return [];
+  }
+  return out;
 }
 
 /**
