@@ -6,19 +6,56 @@
 
 import type { SiteSpec } from '../types.js';
 import { renderSeoHead } from './_seo.js';
-
-function escapeHtml(s: string): string {
-  return String(s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
+import { getBranchPreset } from './_branch_presets.js';
+import {
+  escapeHtml,
+  extractFoundedYear,
+  buildMarqueeItems,
+  pickPullQuote,
+  renderMarquee,
+  renderPullQuote,
+  renderRatingPill,
+  renderQuietFooter,
+  renderTrustBar,
+  EDITORIAL_CSS,
+} from './_editorial.js';
 
 export function renderArztPage(spec: SiteSpec, slug: string): string {
+  const PRESET = getBranchPreset('arzt');
+  const primary = spec.brand.primary_color || PRESET.primary;
+  const secondary = spec.brand.secondary_color || PRESET.secondary;
+  const accent = spec.brand.accent_color || PRESET.accent;
+  const headingFont = spec.brand.heading_font_family
+    ? `'${spec.brand.heading_font_family}', ${PRESET.display_font}`
+    : PRESET.display_font;
+  const bodyFont = spec.brand.body_font_family
+    ? `'${spec.brand.body_font_family}', ${PRESET.body_font}`
+    : PRESET.body_font;
+  const fontImports = (spec.brand?.font_imports && spec.brand.font_imports.length > 0)
+    ? spec.brand.font_imports
+    : PRESET.font_imports;
+  const fontImportTags = fontImports
+    .map(u => `<link rel="stylesheet" href="${escapeHtml(u)}" crossorigin>`).join('\n  ');
+
   const businessName = escapeHtml(spec.business_name);
   const tagline = spec.tagline;
   const headline = spec.hero.headline;
   const subhead = escapeHtml(spec.hero.subheadline);
-  const ctaText = escapeHtml(spec.hero.cta_text || 'Termin online buchen');
+  const ctaText = escapeHtml(spec.hero.cta_text || PRESET.cta_text);
+
+  const foundedYear = extractFoundedYear(spec);
+  const marqueeItems = buildMarqueeItems(spec, foundedYear);
+  const pullQuote = pickPullQuote(spec);
+
+  const trustStats: Array<{ value: string; label: string }> = [];
+  if (foundedYear) {
+    const years = new Date().getFullYear() - foundedYear;
+    if (years > 0) trustStats.push({ value: `${years}+`, label: 'Jahre Praxis' });
+  }
+  if (spec.business?.rating && spec.business?.review_count && spec.business.review_count >= 5) {
+    trustStats.push({ value: `${spec.business.rating.toFixed(1).replace('.', ',')} ★`, label: `${spec.business.review_count} Bewertungen` });
+  }
+  trustStats.push({ value: 'Alle Kassen', label: 'Versicherungen' });
 
   const services = spec.services && spec.services.length >= 3 ? spec.services : [
     { name: 'Allgemeinmedizin', description: 'Vorsorge, Akutbeschwerden, Impfungen — die ganze Familie in einer Hand.' },
@@ -47,22 +84,25 @@ export function renderArztPage(spec: SiteSpec, slug: string): string {
 <html lang="de">
 <head>
   ${renderSeoHead(spec, { slug, schemaKind: 'MedicalBusiness' })}
-  <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
-  <link href="https://fonts.bunny.net/css?family=fraunces:400,500,600|inter:400,500,600,700&display=swap" rel="stylesheet">
+  ${fontImportTags}
   <style>
     :root {
-      --bg: #f6f9fb;
+      --bg: ${PRESET.bg};
       --surface: #ffffff;
-      --primary: #0e7490;       /* calming teal */
-      --primary-soft: #e0f2f1;
-      --primary-50: #f0fafb;
-      --primary-700: #0c5e75;
-      --ink: #0f172a;
+      --primary: ${escapeHtml(primary)};
+      --primary-deep: color-mix(in oklch, ${escapeHtml(primary)} 70%, black);
+      --primary-soft: color-mix(in oklch, ${escapeHtml(primary)} 14%, white);
+      --primary-50: color-mix(in oklch, ${escapeHtml(primary)} 5%, white);
+      --primary-700: color-mix(in oklch, ${escapeHtml(primary)} 70%, black);
+      --secondary: ${escapeHtml(secondary)};
+      --accent: ${escapeHtml(accent)};
+      --ink: ${PRESET.ink};
       --ink-2: #475569;
       --ink-3: #94a3b8;
       --rule: rgba(15,23,42,0.08);
-      --serif: 'Fraunces', 'Georgia', serif;
-      --sans: 'Inter', system-ui, sans-serif;
+      --display: ${headingFont};
+      --serif: ${headingFont};
+      --sans: ${bodyFont};
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html { scroll-behavior: smooth; }
@@ -345,6 +385,8 @@ export function renderArztPage(spec: SiteSpec, slug: string): string {
     .reveal { opacity: 1; transform: none; }
     /* visible by default */
     @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1 !important; transform: none !important; } }
+
+    ${EDITORIAL_CSS}
   </style>
 </head>
 <body>
@@ -393,6 +435,7 @@ export function renderArztPage(spec: SiteSpec, slug: string): string {
       <h1>${escapeHtml(headline.replace(/(\.|\?)([^.?]*)$/, '|$1|'))
             .replace(/\|(\.|\?)\|([^|]*)/, '<em>$1</em>$2')}</h1>
       <p>${subhead}</p>
+      ${renderRatingPill(spec)}
       <div class="hero-cta-row">
         <a href="#kontakt" class="btn-primary">${ctaText}</a>
         <a href="#leistungen" class="btn-secondary">Behandlungen ansehen</a>
@@ -427,6 +470,9 @@ export function renderArztPage(spec: SiteSpec, slug: string): string {
   </div>
 </section>
 
+${renderMarquee(marqueeItems)}
+
+${trustStats.length >= 2 ? renderTrustBar(trustStats) : `
 <section class="trust-strip">
   <div class="trust-inner">
     <div><div class="trust-num">20+</div><div class="trust-lbl">Jahre Praxis</div></div>
@@ -435,6 +481,7 @@ export function renderArztPage(spec: SiteSpec, slug: string): string {
     <div><div class="trust-num">100%</div><div class="trust-lbl">Diskretion</div></div>
   </div>
 </section>
+`}
 
 <section id="leistungen" class="section">
   <div class="container">
@@ -517,14 +564,15 @@ export function renderArztPage(spec: SiteSpec, slug: string): string {
   </div>
 </section>
 
-<footer>
-  <div class="brand">${businessName}</div>
-  <div>${escapeHtml(tagline)}</div>
-  <div class="legal">
-    <a href="/impressum">Impressum</a>
-    <a href="/datenschutz">Datenschutz</a>
-  </div>
-</footer>
+${renderPullQuote(pullQuote, spec.business_name)}
+
+${renderQuietFooter({
+  businessName: spec.business_name,
+  tagline: spec.tagline,
+  ctaText,
+  ctaHref: '#kontakt',
+  socials: spec.socials,
+})}
 
 <script>
   const io = new IntersectionObserver((entries) => {
