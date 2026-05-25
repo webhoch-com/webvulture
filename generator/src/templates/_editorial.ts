@@ -103,13 +103,19 @@ export function pickPullQuote(spec: SiteSpec): string | null {
  * Matches are bounded — Name must be 4–60 chars, alphabet/space/hyphen only.
  */
 export function extractBoardMembers(spec: SiteSpec): Array<{ name: string; role: string }> {
-  const sources = [
-    spec.raw_text_excerpt ?? '',
-    spec.about?.body ?? '',
-    spec.tagline ?? '',
-    ...((spec.redesigned_sections ?? []).map(s => `${s.title}: ${s.body}`)),
-  ];
-  const text = sources.filter(Boolean).join('\n');
+  // Set-based join: raw_text_excerpt already contains about.body and the
+  // redesigned_sections, so a list-join would scan the same characters twice.
+  // The dedupe set keys on the raw source-string identity (cheapest cap on
+  // double-counting); the per-name `seen` set below still handles overlap
+  // when separate sources mention the same person.
+  const sources = new Set<string>();
+  if (spec.raw_text_excerpt) sources.add(spec.raw_text_excerpt);
+  if (spec.about?.body) sources.add(spec.about.body);
+  if (spec.tagline) sources.add(spec.tagline);
+  for (const s of (spec.redesigned_sections ?? [])) {
+    sources.add(`${s.title}: ${s.body}`);
+  }
+  const text = Array.from(sources).join('\n');
 
   // Use matchAll instead of stateful .exec() — same result, no shared state risk.
   const ROLE_RE = /\b(Obmann(?:[-\s]?Stellvertreter)?|Obfrau(?:[-\s]?Stellvertreter)?|Kapellmeister(?:[-\s]?Stellvertreter)?|Vorsitzender?|Vorstand|Schriftführer(?:in)?|Kassier(?:in)?|Trainer(?:in)?|Präsident(?:in)?|Stabführer(?:in)?|Jugendreferent(?:in)?)\b\s*[:\-—]\s*([A-ZÄÖÜ][a-zäöüß]+(?:[\s-][A-ZÄÖÜ][a-zäöüß]+){1,3})/g;
@@ -138,12 +144,17 @@ export function extractBoardMembers(spec: SiteSpec): Array<{ name: string; role:
  * am"), keeps the dedupe strict so the same fest doesn't show 3x.
  */
 export function extractEvents(spec: SiteSpec): Array<{ date: string; title: string; description?: string }> {
-  const sources: string[] = [
-    spec.raw_text_excerpt ?? '',
-    spec.about?.body ?? '',
-    ...((spec.redesigned_sections ?? []).map(s => `${s.title}\n${s.body}`)),
-  ];
-  const text = sources.filter(Boolean).join('\n');
+  // Dedupe sources before regex: raw_text_excerpt already contains the page
+  // body, and redesigned_sections are derived from the same upstream pool, so
+  // joining all four would scan many bytes twice. Set-based join keeps the
+  // single-pass match-cost down without losing any unique text.
+  const sources = new Set<string>();
+  if (spec.raw_text_excerpt) sources.add(spec.raw_text_excerpt);
+  if (spec.about?.body) sources.add(spec.about.body);
+  for (const s of (spec.redesigned_sections ?? [])) {
+    sources.add(`${s.title}\n${s.body}`);
+  }
+  const text = Array.from(sources).join('\n');
 
   // DD.MM.YYYY or DD.MM. with optional title context after a colon/dash/newline.
   // We deliberately don't try to handle written-out month names — too many
@@ -157,18 +168,20 @@ export function extractEvents(spec: SiteSpec): Array<{ date: string; title: stri
     const day = parseInt(m[1], 10);
     const month = parseInt(m[2], 10);
     if (day < 1 || day > 31 || month < 1 || month > 12) continue;
-    let year: number | null = null;
-    if (m[3]) {
-      year = parseInt(m[3], 10);
-      if (year < 100) year += 2000;
-      if (year < currentYear - 1 || year > currentYear + 3) continue;
-    }
+    // Year handling: REQUIRED — the "DD.MM. <title>" shape (no year) was
+    // surfacing as "upcoming" events even when the source page was years
+    // stale, because we had no anchor to filter against. Skipping yearless
+    // matches removes that whole class of false-future events. The
+    // 6000-char text_content always carries enough context for years on
+    // real Vereinsseiten; the trade-off is acceptable.
+    if (!m[3]) continue;
+    let year = parseInt(m[3], 10);
+    if (year < 100) year += 2000;
+    if (year < currentYear - 1 || year > currentYear + 3) continue;
     const rawTitle = m[4].trim().replace(/\s+/g, ' ');
     if (/stand vom|geändert|datenschutz|impressum|cookie|copyright|©/i.test(rawTitle)) continue;
     const title = rawTitle.length > 70 ? rawTitle.slice(0, 70).replace(/\s+\S*$/, '') + '…' : rawTitle;
-    const dateStr = year
-      ? `${String(day).padStart(2, '0')}.${String(month).padStart(2, '0')}.${year}`
-      : `${String(day).padStart(2, '0')}.${String(month).padStart(2, '0')}.`;
+    const dateStr = `${String(day).padStart(2, '0')}.${String(month).padStart(2, '0')}.${year}`;
     const key = `${dateStr}|${title.toLowerCase().slice(0, 30)}`;
     if (seen.has(key)) continue;
     seen.add(key);
@@ -272,10 +285,18 @@ export function renderSocialStrip(socials: Record<string, string> | undefined): 
 }
 
 export function renderRatingPill(spec: SiteSpec): string {
-  const rating = typeof spec.business?.rating === 'number' ? spec.business.rating : null;
-  const reviewCount = typeof spec.business?.review_count === 'number' ? spec.business.review_count : 0;
+  // isFinite guard: a scraped rating of NaN or Infinity passes the
+  // `typeof === 'number'` check but breaks the >=/< comparisons (NaN
+  // arithmetic returns false → silent no-render with no operator signal).
+  // Treat non-finite values the same as missing.
+  const rawRating = spec.business?.rating;
+  const rating = typeof rawRating === 'number' && Number.isFinite(rawRating) ? rawRating : null;
+  const rawCount = spec.business?.review_count;
+  const reviewCount = typeof rawCount === 'number' && Number.isFinite(rawCount) ? rawCount : 0;
   if (rating === null || rating < 4.0 || reviewCount < 5) return '';
-  const full = Math.round(rating);
+  // Clamp to a valid 1–5 stars range so even garbage values like 12.7
+  // produce a defensible label rather than 13 filled stars.
+  const full = Math.max(0, Math.min(5, Math.round(rating)));
   const stars = '★'.repeat(full) + '☆'.repeat(5 - full);
   return `
 <div class="hero-rating" role="img" aria-label="Google-Bewertung ${rating.toFixed(1)} von 5 Sternen, basierend auf ${reviewCount} Bewertungen">
@@ -341,6 +362,16 @@ export function renderEventsSection(events: Array<{ date: string; title: string;
  *                     --bg, --display, --serif.
  * Each verein-* host template declares these — fallbacks are baked in for
  * defensive rendering should a variable ever be missing.
+ *
+ * SECURITY ASSUMPTION: every caller of this block MUST guarantee that the
+ * values landing in --primary / --accent / --secondary are normalised hex
+ * strings produced by `normalizeHex` in the orchestrator. CSS `color-mix()`
+ * happily parses anything — a raw scraped value like `red; background:
+ * url(javascript:…)` interpolated into `var(--primary)` would land inside
+ * the `color-mix(in oklch, var(--primary) 8%, white)` expressions below
+ * and could break out via CSS-property injection. The orchestrator
+ * `normalizeHex` (see orchestrator.ts) enforces /^#([0-9a-f]{3,6})$/i;
+ * keep that contract or this block becomes a CSSi sink.
  */
 export const EDITORIAL_CSS = `
 .section.tone-cream  { background: var(--bg);    color: var(--ink); }
