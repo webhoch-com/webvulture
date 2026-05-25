@@ -476,18 +476,18 @@ export function renderStandardPage(spec: SiteSpec, slug: string): string {
     </div>
 
     <div class="hero-meta reveal">
-      <div class="hero-meta-item">
+      ${foundedYear ? `<div class="hero-meta-item">
         <div class="lbl">Erfahrung</div>
-        <div class="val">&lt;&lt;Jahre&gt;&gt;<span>+</span></div>
-      </div>
-      <div class="hero-meta-item">
-        <div class="lbl">Projekte</div>
-        <div class="val">&lt;&lt;Anzahl&gt;&gt;<span>+</span></div>
-      </div>
-      <div class="hero-meta-item">
-        <div class="lbl">Region</div>
-        <div class="val">&lt;&lt;Region&gt;&gt;<span>.</span></div>
-      </div>
+        <div class="val">${new Date().getFullYear() - foundedYear}<span>+</span></div>
+      </div>` : ''}
+      ${spec.business?.review_count && spec.business.review_count >= 5 ? `<div class="hero-meta-item">
+        <div class="lbl">Bewertungen</div>
+        <div class="val">${spec.business.review_count}<span>+</span></div>
+      </div>` : ''}
+      ${spec.contact?.address ? `<div class="hero-meta-item">
+        <div class="lbl">Standort</div>
+        <div class="val">${escapeHtml((spec.contact.address.match(/\b\d{4,5}\s+([A-ZÄÖÜ][\wäöüÄÖÜß-]+)/) || ['', 'Region'])[1])}<span>.</span></div>
+      </div>` : ''}
       <div class="hero-meta-item">
         <div class="lbl">Erstgespräch</div>
         <div class="val">Kostenfrei<span>.</span></div>
@@ -524,7 +524,7 @@ ${renderTrustBar(trustStats)}
   <div class="showcase-inner">
     <div class="reveal">
       <h2>Persönlich, <em>ehrlich, präzise</em>.</h2>
-      <p>${escapeHtml(spec.about?.body || 'Seit &lt;&lt;Jahren&gt;&gt; begleiten wir Unternehmen aus &lt;&lt;Region&gt;&gt; und Umgebung. Unser Anspruch: Lösungen, die wirken — keine Buzzwords, keine Hochglanz-Fassade.')}</p>
+      <p>${escapeHtml(spec.about?.body || 'Wir begleiten Unternehmen aus der Region und Umgebung. Unser Anspruch: Lösungen, die wirken — keine Buzzwords, keine Hochglanz-Fassade.')}</p>
       <ul>
         <li>Festpreise und transparente Kalkulation</li>
         <li>Persönlicher Ansprechpartner während des gesamten Projekts</li>
@@ -560,12 +560,12 @@ ${renderTrustBar(trustStats)}
   </div>
 </section>
 
+${pullQuote ? `
 <section class="quote-banner reveal">
-  <blockquote>
-    Sie liefern, was Sie versprechen — und das in einem Tonfall, der Vertrauen schafft. Genau das suchten wir.
-  </blockquote>
-  <div class="author"><strong>&lt;&lt;Kundenname&gt;&gt;</strong> · &lt;&lt;Position&gt;&gt; · ${address ? address.split(',')[0] : '&lt;&lt;Ort&gt;&gt;'}</div>
+  <blockquote>${escapeHtml(pullQuote)}</blockquote>
+  <div class="author">— ${businessName}</div>
 </section>
+` : ''}
 
 <section id="kontakt" class="contact-section">
   <div class="contact-card reveal">
