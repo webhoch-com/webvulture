@@ -173,6 +173,11 @@ export function extractEvents(spec: SiteSpec): Array<{ date: string; title: stri
   const currentYear = new Date().getFullYear();
   const seen = new Set<string>();
   const out: Array<{ date: string; title: string; description?: string }> = [];
+  // Counters so operators see "we found 14 dates, kept 0" patterns and can
+  // tell whether the regex / filter is too aggressive on a particular site.
+  let droppedYearless = 0;
+  let droppedOutOfRange = 0;
+  let droppedChrome = 0;
   for (const m of text.matchAll(DATE_RE)) {
     const day = parseInt(m[1], 10);
     const month = parseInt(m[2], 10);
@@ -183,12 +188,12 @@ export function extractEvents(spec: SiteSpec): Array<{ date: string; title: stri
     // matches removes that whole class of false-future events. The
     // 6000-char text_content always carries enough context for years on
     // real Vereinsseiten; the trade-off is acceptable.
-    if (!m[3]) continue;
+    if (!m[3]) { droppedYearless += 1; continue; }
     let year = parseInt(m[3], 10);
     if (year < 100) year += 2000;
-    if (year < currentYear - 1 || year > currentYear + 3) continue;
+    if (year < currentYear - 1 || year > currentYear + 3) { droppedOutOfRange += 1; continue; }
     const rawTitle = m[4].trim().replace(/\s+/g, ' ');
-    if (/stand vom|geändert|datenschutz|impressum|cookie|copyright|©/i.test(rawTitle)) continue;
+    if (/stand vom|geändert|datenschutz|impressum|cookie|copyright|©/i.test(rawTitle)) { droppedChrome += 1; continue; }
     const title = rawTitle.length > 70 ? rawTitle.slice(0, 70).replace(/\s+\S*$/, '') + '…' : rawTitle;
     const dateStr = `${String(day).padStart(2, '0')}.${String(month).padStart(2, '0')}.${year}`;
     const key = `${dateStr}|${title.toLowerCase().slice(0, 30)}`;
@@ -196,6 +201,17 @@ export function extractEvents(spec: SiteSpec): Array<{ date: string; title: stri
     seen.add(key);
     out.push({ date: dateStr, title });
     if (out.length >= 4) break;
+  }
+  // Only log when the scraper found dates AND we kept none of them — the
+  // common "we found 0 dates" case is silent (most Vereine just don't list
+  // dated events on their homepage). Pattern in 1-of-1 case is the same as
+  // board: useful for operators tuning the regex.
+  const totalDropped = droppedYearless + droppedOutOfRange + droppedChrome;
+  if (out.length === 0 && totalDropped > 0) {
+    // eslint-disable-next-line no-console
+    console.warn('[editorial.extractor] events_all_suppressed', JSON.stringify({
+      yearless: droppedYearless, out_of_range: droppedOutOfRange, chrome: droppedChrome,
+    }));
   }
   return out;
 }
