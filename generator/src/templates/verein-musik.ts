@@ -24,6 +24,7 @@ import {
   renderRatingPill,
   renderBoardSection,
   renderEventsSection,
+  renderHeritageStatement,
   EDITORIAL_CSS,
 } from './_editorial.js';
 
@@ -796,6 +797,8 @@ ${marqueeItems.length > 0 ? `
   <div class="marquee-track">${marqueeItems.map(i => `<span>${escapeHtml(i)}</span>`).join('')}</div>
 </div>
 ` : ''}
+
+${renderHeritageStatement(spec, foundedYear)}
 
 ${events.length > 0 ? `
 <div class="section-anchor-wrap on-dark"><span class="section-anchor">${nextAnchor()}</span></div>

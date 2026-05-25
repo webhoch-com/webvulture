@@ -354,6 +354,38 @@ export function renderSocialStrip(socials: Record<string, string> | undefined): 
   return `<div class="vf-socials">${links}</div>`;
 }
 
+/**
+ * Heritage-Statement: large editorial block right under the hero that
+ * makes the club's identity feel rooted before any service-grid begins.
+ * Based on research of premium Amateur-Musikvereine (Speckbacher Hall,
+ * Algunder, Lana) which all open with a "we are X since Y" anchor.
+ *
+ * Format: "Wir spielen seit YYYY · stadtname" in display-serif as a
+ * single hero-sized statement. Falls back gracefully when founding year
+ * isn't extractable.
+ */
+export function renderHeritageStatement(spec: SiteSpec, foundedYear: number | null): string {
+  if (!foundedYear) return '';
+  const years = new Date().getFullYear() - foundedYear;
+  if (years <= 0) return '';
+  // Try to extract the city from the address
+  let city = '';
+  if (spec.contact?.address) {
+    const m = spec.contact.address.match(/\b\d{4,5}\s+([A-ZÄÖÜ][\wäöüÄÖÜß-]+(?:\s+(?:am|im|an|bei|ob|in|der|auf)\s+[A-ZÄÖÜ][\wäöüÄÖÜß-]+)?)/);
+    if (m) city = m[1].trim().split(/[,\n]/)[0].trim();
+  }
+  const statement = city
+    ? `Seit <em>${foundedYear}</em> in ${escapeHtml(city)}.`
+    : `Seit <em>${foundedYear}</em> in der Region.`;
+  return `
+<section class="heritage-statement">
+  <div class="heritage-inner">
+    <span class="heritage-kicker">${years} Jahre Tradition</span>
+    <h2 class="heritage-headline">${statement}</h2>
+  </div>
+</section>`;
+}
+
 export function renderRatingPill(spec: SiteSpec): string {
   // isFinite guard: a scraped rating of NaN or Infinity passes the
   // `typeof === 'number'` check but breaks the >=/< comparisons (NaN
@@ -869,4 +901,28 @@ export const EDITORIAL_CSS = `
   transition: background .2s, transform .2s;
 }
 .nl-button:hover { background: var(--primary-deep, #000); transform: translateY(-2px); }
+
+/* Heritage-Statement (Algunder/Speckbacher pattern). Tall block right
+   after hero. Big italic-year as the rooted anchor. */
+.heritage-statement {
+  padding: clamp(5rem, 10vw, 8rem) 1.5rem;
+  text-align: center;
+  background: var(--bg, #fff);
+}
+.heritage-inner { max-width: 1100px; margin: 0 auto; }
+.heritage-kicker {
+  display: inline-block; font-family: var(--display, Georgia, serif);
+  font-size: 0.82rem; letter-spacing: 0.22em; text-transform: uppercase;
+  color: var(--accent, #b8893d); font-weight: 600;
+  margin-bottom: 1.5rem;
+  padding: 0.4rem 1rem; border: 1px solid var(--accent, #b8893d);
+  border-radius: 999px;
+}
+.heritage-headline {
+  font-family: var(--display, Georgia, serif); font-weight: 500;
+  font-size: clamp(2.5rem, 7vw, 6rem); line-height: 1.05;
+  letter-spacing: -0.025em; color: var(--ink, #1a1a1a);
+  max-width: 22ch; margin: 0 auto;
+}
+.heritage-headline em { font-style: italic; color: var(--primary, #2d4a32); font-weight: 500; }
 `;
