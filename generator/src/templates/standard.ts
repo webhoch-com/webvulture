@@ -8,23 +8,59 @@
 import type { SiteSpec } from '../types.js';
 import { renderSeoHead } from './_seo.js';
 import { getGalleryImage } from './_media.js';
-
-function escapeHtml(s: string): string {
-  return String(s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
+import { getBranchPreset } from './_branch_presets.js';
+import {
+  escapeHtml,
+  extractFoundedYear,
+  buildMarqueeItems,
+  pickPullQuote,
+  renderMarquee,
+  renderPullQuote,
+  renderRatingPill,
+  renderQuietFooter,
+  renderTrustBar,
+  EDITORIAL_CSS,
+} from './_editorial.js';
 
 function workPhoto(spec: SiteSpec, slug: string, idx: number, w = 800, h = 600): string {
   return getGalleryImage(spec, slug, idx, w, h);
 }
 
 export function renderStandardPage(spec: SiteSpec, slug: string): string {
+  const PRESET = getBranchPreset('standard');
+  const primary = spec.brand.primary_color || PRESET.primary;
+  const secondary = spec.brand.secondary_color || PRESET.secondary;
+  const accent = spec.brand.accent_color || PRESET.accent;
+  const headingFont = spec.brand.heading_font_family
+    ? `'${spec.brand.heading_font_family}', ${PRESET.display_font}`
+    : PRESET.display_font;
+  const bodyFont = spec.brand.body_font_family
+    ? `'${spec.brand.body_font_family}', ${PRESET.body_font}`
+    : PRESET.body_font;
+  const fontImports = (spec.brand?.font_imports && spec.brand.font_imports.length > 0)
+    ? spec.brand.font_imports
+    : PRESET.font_imports;
+  const fontImportTags = fontImports
+    .map(u => `<link rel="stylesheet" href="${escapeHtml(u)}" crossorigin>`).join('\n  ');
+
   const businessName = escapeHtml(spec.business_name);
   const tagline = spec.tagline;
   const headline = spec.hero.headline;
   const subhead = escapeHtml(spec.hero.subheadline);
-  const ctaText = escapeHtml(spec.hero.cta_text || 'Kontakt aufnehmen');
+  const ctaText = escapeHtml(spec.hero.cta_text || PRESET.cta_text);
+
+  const foundedYear = extractFoundedYear(spec);
+  const marqueeItems = buildMarqueeItems(spec, foundedYear);
+  const pullQuote = pickPullQuote(spec);
+
+  const trustStats: Array<{ value: string; label: string }> = [];
+  if (foundedYear) {
+    const years = new Date().getFullYear() - foundedYear;
+    if (years > 0) trustStats.push({ value: `${years}+`, label: 'Jahre Erfahrung' });
+  }
+  if (spec.business?.rating && spec.business?.review_count && spec.business.review_count >= 5) {
+    trustStats.push({ value: `${spec.business.rating.toFixed(1).replace('.', ',')} ★`, label: `${spec.business.review_count} Bewertungen` });
+  }
 
   const services = spec.services && spec.services.length >= 3 ? spec.services : [
     { name: 'Beratung', description: 'Wir hören zu — kostenlos und unverbindlich. 30 Minuten reichen oft, um Klarheit zu schaffen.' },
@@ -52,22 +88,24 @@ export function renderStandardPage(spec: SiteSpec, slug: string): string {
 <html lang="de">
 <head>
   ${renderSeoHead(spec, { slug, schemaKind: 'LocalBusiness' })}
-  <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
-  <link href="https://fonts.bunny.net/css?family=inter:400,500,600,700,800|jetbrains-mono:400,500&display=swap" rel="stylesheet">
+  ${fontImportTags}
   <style is:global>
     :root {
-      --bg: #fbfbfd;            /* almost-white */
+      --bg: ${PRESET.bg};
       --bg-2: #f3f4f8;
       --surface: #ffffff;
-      --primary: #4f46e5;       /* indigo */
-      --primary-soft: #e0e7ff;
-      --primary-deep: #3730a3;
-      --accent: #f59e0b;        /* amber for highlight */
-      --ink: #0f172a;           /* slate-900 */
+      --primary: ${escapeHtml(primary)};
+      --primary-soft: color-mix(in oklch, ${escapeHtml(primary)} 14%, white);
+      --primary-deep: color-mix(in oklch, ${escapeHtml(primary)} 70%, black);
+      --secondary: ${escapeHtml(secondary)};
+      --accent: ${escapeHtml(accent)};
+      --ink: ${PRESET.ink};
       --ink-2: #475569;         /* slate-600 */
       --ink-3: #94a3b8;         /* slate-400 */
       --rule: rgba(15,23,42,0.08);
-      --sans: 'Inter', system-ui, sans-serif;
+      --display: ${headingFont};
+      --serif: ${headingFont};
+      --sans: ${bodyFont};
       --mono: 'JetBrains Mono', ui-monospace, monospace;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -393,6 +431,8 @@ export function renderStandardPage(spec: SiteSpec, slug: string): string {
     .reveal { opacity: 1; transform: none; }
     /* visible by default */
     @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1 !important; transform: none !important; } }
+
+    ${EDITORIAL_CSS}
   </style>
 </head>
 <body>
@@ -429,6 +469,7 @@ export function renderStandardPage(spec: SiteSpec, slug: string): string {
     <span class="hero-tagline reveal"><span class="hero-tagline-dot"></span>${escapeHtml(tagline.slice(0, 60))}</span>
     <h1 class="reveal">${escapeHtml(headline.replace(/(\.|!|\?)([^.!?]*)$/, '|$1$2|')).replace(/\|([^|]+)\|/, '<em>$1</em>')}</h1>
     <p class="reveal">${subhead}</p>
+    ${renderRatingPill(spec)}
     <div class="hero-cta-row reveal">
       <a href="#kontakt" class="btn-primary">${ctaText} <span aria-hidden="true">→</span></a>
       <a href="#leistungen" class="btn-secondary">Leistungen ansehen <span aria-hidden="true">↓</span></a>
@@ -454,6 +495,10 @@ export function renderStandardPage(spec: SiteSpec, slug: string): string {
     </div>
   </div>
 </section>
+
+${renderMarquee(marqueeItems)}
+
+${renderTrustBar(trustStats)}
 
 <section id="leistungen" class="section">
   <div class="container">
@@ -546,64 +591,15 @@ export function renderStandardPage(spec: SiteSpec, slug: string): string {
   </div>
 </section>
 
-<footer class="site-footer">
-  <div class="footer-inner">
-    <div class="footer-grid">
-      <div class="footer-col footer-brand">
-        <h3><span class="dot"></span>${businessName}</h3>
-        <p>${escapeHtml(tagline)}</p>
-        <a href="#kontakt" class="footer-cta">
-          ${ctaText}
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
-        </a>
-      </div>
+${renderPullQuote(pullQuote, spec.business_name)}
 
-      <div class="footer-col">
-        <h4>Navigation</h4>
-        <ul>
-          <li><a href="#leistungen">Leistungen</a></li>
-          <li><a href="#ablauf">Ablauf</a></li>
-          <li><a href="#ueber">Über uns</a></li>
-          <li><a href="#kontakt">Kontakt</a></li>
-        </ul>
-      </div>
-
-      <div class="footer-col">
-        <h4>Kontakt</h4>
-        <ul>
-          ${phone ? `<li>
-            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-            <a href="tel:${phone.replace(/\s/g, '')}">${phone}</a>
-          </li>` : ''}
-          ${email ? `<li>
-            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-            <a href="mailto:${email}">${email}</a>
-          </li>` : ''}
-          ${address ? `<li style="align-items:flex-start">
-            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="margin-top:0.2rem"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-            <span>${address}</span>
-          </li>` : ''}
-        </ul>
-      </div>
-
-      <div class="footer-col">
-        <h4>Rechtliches</h4>
-        <ul>
-          <li><a href="/impressum">Impressum</a></li>
-          <li><a href="/datenschutz">Datenschutz</a></li>
-          ${email ? `<li><a href="mailto:${email}?subject=AGB">AGB anfragen</a></li>` : ''}
-        </ul>
-      </div>
-    </div>
-
-    <div class="footer-bottom">
-      <span>&copy; ${new Date().getFullYear()} ${businessName} · Alle Rechte vorbehalten.</span>
-      <span class="footer-credit">
-        Demo erstellt von <a href="https://webhoch.com" target="_blank" rel="noopener">Webagentur Hochmeir e.U.</a>
-      </span>
-    </div>
-  </div>
-</footer>
+${renderQuietFooter({
+  businessName: spec.business_name,
+  tagline: spec.tagline,
+  ctaText,
+  ctaHref: '#kontakt',
+  socials: spec.socials,
+})}
 
 <script>
   const io = new IntersectionObserver((entries) => {

@@ -7,23 +7,59 @@
 import type { SiteSpec } from '../types.js';
 import { renderSeoHead } from './_seo.js';
 import { getGalleryImage, getHeroImage } from './_media.js';
-
-function escapeHtml(s: string): string {
-  return String(s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
+import { getBranchPreset } from './_branch_presets.js';
+import {
+  escapeHtml,
+  extractFoundedYear,
+  buildMarqueeItems,
+  pickPullQuote,
+  renderMarquee,
+  renderPullQuote,
+  renderRatingPill,
+  renderQuietFooter,
+  renderTrustBar,
+  EDITORIAL_CSS,
+} from './_editorial.js';
 
 function workPhoto(spec: SiteSpec, slug: string, idx: number, w = 800, h = 1000): string {
   return getGalleryImage(spec, slug, idx, w, h);
 }
 
 export function renderGaleriePage(spec: SiteSpec, slug: string): string {
+  const PRESET = getBranchPreset('galerie');
+  const primary = spec.brand.primary_color || PRESET.primary;
+  const secondary = spec.brand.secondary_color || PRESET.secondary;
+  const accent = spec.brand.accent_color || PRESET.accent;
+  const headingFont = spec.brand.heading_font_family
+    ? `'${spec.brand.heading_font_family}', ${PRESET.display_font}`
+    : PRESET.display_font;
+  const bodyFont = spec.brand.body_font_family
+    ? `'${spec.brand.body_font_family}', ${PRESET.body_font}`
+    : PRESET.body_font;
+  const fontImports = (spec.brand?.font_imports && spec.brand.font_imports.length > 0)
+    ? spec.brand.font_imports
+    : PRESET.font_imports;
+  const fontImportTags = fontImports
+    .map(u => `<link rel="stylesheet" href="${escapeHtml(u)}" crossorigin>`).join('\n  ');
+
   const businessName = escapeHtml(spec.business_name);
   const tagline = spec.tagline; // pre-escaped at use sites
   const headline = escapeHtml(spec.hero.headline);
   const subhead = escapeHtml(spec.hero.subheadline);
-  const ctaText = escapeHtml(spec.hero.cta_text || 'Anfrage senden');
+  const ctaText = escapeHtml(spec.hero.cta_text || PRESET.cta_text);
+
+  const foundedYear = extractFoundedYear(spec);
+  const marqueeItems = buildMarqueeItems(spec, foundedYear);
+  const pullQuote = pickPullQuote(spec);
+
+  const trustStats: Array<{ value: string; label: string }> = [];
+  if (foundedYear) {
+    const years = new Date().getFullYear() - foundedYear;
+    if (years > 0) trustStats.push({ value: `${years}+`, label: 'Jahre Erfahrung' });
+  }
+  if (spec.business?.rating && spec.business?.review_count && spec.business.review_count >= 5) {
+    trustStats.push({ value: `${spec.business.rating.toFixed(1).replace('.', ',')} ★`, label: `${spec.business.review_count} Bewertungen` });
+  }
 
   const services = spec.services && spec.services.length >= 3 ? spec.services : [
     { name: 'Hochzeit', description: 'Reportage-Stil, ungestellt — wir fangen den Moment.' },
@@ -43,19 +79,22 @@ export function renderGaleriePage(spec: SiteSpec, slug: string): string {
 <html lang="de">
 <head>
   ${renderSeoHead(spec, { slug, schemaKind: 'LocalBusiness' })}
-  <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
-  <link href="https://fonts.bunny.net/css?family=fraunces:400,500,600,700,800,900|inter:400,500,600&display=swap" rel="stylesheet">
+  ${fontImportTags}
   <style>
     :root {
-      --bg: #0a0a0a;
+      --bg: ${PRESET.bg};
       --surface: #141414;
-      --ink: #f5f5f4;
+      --ink: ${PRESET.ink};
       --ink-2: rgba(245,245,244,0.65);
       --ink-3: rgba(245,245,244,0.4);
       --rule: rgba(255,255,255,0.10);
-      --accent: #e8c97a;       /* warm gold accent */
-      --display: 'Fraunces', 'Georgia', serif;
-      --sans: 'Inter', system-ui, sans-serif;
+      --primary: ${escapeHtml(primary)};
+      --primary-deep: color-mix(in oklch, ${escapeHtml(primary)} 70%, black);
+      --secondary: ${escapeHtml(secondary)};
+      --accent: ${escapeHtml(accent)};
+      --display: ${headingFont};
+      --serif: ${headingFont};
+      --sans: ${bodyFont};
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html { scroll-behavior: smooth; }
@@ -282,6 +321,8 @@ export function renderGaleriePage(spec: SiteSpec, slug: string): string {
     .reveal { opacity: 1; transform: none; }
     /* visible by default */
     @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1 !important; transform: none !important; } .scroll-hint { animation: none; } }
+
+    ${EDITORIAL_CSS}
   </style>
 </head>
 <body>
@@ -318,6 +359,7 @@ export function renderGaleriePage(spec: SiteSpec, slug: string): string {
     <div class="hero-eyebrow">${escapeHtml(tagline.slice(0, 80))}</div>
     <h1>${headline.replace(/(\.|\?|!)([^.?!]*)$/, '<em>$1$2</em>')}</h1>
     <p>${subhead}</p>
+    ${renderRatingPill(spec)}
     <div class="ctas">
       <a href="#kontakt" class="btn-primary">${ctaText}</a>
       <a href="#work" class="btn-ghost">Arbeiten ansehen</a>
@@ -325,6 +367,10 @@ export function renderGaleriePage(spec: SiteSpec, slug: string): string {
   </div>
   <div class="scroll-hint">Scrollen</div>
 </section>
+
+${renderMarquee(marqueeItems)}
+
+${renderTrustBar(trustStats)}
 
 <section id="work" class="work-section">
   <div class="work-head reveal">
@@ -405,14 +451,15 @@ export function renderGaleriePage(spec: SiteSpec, slug: string): string {
   </div>
 </section>
 
-<footer>
-  <div class="brand">${businessName}</div>
-  <div>${escapeHtml(tagline)}</div>
-  <div class="legal">
-    <a href="/impressum">Impressum</a>
-    <a href="/datenschutz">Datenschutz</a>
-  </div>
-</footer>
+${renderPullQuote(pullQuote, spec.business_name)}
+
+${renderQuietFooter({
+  businessName: spec.business_name,
+  tagline: spec.tagline,
+  ctaText,
+  ctaHref: '#kontakt',
+  socials: spec.socials,
+})}
 
 <script>
   const io = new IntersectionObserver((entries) => {

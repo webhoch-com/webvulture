@@ -7,23 +7,59 @@
 import type { SiteSpec } from '../types.js';
 import { getGalleryImage, getHeroImage } from './_media.js';
 import { renderSeoHead } from './_seo.js';
-
-function escapeHtml(s: string): string {
-  return String(s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
+import { getBranchPreset } from './_branch_presets.js';
+import {
+  escapeHtml,
+  extractFoundedYear,
+  buildMarqueeItems,
+  pickPullQuote,
+  renderMarquee,
+  renderPullQuote,
+  renderRatingPill,
+  renderQuietFooter,
+  renderTrustBar,
+  EDITORIAL_CSS,
+} from './_editorial.js';
 
 function projectPhoto(spec: SiteSpec, slug: string, idx: number, w = 800, h = 600): string {
   return getGalleryImage(spec, slug, idx, w, h);
 }
 
 export function renderHandwerkPage(spec: SiteSpec, slug: string): string {
+  const PRESET = getBranchPreset('handwerk');
+  const primary = spec.brand.primary_color || PRESET.primary;
+  const secondary = spec.brand.secondary_color || PRESET.secondary;
+  const accent = spec.brand.accent_color || PRESET.accent;
+  const headingFont = spec.brand.heading_font_family
+    ? `'${spec.brand.heading_font_family}', ${PRESET.display_font}`
+    : PRESET.display_font;
+  const bodyFont = spec.brand.body_font_family
+    ? `'${spec.brand.body_font_family}', ${PRESET.body_font}`
+    : PRESET.body_font;
+  const fontImports = (spec.brand?.font_imports && spec.brand.font_imports.length > 0)
+    ? spec.brand.font_imports
+    : PRESET.font_imports;
+  const fontImportTags = fontImports
+    .map(u => `<link rel="stylesheet" href="${escapeHtml(u)}" crossorigin>`).join('\n  ');
+
   const businessName = escapeHtml(spec.business_name);
   const tagline = spec.tagline;
   const headline = spec.hero.headline;
   const subhead = escapeHtml(spec.hero.subheadline);
-  const ctaText = escapeHtml(spec.hero.cta_text || 'Festpreis-Angebot anfragen');
+  const ctaText = escapeHtml(spec.hero.cta_text || PRESET.cta_text);
+
+  const foundedYear = extractFoundedYear(spec);
+  const marqueeItems = buildMarqueeItems(spec, foundedYear);
+  const pullQuote = pickPullQuote(spec);
+
+  const trustStats: Array<{ value: string; label: string }> = [];
+  if (foundedYear) {
+    const years = new Date().getFullYear() - foundedYear;
+    if (years > 0) trustStats.push({ value: `${years}+`, label: 'Jahre Erfahrung' });
+  }
+  if (spec.business?.rating && spec.business?.review_count && spec.business.review_count >= 5) {
+    trustStats.push({ value: `${spec.business.rating.toFixed(1).replace('.', ',')} ★`, label: `${spec.business.review_count} Bewertungen` });
+  }
 
   const services = spec.services && spec.services.length >= 3 ? spec.services : [
     { name: 'Innenanstrich', description: 'Wohnräume, Büros, Praxen — sauber, auf Termin.' },
@@ -44,21 +80,24 @@ export function renderHandwerkPage(spec: SiteSpec, slug: string): string {
 <html lang="de">
 <head>
   ${renderSeoHead(spec, { slug, schemaKind: 'LocalBusiness' })}
-  <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
-  <link href="https://fonts.bunny.net/css?family=oswald:400,500,600,700|inter:400,500,600,700&display=swap" rel="stylesheet">
+  ${fontImportTags}
   <style>
     :root {
-      --bg: #f5f2ee;          /* warm light grey */
+      --bg: ${PRESET.bg};
       --surface: #ffffff;
-      --primary: #c2410c;     /* burnt orange */
-      --primary-dark: #9a3412;
-      --ink: #1c1917;         /* near-black warm */
+      --primary: ${escapeHtml(primary)};
+      --primary-deep: color-mix(in oklch, ${escapeHtml(primary)} 70%, black);
+      --primary-dark: color-mix(in oklch, ${escapeHtml(primary)} 70%, black);
+      --secondary: ${escapeHtml(secondary)};
+      --accent: ${escapeHtml(accent)};
+      --ink: ${PRESET.ink};
       --ink-2: #44403c;
       --ink-3: #78716c;
       --rule: rgba(28,25,23,0.10);
       --signal: #facc15;      /* yellow accent for emergency */
-      --display: 'Oswald', 'Impact', sans-serif;
-      --sans: 'Inter', system-ui, sans-serif;
+      --display: ${headingFont};
+      --serif: ${headingFont};
+      --sans: ${bodyFont};
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html { scroll-behavior: smooth; }
@@ -344,6 +383,8 @@ export function renderHandwerkPage(spec: SiteSpec, slug: string): string {
     .reveal { opacity: 1; transform: none; }
     /* visible by default */
     @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1 !important; transform: none !important; } .notdienst .pulse { animation: none; } }
+
+    ${EDITORIAL_CSS}
   </style>
 </head>
 <body>
@@ -388,6 +429,7 @@ export function renderHandwerkPage(spec: SiteSpec, slug: string): string {
     <span class="hero-eyebrow">${escapeHtml(tagline.slice(0, 60))}</span>
     <h1>${escapeHtml(headline.replace(/(\.|!|\?)([^.!?]*)$/, '|$1$2|')).replace(/\|([^|]+)\|/, '<em>$1</em>')}</h1>
     <p>${subhead}</p>
+    ${renderRatingPill(spec)}
     <div class="hero-trust">
       <span class="hero-trust-item">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
@@ -409,6 +451,10 @@ export function renderHandwerkPage(spec: SiteSpec, slug: string): string {
   </div>
   <div class="hero-image" aria-hidden="true"></div>
 </section>
+
+${renderMarquee(marqueeItems)}
+
+${renderTrustBar(trustStats)}
 
 <section class="promise">
   <div class="promise-inner">
@@ -508,14 +554,15 @@ export function renderHandwerkPage(spec: SiteSpec, slug: string): string {
   </div>
 </section>
 
-<footer>
-  <div class="brand">${businessName}</div>
-  <div>${escapeHtml(tagline)}</div>
-  <div class="legal">
-    <a href="/impressum">Impressum</a>
-    <a href="/datenschutz">Datenschutz</a>
-  </div>
-</footer>
+${renderPullQuote(pullQuote, spec.business_name)}
+
+${renderQuietFooter({
+  businessName: spec.business_name,
+  tagline: spec.tagline,
+  ctaText,
+  ctaHref: '#kontakt',
+  socials: spec.socials,
+})}
 
 <script>
   const io = new IntersectionObserver((entries) => {

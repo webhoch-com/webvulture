@@ -14,19 +14,42 @@
 import type { SiteSpec } from '../types.js';
 import { getGalleryImage, getHeroImage, hasHeroImage, hasGalleryImages, galleryCount, getLogo, getFavicon } from './_media.js';
 import { renderSeoHead } from './_seo.js';
-
-function escapeHtml(s: string): string {
-  return String(s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
+import { getBranchPreset } from './_branch_presets.js';
+import {
+  escapeHtml,
+  extractFoundedYear,
+  buildMarqueeItems,
+  pickPullQuote,
+  renderMarquee,
+  renderPullQuote,
+  renderRatingPill,
+  renderQuietFooter,
+  renderTrustBar,
+  EDITORIAL_CSS,
+} from './_editorial.js';
 
 export function renderGolfclubPage(spec: SiteSpec, slug: string): string {
+  const PRESET = getBranchPreset('golfclub');
+  const primary = spec.brand.primary_color || PRESET.primary;
+  const secondary = spec.brand.secondary_color || PRESET.secondary;
+  const accent = spec.brand.accent_color || PRESET.accent;
+  const headingFont = spec.brand.heading_font_family
+    ? `'${spec.brand.heading_font_family}', ${PRESET.display_font}`
+    : PRESET.display_font;
+  const bodyFont = spec.brand.body_font_family
+    ? `'${spec.brand.body_font_family}', ${PRESET.body_font}`
+    : PRESET.body_font;
+  const fontImports = (spec.brand?.font_imports && spec.brand.font_imports.length > 0)
+    ? spec.brand.font_imports
+    : PRESET.font_imports;
+  const fontImportTags = fontImports
+    .map(u => `<link rel="stylesheet" href="${escapeHtml(u)}" crossorigin>`).join('\n  ');
+
   const businessName = escapeHtml(spec.business_name);
   const tagline = spec.tagline;
   const headline = spec.hero.headline;
   const subhead = escapeHtml(spec.hero.subheadline);
-  const ctaText = escapeHtml(spec.hero.cta_text || 'Probespiel anfragen');
+  const ctaText = escapeHtml(spec.hero.cta_text || PRESET.cta_text);
 
   const phone = spec.contact.phone ? escapeHtml(spec.contact.phone) : '';
   const email = spec.contact.email ? escapeHtml(spec.contact.email) : '';
@@ -37,7 +60,18 @@ export function renderGolfclubPage(spec: SiteSpec, slug: string): string {
   const openingHours = spec.opening_hours && spec.opening_hours.length > 0 ? spec.opening_hours.slice(0, 7) : [];
   const testimonials = spec.testimonials && spec.testimonials.length > 0 ? spec.testimonials.slice(0, 3) : [];
 
-  const primary = spec.brand?.primary_color || '#23423a';
+  const foundedYear = extractFoundedYear(spec);
+  const marqueeItems = buildMarqueeItems(spec, foundedYear);
+  const pullQuote = pickPullQuote(spec);
+
+  const trustStats: Array<{ value: string; label: string }> = [];
+  if (foundedYear) {
+    const years = new Date().getFullYear() - foundedYear;
+    if (years > 0) trustStats.push({ value: `${years}+`, label: 'Jahre Erfahrung' });
+  }
+  if (spec.business?.rating && spec.business?.review_count && spec.business.review_count >= 5) {
+    trustStats.push({ value: `${spec.business.rating.toFixed(1).replace('.', ',')} ★`, label: `${spec.business.review_count} Bewertungen` });
+  }
 
   return `---
 ---
@@ -45,23 +79,25 @@ export function renderGolfclubPage(spec: SiteSpec, slug: string): string {
 <html lang="de">
 <head>
   ${renderSeoHead(spec, { slug, schemaKind: 'GolfCourse' })}
-  <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
-  <link href="https://fonts.bunny.net/css?family=cormorant-garamond:400,500,600,700|inter:300,400,500,600&display=swap" rel="stylesheet">
+  ${fontImportTags}
   <style is:global>
     :root {
       --primary: ${escapeHtml(primary)};
       --primary-deep: color-mix(in oklch, ${escapeHtml(primary)} 70%, black);
-      --bg: #faf7f0;            /* parchment cream */
+      --secondary: ${escapeHtml(secondary)};
+      --accent: ${escapeHtml(accent)};
+      --bg: ${PRESET.bg};
       --bg-2: #f1ecdf;          /* deeper cream */
       --surface: #ffffff;
-      --ink: #1a2421;           /* dark forest */
+      --ink: ${PRESET.ink};
       --ink-2: #455046;
       --ink-3: #818a83;
-      --gold: #b89968;          /* brushed gold */
-      --gold-deep: #8b7142;
+      --gold: ${escapeHtml(accent)};
+      --gold-deep: color-mix(in oklch, ${escapeHtml(accent)} 70%, black);
       --rule: rgba(26,36,33,0.08);
-      --display: 'Cormorant Garamond', 'Times New Roman', serif;
-      --sans: 'Inter', system-ui, sans-serif;
+      --display: ${headingFont};
+      --serif: ${headingFont};
+      --sans: ${bodyFont};
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html { scroll-behavior: smooth; }
@@ -321,6 +357,8 @@ export function renderGolfclubPage(spec: SiteSpec, slug: string): string {
       .reveal { opacity: 1; transform: none; transition: none; }
       .gallery-item img { transition: none; }
     }
+
+    ${EDITORIAL_CSS}
   </style>
 </head>
 <body>
@@ -358,12 +396,17 @@ export function renderGolfclubPage(spec: SiteSpec, slug: string): string {
       <span class="hero-eyebrow">${escapeHtml(tagline)}</span>
       <h1>${escapeHtml(headline)}</h1>
       <p class="hero-sub">${subhead}</p>
+      ${renderRatingPill(spec)}
       <div class="hero-actions">
         <a href="#kontakt" class="btn-primary">${ctaText}</a>
         ${services.length > 0 ? `<a href="#angebot" class="btn-ghost">Mitgliedschaft &amp; Greenfee</a>` : ''}
       </div>
     </div>
   </section>
+
+  ${renderMarquee(marqueeItems)}
+
+  ${renderTrustBar(trustStats)}
 
   <section class="course-facts">
     <div class="course-facts-inner">
@@ -521,12 +564,15 @@ export function renderGolfclubPage(spec: SiteSpec, slug: string): string {
     </div>
   </section>
 
-  <footer class="footer">
-    <div class="footer-inner">
-      <div>© ${new Date().getFullYear()} ${businessName} · Alle Rechte vorbehalten</div>
-      <div>Demo erstellt von <a href="https://webhoch.com" target="_blank" rel="noopener">Webagentur Hochmeir e.U.</a></div>
-    </div>
-  </footer>
+  ${renderPullQuote(pullQuote, spec.business_name)}
+
+  ${renderQuietFooter({
+    businessName: spec.business_name,
+    tagline: spec.tagline,
+    ctaText,
+    ctaHref: '#kontakt',
+    socials: spec.socials,
+  })}
 
   <script>
     if ('IntersectionObserver' in window) {

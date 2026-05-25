@@ -9,12 +9,19 @@
 import type { SiteSpec } from '../types.js';
 import { renderSeoHead } from './_seo.js';
 import { getGalleryImage } from './_media.js';
-
-function escapeHtml(s: string): string {
-  return String(s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
+import { getBranchPreset } from './_branch_presets.js';
+import {
+  escapeHtml,
+  extractFoundedYear,
+  buildMarqueeItems,
+  pickPullQuote,
+  renderMarquee,
+  renderPullQuote,
+  renderRatingPill,
+  renderQuietFooter,
+  renderTrustBar,
+  EDITORIAL_CSS,
+} from './_editorial.js';
 
 function petPhoto(spec: SiteSpec, slug: string, idx: number, w = 800, h = 600): string {
   return getGalleryImage(spec, slug, idx, w, h);
@@ -27,11 +34,40 @@ function vetPortrait(name: string): string {
 }
 
 export function renderTierPage(spec: SiteSpec, slug: string): string {
+  const PRESET = getBranchPreset('tier');
+  const primary = spec.brand.primary_color || PRESET.primary;
+  const secondary = spec.brand.secondary_color || PRESET.secondary;
+  const accent = spec.brand.accent_color || PRESET.accent;
+  const headingFont = spec.brand.heading_font_family
+    ? `'${spec.brand.heading_font_family}', ${PRESET.display_font}`
+    : PRESET.display_font;
+  const bodyFont = spec.brand.body_font_family
+    ? `'${spec.brand.body_font_family}', ${PRESET.body_font}`
+    : PRESET.body_font;
+  const fontImports = (spec.brand?.font_imports && spec.brand.font_imports.length > 0)
+    ? spec.brand.font_imports
+    : PRESET.font_imports;
+  const fontImportTags = fontImports
+    .map(u => `<link rel="stylesheet" href="${escapeHtml(u)}" crossorigin>`).join('\n  ');
+
   const businessName = escapeHtml(spec.business_name);
   const tagline = spec.tagline;
   const headline = spec.hero.headline;
   const subhead = escapeHtml(spec.hero.subheadline);
-  const ctaText = escapeHtml(spec.hero.cta_text || 'Termin vereinbaren');
+  const ctaText = escapeHtml(spec.hero.cta_text || PRESET.cta_text);
+
+  const foundedYear = extractFoundedYear(spec);
+  const marqueeItems = buildMarqueeItems(spec, foundedYear);
+  const pullQuote = pickPullQuote(spec);
+
+  const trustStats: Array<{ value: string; label: string }> = [];
+  if (foundedYear) {
+    const years = new Date().getFullYear() - foundedYear;
+    if (years > 0) trustStats.push({ value: `${years}+`, label: 'Jahre Praxis' });
+  }
+  if (spec.business?.rating && spec.business?.review_count && spec.business.review_count >= 5) {
+    trustStats.push({ value: `${spec.business.rating.toFixed(1).replace('.', ',')} ★`, label: `${spec.business.review_count} Bewertungen` });
+  }
 
   const services = spec.services && spec.services.length >= 3 ? spec.services : [
     { name: 'Allgemeine Sprechstunde', description: 'Gründliche Untersuchung — vom Welpen bis zum Senior.' },
@@ -68,26 +104,28 @@ export function renderTierPage(spec: SiteSpec, slug: string): string {
 <html lang="de">
 <head>
   ${renderSeoHead(spec, { slug, schemaKind: 'VeterinaryCare' })}
+  ${fontImportTags}
   <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
-  <link href="https://fonts.bunny.net/css?family=fraunces:400,500,600|caveat:500,700|nunito:400,500,600,700&display=swap" rel="stylesheet">
+  <link href="https://fonts.bunny.net/css?family=caveat:500,700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #fbf6f0;            /* warm cream */
-      --bg-2: #f3ead9;          /* slightly darker cream */
+      --bg: ${PRESET.bg};
+      --bg-2: color-mix(in oklch, ${PRESET.bg} 60%, #f3ead9);
       --surface: #ffffff;
-      --primary: #c0633e;       /* warm terracotta */
-      --primary-soft: #f5e0d2;
-      --primary-deep: #8a3f22;
-      --secondary: #6b8e6b;     /* sage */
-      --secondary-soft: #d8e4d6;
-      --accent: #e8a838;        /* honey */
-      --ink: #2d1f17;           /* warm dark brown */
+      --primary: ${escapeHtml(primary)};
+      --primary-soft: color-mix(in oklch, ${escapeHtml(primary)} 14%, white);
+      --primary-deep: color-mix(in oklch, ${escapeHtml(primary)} 70%, black);
+      --secondary: ${escapeHtml(secondary)};
+      --secondary-soft: color-mix(in oklch, ${escapeHtml(secondary)} 14%, white);
+      --accent: ${escapeHtml(accent)};
+      --ink: ${PRESET.ink};
       --ink-2: #5a4a3d;
       --ink-3: #8e7d6e;
       --rule: rgba(45,31,23,0.08);
-      --display: 'Fraunces', Georgia, serif;
+      --display: ${headingFont};
+      --serif: ${headingFont};
       --hand: 'Caveat', cursive;
-      --sans: 'Nunito', system-ui, sans-serif;
+      --sans: ${bodyFont};
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html { scroll-behavior: smooth; }
@@ -369,6 +407,8 @@ export function renderTierPage(spec: SiteSpec, slug: string): string {
     .reveal { opacity: 1; transform: none; }
     /* visible by default */
     @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1 !important; transform: none !important; } }
+
+    ${EDITORIAL_CSS}
   </style>
 </head>
 <body>
@@ -406,13 +446,14 @@ export function renderTierPage(spec: SiteSpec, slug: string): string {
       <span class="hero-eyebrow">Mit Liebe & Sachverstand 🐾</span>
       <h1>${escapeHtml(headline.replace(/(\.|!|\?)([^.!?]*)$/, '|$1$2|')).replace(/\|([^|]+)\|/, '<em>$1</em>')}</h1>
       <p>${subhead}</p>
+      ${renderRatingPill(spec) || `
+      <div class="hero-trust">
+        <span class="hero-trust-stars">★★★★★</span>
+        <span>Ihre Lieblinge in besten Händen.</span>
+      </div>`}
       <div class="hero-cta-row">
         <a href="#kontakt" class="btn-primary">${ctaText} →</a>
         <a href="#leistungen" class="btn-secondary">Leistungen ansehen</a>
-      </div>
-      <div class="hero-trust">
-        <span class="hero-trust-stars">★★★★★</span>
-        <span>4,9 / 5 aus 312 Bewertungen — Ihre Lieblinge in besten Händen.</span>
       </div>
     </div>
 
@@ -428,6 +469,10 @@ export function renderTierPage(spec: SiteSpec, slug: string): string {
     </div>
   </div>
 </section>
+
+${renderMarquee(marqueeItems)}
+
+${renderTrustBar(trustStats)}
 
 <section class="animals-strip">
   <div class="container">
@@ -548,14 +593,15 @@ export function renderTierPage(spec: SiteSpec, slug: string): string {
   </div>
 </section>
 
-<footer>
-  <div class="brand"><span class="paw">🐾</span>${businessName}</div>
-  <div>${escapeHtml(tagline)}</div>
-  <div class="legal">
-    <a href="/impressum">Impressum</a>
-    <a href="/datenschutz">Datenschutz</a>
-  </div>
-</footer>
+${renderPullQuote(pullQuote, spec.business_name)}
+
+${renderQuietFooter({
+  businessName: spec.business_name,
+  tagline: spec.tagline,
+  ctaText,
+  ctaHref: '#kontakt',
+  socials: spec.socials,
+})}
 
 <script>
   const io = new IntersectionObserver((entries) => {

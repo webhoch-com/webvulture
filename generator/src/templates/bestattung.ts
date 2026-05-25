@@ -8,12 +8,19 @@
 import type { SiteSpec } from '../types.js';
 import { renderSeoHead } from './_seo.js';
 import { getHeroImage, getGalleryImage } from './_media.js';
-
-function escapeHtml(s: string): string {
-  return String(s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
+import { getBranchPreset } from './_branch_presets.js';
+import {
+  escapeHtml,
+  extractFoundedYear,
+  buildMarqueeItems,
+  pickPullQuote,
+  renderMarquee,
+  renderPullQuote,
+  renderRatingPill,
+  renderQuietFooter,
+  renderTrustBar,
+  EDITORIAL_CSS,
+} from './_editorial.js';
 
 function heroPhoto(spec: SiteSpec, slug: string): string {
   return getHeroImage(spec, slug, 1800, 1100);
@@ -24,11 +31,40 @@ function memoriamPhoto(spec: SiteSpec, slug: string): string {
 }
 
 export function renderBestattungPage(spec: SiteSpec, slug: string): string {
+  const PRESET = getBranchPreset('bestattung');
+  const primary = spec.brand.primary_color || PRESET.primary;
+  const secondary = spec.brand.secondary_color || PRESET.secondary;
+  const accent = spec.brand.accent_color || PRESET.accent;
+  const headingFont = spec.brand.heading_font_family
+    ? `'${spec.brand.heading_font_family}', ${PRESET.display_font}`
+    : PRESET.display_font;
+  const bodyFont = spec.brand.body_font_family
+    ? `'${spec.brand.body_font_family}', ${PRESET.body_font}`
+    : PRESET.body_font;
+  const fontImports = (spec.brand?.font_imports && spec.brand.font_imports.length > 0)
+    ? spec.brand.font_imports
+    : PRESET.font_imports;
+  const fontImportTags = fontImports
+    .map(u => `<link rel="stylesheet" href="${escapeHtml(u)}" crossorigin>`).join('\n  ');
+
   const businessName = escapeHtml(spec.business_name);
   const tagline = spec.tagline;
   const headline = spec.hero.headline;
   const subhead = escapeHtml(spec.hero.subheadline);
-  const ctaText = escapeHtml(spec.hero.cta_text || 'Beratung vereinbaren');
+  const ctaText = escapeHtml(spec.hero.cta_text || PRESET.cta_text);
+
+  const foundedYear = extractFoundedYear(spec);
+  const marqueeItems = buildMarqueeItems(spec, foundedYear);
+  const pullQuote = pickPullQuote(spec);
+
+  const trustStats: Array<{ value: string; label: string }> = [];
+  if (foundedYear) {
+    const years = new Date().getFullYear() - foundedYear;
+    if (years > 0) trustStats.push({ value: `${years}+`, label: 'Jahre Erfahrung' });
+  }
+  if (spec.business?.rating && spec.business?.review_count && spec.business.review_count >= 5) {
+    trustStats.push({ value: `${spec.business.rating.toFixed(1).replace('.', ',')} ★`, label: `${spec.business.review_count} Bewertungen` });
+  }
 
   const services = spec.services && spec.services.length >= 4 ? spec.services : [
     { name: 'Erstversorgung', description: 'Zu jeder Tages- und Nachtzeit erreichbar. Wir übernehmen die Überführung in unsere Räume.' },
@@ -72,21 +108,24 @@ export function renderBestattungPage(spec: SiteSpec, slug: string): string {
 <html lang="de">
 <head>
   ${renderSeoHead(spec, { slug, schemaKind: 'FuneralHome' })}
-  <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
-  <link href="https://fonts.bunny.net/css?family=cormorant-garamond:400,500,600|inter:300,400,500,600&display=swap" rel="stylesheet">
+  ${fontImportTags}
   <style is:global>
     :root {
-      --bg: #f8f7f3;
+      --bg: ${PRESET.bg};
       --bg-2: #efece5;
       --paper: #fdfdfb;
-      --ink: #1f2630;
+      --ink: ${PRESET.ink};
       --ink-2: #4a5260;
       --ink-3: #8a8e96;
-      --accent: #788392;
-      --accent-deep: #4d5764;
+      --primary: ${escapeHtml(primary)};
+      --primary-deep: color-mix(in oklch, ${escapeHtml(primary)} 70%, black);
+      --secondary: ${escapeHtml(secondary)};
+      --accent: ${escapeHtml(accent)};
+      --accent-deep: color-mix(in oklch, ${escapeHtml(accent)} 70%, black);
       --rule: rgba(31,38,48,0.10);
-      --serif: 'Cormorant Garamond', Georgia, serif;
-      --sans: 'Inter', system-ui, sans-serif;
+      --display: ${headingFont};
+      --serif: ${headingFont};
+      --sans: ${bodyFont};
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html { scroll-behavior: smooth; }
@@ -332,6 +371,8 @@ export function renderBestattungPage(spec: SiteSpec, slug: string): string {
     .reveal { opacity: 1; transform: none; }
     /* visible by default */
     @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1 !important; transform: none !important; } }
+
+    ${EDITORIAL_CSS}
   </style>
 </head>
 <body>
@@ -368,6 +409,7 @@ export function renderBestattungPage(spec: SiteSpec, slug: string): string {
     <span class="hero-eyebrow">${escapeHtml(tagline.slice(0, 60))}</span>
     <h1>${escapeHtml(headline.replace(/(\.|!|\?)([^.!?]*)$/, '|$1$2|')).replace(/\|([^|]+)\|/, '<em>$1</em>')}</h1>
     <p class="lead">${subhead}</p>
+    ${renderRatingPill(spec)}
     <div class="hero-actions">
       <a href="#kontakt" class="btn-primary">${ctaText}</a>
       <a href="#erste-schritte" class="btn-outline">Erste Schritte ansehen</a>
@@ -375,14 +417,16 @@ export function renderBestattungPage(spec: SiteSpec, slug: string): string {
   </div>
 </section>
 
-<section class="trust">
+${renderMarquee(marqueeItems)}
+
+${trustStats.length >= 2 ? renderTrustBar(trustStats) : `<section class="trust">
   <div class="trust-inner">
     <div class="trust-item"><strong>24 / 7</strong><span>Erreichbar</span></div>
     <div class="trust-item"><strong>40+ Jahre</strong><span>Erfahrung</span></div>
     <div class="trust-item"><strong>3 Generationen</strong><span>Familienbetrieb</span></div>
     <div class="trust-item"><strong>Mitglied</strong><span>Bestatter-Verband AT</span></div>
   </div>
-</section>
+</section>`}
 
 <section id="erste-schritte" class="section first-steps">
   <div class="container">
@@ -532,45 +576,15 @@ export function renderBestattungPage(spec: SiteSpec, slug: string): string {
   </div>
 </section>
 
-<footer class="site-footer">
-  <div class="footer-inner">
-    <div class="footer-grid">
-      <div class="footer-col footer-brand">
-        <h3>${businessName}</h3>
-        <p>${escapeHtml(tagline)}</p>
-        <a href="#kontakt" style="display:inline-flex;align-items:center;gap:0.5rem;padding:0.7rem 1.2rem;background:var(--accent);color:#fff;font-weight:500;font-size:0.86rem;letter-spacing:0.06em;text-transform:uppercase;border:1px solid var(--accent);transition:background .25s,color .25s;">${ctaText}</a>
-      </div>
-      <div class="footer-col">
-        <h4>Begleitung</h4>
-        <ul>
-          <li><a href="#erste-schritte">Erste Schritte</a></li>
-          <li><a href="#begleitung">Wie wir begleiten</a></li>
-          <li><a href="#bestattungsformen">Bestattungsformen</a></li>
-          <li><a href="#fragen">Häufige Fragen</a></li>
-        </ul>
-      </div>
-      <div class="footer-col">
-        <h4>Kontakt</h4>
-        <ul>
-          <li>${phone}</li>
-          <li><a href="mailto:${email}">${email}</a></li>
-          <li>${address}</li>
-        </ul>
-      </div>
-      <div class="footer-col">
-        <h4>Rechtliches</h4>
-        <ul>
-          <li><a href="/impressum">Impressum</a></li>
-          <li><a href="/datenschutz">Datenschutz</a></li>
-        </ul>
-      </div>
-    </div>
-    <div class="footer-bottom">
-      <span>&copy; ${new Date().getFullYear()} ${businessName} · Alle Rechte vorbehalten.</span>
-      <span class="footer-credit">Demo erstellt von <a href="https://webhoch.com" target="_blank" rel="noopener">Webagentur Hochmeir e.U.</a></span>
-    </div>
-  </div>
-</footer>
+${renderPullQuote(pullQuote, spec.business_name)}
+
+${renderQuietFooter({
+  businessName: spec.business_name,
+  tagline: spec.tagline,
+  ctaText,
+  ctaHref: '#kontakt',
+  socials: spec.socials,
+})}
 
 <script>
   const io = new IntersectionObserver((entries) => {

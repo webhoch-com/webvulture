@@ -7,12 +7,19 @@
 
 import type { SiteSpec } from '../types.js';
 import { renderSeoHead } from './_seo.js';
-
-function escapeHtml(s: string): string {
-  return String(s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
+import { getBranchPreset } from './_branch_presets.js';
+import {
+  escapeHtml,
+  extractFoundedYear,
+  buildMarqueeItems,
+  pickPullQuote,
+  renderMarquee,
+  renderPullQuote,
+  renderRatingPill,
+  renderQuietFooter,
+  renderTrustBar,
+  EDITORIAL_CSS,
+} from './_editorial.js';
 
 import { avatarPlaceholder, SYMBOLIC_TAG_CSS } from './_avatar.js';
 
@@ -23,11 +30,40 @@ function lawyerPhoto(name: string): string {
 }
 
 export function renderKanzleiPage(spec: SiteSpec, slug: string): string {
+  const PRESET = getBranchPreset('kanzlei');
+  const primary = spec.brand.primary_color || PRESET.primary;
+  const secondary = spec.brand.secondary_color || PRESET.secondary;
+  const accent = spec.brand.accent_color || PRESET.accent;
+  const headingFont = spec.brand.heading_font_family
+    ? `'${spec.brand.heading_font_family}', ${PRESET.display_font}`
+    : PRESET.display_font;
+  const bodyFont = spec.brand.body_font_family
+    ? `'${spec.brand.body_font_family}', ${PRESET.body_font}`
+    : PRESET.body_font;
+  const fontImports = (spec.brand?.font_imports && spec.brand.font_imports.length > 0)
+    ? spec.brand.font_imports
+    : PRESET.font_imports;
+  const fontImportTags = fontImports
+    .map(u => `<link rel="stylesheet" href="${escapeHtml(u)}" crossorigin>`).join('\n  ');
+
   const businessName = escapeHtml(spec.business_name);
   const tagline = escapeHtml(spec.tagline);
   const headline = escapeHtml(spec.hero.headline);
   const subhead = escapeHtml(spec.hero.subheadline);
-  const ctaText = escapeHtml(spec.hero.cta_text || 'Erstberatung anfragen');
+  const ctaText = escapeHtml(spec.hero.cta_text || PRESET.cta_text);
+
+  const foundedYear = extractFoundedYear(spec);
+  const marqueeItems = buildMarqueeItems(spec, foundedYear);
+  const pullQuote = pickPullQuote(spec);
+
+  const trustStats: Array<{ value: string; label: string }> = [];
+  if (foundedYear) {
+    const years = new Date().getFullYear() - foundedYear;
+    if (years > 0) trustStats.push({ value: `${years}+`, label: 'Jahre Kanzleierfahrung' });
+  }
+  if (spec.business?.rating && spec.business?.review_count && spec.business.review_count >= 5) {
+    trustStats.push({ value: `${spec.business.rating.toFixed(1).replace('.', ',')} ★`, label: `${spec.business.review_count} Mandanten-Bewertungen` });
+  }
 
   // Curated practice areas — fall back to spec.services
   const practiceAreas = (spec.services?.length ?? 0) >= 3 ? spec.services : [
@@ -61,19 +97,24 @@ export function renderKanzleiPage(spec: SiteSpec, slug: string): string {
 <html lang="de">
 <head>
   ${renderSeoHead(spec, { slug, schemaKind: 'LegalService' })}
-  <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
-  <link href="https://fonts.bunny.net/css?family=cormorant-garamond:400,500,600,700|inter:400,500,600,700&display=swap" rel="stylesheet">
+  ${fontImportTags}
   <style>
     :root {
-      --ink: #0f1729;          /* near-black navy */
+      --ink: ${PRESET.ink};
       --ink-2: #3a4256;
       --ink-3: #6b7280;
-      --paper: #f7f5f0;        /* warm cream */
-      --paper-2: #ece8df;
+      --paper: ${PRESET.bg};
+      --paper-2: color-mix(in oklch, ${PRESET.bg} 60%, #ece8df);
+      --bg: ${PRESET.bg};
+      --primary: ${escapeHtml(primary)};
+      --primary-deep: color-mix(in oklch, ${escapeHtml(primary)} 70%, black);
+      --secondary: ${escapeHtml(secondary)};
+      --accent: ${escapeHtml(accent)};
       --rule: rgba(15,23,41,0.14);
-      --gold: #a08146;         /* subtle warm accent */
-      --serif: 'Cormorant Garamond', 'Garamond', 'Times New Roman', serif;
-      --sans: 'Inter', system-ui, sans-serif;
+      --gold: ${escapeHtml(accent)};
+      --display: ${headingFont};
+      --serif: ${headingFont};
+      --sans: ${bodyFont};
       --col: 720px;            /* editorial reading column */
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -352,6 +393,8 @@ export function renderKanzleiPage(spec: SiteSpec, slug: string): string {
     .reveal { opacity: 1; transform: none; }
     /* visible by default */
     @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1 !important; transform: none !important; } }
+
+    ${EDITORIAL_CSS}
   </style>
 </head>
 <body>
@@ -387,12 +430,16 @@ export function renderKanzleiPage(spec: SiteSpec, slug: string): string {
   <div class="hero-eyebrow">${escapeHtml(tagline.slice(0, 70))}</div>
   <h1>${headline.replace(/(\.|\?|!)([^.?!]*)$/, '<em>$1$2</em>')}</h1>
   <p class="hero-sub">${subhead}</p>
+  ${renderRatingPill(spec)}
   <div class="hero-ctas">
     <a href="#kontakt" class="btn-solid">${ctaText}</a>
     <a href="#rechtsgebiete" class="btn-line">Rechtsgebiete</a>
   </div>
 </section>
 
+${renderMarquee(marqueeItems)}
+
+${trustStats.length >= 2 ? renderTrustBar(trustStats) : `
 <section class="trust-strip">
   <div class="trust-strip-inner">
     <div class="trust-item"><div class="num">20+</div><div class="lbl">Jahre Erfahrung</div></div>
@@ -401,6 +448,7 @@ export function renderKanzleiPage(spec: SiteSpec, slug: string): string {
     <div class="trust-item"><div class="num">RAK</div><div class="lbl">Mitgliedschaften</div></div>
   </div>
 </section>
+`}
 
 <section id="rechtsgebiete" class="section">
   <div class="container">
@@ -497,7 +545,16 @@ export function renderKanzleiPage(spec: SiteSpec, slug: string): string {
   </div>
 </section>
 
-<footer>
+${renderPullQuote(pullQuote, spec.business_name)}
+
+${renderQuietFooter({
+  businessName: spec.business_name,
+  tagline: spec.tagline,
+  ctaText,
+  ctaHref: '#kontakt',
+  socials: spec.socials,
+})}
+<footer style="display:none">
   <div class="brand">${businessName}</div>
   <div>${tagline}</div>
   <div class="legal">

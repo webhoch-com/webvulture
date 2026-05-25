@@ -7,23 +7,59 @@
 import type { SiteSpec } from '../types.js';
 import { renderSeoHead } from './_seo.js';
 import { getGalleryImage } from './_media.js';
-
-function escapeHtml(s: string): string {
-  return String(s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
+import { getBranchPreset } from './_branch_presets.js';
+import {
+  escapeHtml,
+  extractFoundedYear,
+  buildMarqueeItems,
+  pickPullQuote,
+  renderMarquee,
+  renderPullQuote,
+  renderRatingPill,
+  renderQuietFooter,
+  renderTrustBar,
+  EDITORIAL_CSS,
+} from './_editorial.js';
 
 function projectPhoto(spec: SiteSpec, slug: string, idx: number, w = 800, h = 600): string {
   return getGalleryImage(spec, slug, idx, w, h);
 }
 
 export function renderEnergiePage(spec: SiteSpec, slug: string): string {
+  const PRESET = getBranchPreset('energie');
+  const primary = spec.brand.primary_color || PRESET.primary;
+  const secondary = spec.brand.secondary_color || PRESET.secondary;
+  const accent = spec.brand.accent_color || PRESET.accent;
+  const headingFont = spec.brand.heading_font_family
+    ? `'${spec.brand.heading_font_family}', ${PRESET.display_font}`
+    : PRESET.display_font;
+  const bodyFont = spec.brand.body_font_family
+    ? `'${spec.brand.body_font_family}', ${PRESET.body_font}`
+    : PRESET.body_font;
+  const fontImports = (spec.brand?.font_imports && spec.brand.font_imports.length > 0)
+    ? spec.brand.font_imports
+    : PRESET.font_imports;
+  const fontImportTags = fontImports
+    .map(u => `<link rel="stylesheet" href="${escapeHtml(u)}" crossorigin>`).join('\n  ');
+
   const businessName = escapeHtml(spec.business_name);
   const tagline = spec.tagline;
   const headline = spec.hero.headline;
   const subhead = escapeHtml(spec.hero.subheadline);
-  const ctaText = escapeHtml(spec.hero.cta_text || 'Beratungstermin anfragen');
+  const ctaText = escapeHtml(spec.hero.cta_text || PRESET.cta_text);
+
+  const foundedYear = extractFoundedYear(spec);
+  const marqueeItems = buildMarqueeItems(spec, foundedYear);
+  const pullQuote = pickPullQuote(spec);
+
+  const trustStats: Array<{ value: string; label: string }> = [];
+  if (foundedYear) {
+    const years = new Date().getFullYear() - foundedYear;
+    if (years > 0) trustStats.push({ value: `${years}+`, label: 'Jahre Erfahrung' });
+  }
+  if (spec.business?.rating && spec.business?.review_count && spec.business.review_count >= 5) {
+    trustStats.push({ value: `${spec.business.rating.toFixed(1).replace('.', ',')} ★`, label: `${spec.business.review_count} Bewertungen` });
+  }
 
   const services = spec.services && spec.services.length >= 3 ? spec.services : [
     { name: 'Photovoltaik', description: 'Komplettpaket Hausdach, Carport oder Freifläche — inkl. Förderabwicklung.' },
@@ -44,23 +80,25 @@ export function renderEnergiePage(spec: SiteSpec, slug: string): string {
 <html lang="de">
 <head>
   ${renderSeoHead(spec, { slug, schemaKind: 'ProfessionalService' })}
-  <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
-  <link href="https://fonts.bunny.net/css?family=fraunces:400,500,600,700|inter:400,500,600,700&display=swap" rel="stylesheet">
+  ${fontImportTags}
   <style>
     :root {
-      --bg: #f7f5f0;          /* warm off-white */
+      --bg: ${PRESET.bg};
       --bg-2: #eae6db;
       --surface: #ffffff;
-      --primary: #3a5a40;     /* deep moss green */
-      --primary-soft: #d8e2d2;
-      --primary-light: #a3b18a;
-      --accent: #d4a017;      /* sun gold */
-      --ink: #1a2820;         /* deep forest */
+      --primary: ${escapeHtml(primary)};
+      --primary-deep: color-mix(in oklch, ${escapeHtml(primary)} 70%, black);
+      --primary-soft: color-mix(in oklch, ${escapeHtml(primary)} 14%, white);
+      --primary-light: color-mix(in oklch, ${escapeHtml(primary)} 50%, white);
+      --secondary: ${escapeHtml(secondary)};
+      --accent: ${escapeHtml(accent)};
+      --ink: ${PRESET.ink};
       --ink-2: #4a5a52;
       --ink-3: #8a9a90;
       --rule: rgba(26,40,32,0.10);
-      --display: 'Fraunces', Georgia, serif;
-      --sans: 'Inter', system-ui, sans-serif;
+      --display: ${headingFont};
+      --serif: ${headingFont};
+      --sans: ${bodyFont};
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html { scroll-behavior: smooth; }
@@ -291,6 +329,8 @@ export function renderEnergiePage(spec: SiteSpec, slug: string): string {
     .reveal { opacity: 1; transform: none; }
     /* visible by default */
     @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1 !important; transform: none !important; } }
+
+    ${EDITORIAL_CSS}
   </style>
 </head>
 <body>
@@ -331,6 +371,7 @@ export function renderEnergiePage(spec: SiteSpec, slug: string): string {
       </span>
       <h1>${escapeHtml(headline.replace(/(\.|!|\?)([^.!?]*)$/, '|$1$2|')).replace(/\|([^|]+)\|/, '<em>$1</em>')}</h1>
       <p>${subhead}</p>
+      ${renderRatingPill(spec)}
       <div class="hero-cta-row">
         <a href="#kontakt" class="btn-primary">${ctaText} →</a>
         <a href="#leistungen" class="btn-secondary">Leistungen ansehen</a>
@@ -351,14 +392,16 @@ export function renderEnergiePage(spec: SiteSpec, slug: string): string {
   </div>
 </section>
 
-<section class="trust-strip">
+${renderMarquee(marqueeItems)}
+
+${trustStats.length >= 2 ? renderTrustBar(trustStats) : `<section class="trust-strip">
   <div class="trust-inner">
     <div><div class="trust-num">500+</div><div class="trust-lbl">Anlagen installiert</div></div>
     <div><div class="trust-num">25 Jahre</div><div class="trust-lbl">Modul-Garantie</div></div>
     <div><div class="trust-num">12 Mt.</div><div class="trust-lbl">Auf Arbeit</div></div>
     <div><div class="trust-num">100%</div><div class="trust-lbl">EU-Komponenten</div></div>
   </div>
-</section>
+</section>`}
 
 <section id="leistungen" class="section">
   <div class="container">
@@ -472,14 +515,15 @@ export function renderEnergiePage(spec: SiteSpec, slug: string): string {
   </div>
 </section>
 
-<footer>
-  <div class="brand">${businessName}</div>
-  <div>${escapeHtml(tagline)}</div>
-  <div class="legal">
-    <a href="/impressum">Impressum</a>
-    <a href="/datenschutz">Datenschutz</a>
-  </div>
-</footer>
+${renderPullQuote(pullQuote, spec.business_name)}
+
+${renderQuietFooter({
+  businessName: spec.business_name,
+  tagline: spec.tagline,
+  ctaText,
+  ctaHref: '#kontakt',
+  socials: spec.socials,
+})}
 
 <script>
   const io = new IntersectionObserver((entries) => {

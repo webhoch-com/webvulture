@@ -9,23 +9,59 @@ import type { SiteSpec } from '../types.js';
 import { renderSeoHead } from './_seo.js';
 import { getGalleryImage, getHeroImage } from './_media.js';
 import { avatarPlaceholder, SYMBOLIC_TAG_CSS } from './_avatar.js';
-
-function escapeHtml(s: string): string {
-  return String(s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
+import { getBranchPreset } from './_branch_presets.js';
+import {
+  escapeHtml,
+  extractFoundedYear,
+  buildMarqueeItems,
+  pickPullQuote,
+  renderMarquee,
+  renderPullQuote,
+  renderRatingPill,
+  renderQuietFooter,
+  renderTrustBar,
+  EDITORIAL_CSS,
+} from './_editorial.js';
 
 function gymPhoto(spec: SiteSpec, slug: string, idx: number, w = 1200, h = 800): string {
   return getGalleryImage(spec, slug, idx, w, h);
 }
 
 export function renderFitnessPage(spec: SiteSpec, slug: string): string {
+  const PRESET = getBranchPreset('fitness');
+  const primary = spec.brand.primary_color || PRESET.primary;
+  const secondary = spec.brand.secondary_color || PRESET.secondary;
+  const accent = spec.brand.accent_color || PRESET.accent;
+  const headingFont = spec.brand.heading_font_family
+    ? `'${spec.brand.heading_font_family}', ${PRESET.display_font}`
+    : PRESET.display_font;
+  const bodyFont = spec.brand.body_font_family
+    ? `'${spec.brand.body_font_family}', ${PRESET.body_font}`
+    : PRESET.body_font;
+  const fontImports = (spec.brand?.font_imports && spec.brand.font_imports.length > 0)
+    ? spec.brand.font_imports
+    : PRESET.font_imports;
+  const fontImportTags = fontImports
+    .map(u => `<link rel="stylesheet" href="${escapeHtml(u)}" crossorigin>`).join('\n  ');
+
   const businessName = escapeHtml(spec.business_name);
   const tagline = spec.tagline;
   const headline = spec.hero.headline;
   const subhead = escapeHtml(spec.hero.subheadline);
-  const ctaText = escapeHtml(spec.hero.cta_text || 'Probetraining buchen');
+  const ctaText = escapeHtml(spec.hero.cta_text || PRESET.cta_text);
+
+  const foundedYear = extractFoundedYear(spec);
+  const marqueeItems = buildMarqueeItems(spec, foundedYear);
+  const pullQuote = pickPullQuote(spec);
+
+  const trustStats: Array<{ value: string; label: string }> = [];
+  if (foundedYear) {
+    const years = new Date().getFullYear() - foundedYear;
+    if (years > 0) trustStats.push({ value: `${years}+`, label: 'Jahre Erfahrung' });
+  }
+  if (spec.business?.rating && spec.business?.review_count && spec.business.review_count >= 5) {
+    trustStats.push({ value: `${spec.business.rating.toFixed(1).replace('.', ',')} ★`, label: `${spec.business.review_count} Bewertungen` });
+  }
 
   const services = spec.services && spec.services.length >= 3 ? spec.services : [
     { name: 'Krafttraining', description: 'Großzügiger Hantelbereich, Maschinen, Functional Zone.', price: 'ab 39 €' },
@@ -46,21 +82,24 @@ export function renderFitnessPage(spec: SiteSpec, slug: string): string {
 <html lang="de">
 <head>
   ${renderSeoHead(spec, { slug, schemaKind: 'HealthAndBeautyBusiness' })}
-  <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
-  <link href="https://fonts.bunny.net/css?family=barlow-condensed:500,600,700,800,900|inter:400,500,600,700&display=swap" rel="stylesheet">
+  ${fontImportTags}
   <style>
     :root {
-      --bg: #0a0a0a;
+      --bg: ${PRESET.bg};
       --surface: #141414;
       --surface-2: #1c1c1c;
-      --ink: #f5f5f4;
+      --ink: ${PRESET.ink};
       --ink-2: rgba(245,245,244,0.7);
       --ink-3: rgba(245,245,244,0.4);
       --rule: rgba(255,255,255,0.10);
-      --accent: #d4ff00;       /* electric lime */
-      --accent-dim: #a8cc00;
-      --display: 'Barlow Condensed', 'Impact', sans-serif;
-      --sans: 'Inter', system-ui, sans-serif;
+      --primary: ${escapeHtml(primary)};
+      --primary-deep: color-mix(in oklch, ${escapeHtml(primary)} 70%, black);
+      --secondary: ${escapeHtml(secondary)};
+      --accent: ${escapeHtml(accent)};
+      --accent-dim: color-mix(in oklch, ${escapeHtml(accent)} 70%, black);
+      --display: ${headingFont};
+      --serif: ${headingFont};
+      --sans: ${bodyFont};
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html { scroll-behavior: smooth; }
@@ -321,6 +360,8 @@ export function renderFitnessPage(spec: SiteSpec, slug: string): string {
     .reveal { opacity: 1; transform: none; }
     /* visible by default */
     @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1 !important; transform: none !important; } }
+
+    ${EDITORIAL_CSS}
   </style>
 </head>
 <body>
@@ -358,6 +399,7 @@ export function renderFitnessPage(spec: SiteSpec, slug: string): string {
     <span class="hero-eyebrow">${escapeHtml(tagline.slice(0, 60))}</span>
     <h1>${escapeHtml(headline.replace(/\s*(\S+\.?)$/, '|$1|')).replace(/\|([^|]+)\|/, '<em>$1</em>')}</h1>
     <p>${subhead}</p>
+    ${renderRatingPill(spec)}
     <div class="hero-cta-row">
       <a href="#kontakt" class="btn-primary">${ctaText} →</a>
       <a href="#programme" class="btn-ghost">Programme</a>
@@ -365,7 +407,7 @@ export function renderFitnessPage(spec: SiteSpec, slug: string): string {
   </div>
 </section>
 
-<div class="marquee">
+${renderMarquee(marqueeItems) || `<div class="marquee">
   <div class="marquee-track" aria-hidden="true">
     <span>NIE WIEDER WARTEN</span>
     <span>OFFEN AB 6 UHR</span>
@@ -376,7 +418,9 @@ export function renderFitnessPage(spec: SiteSpec, slug: string): string {
     <span>OFFEN AB 6 UHR</span>
     <span>FREIES PROBETRAINING</span>
   </div>
-</div>
+</div>`}
+
+${renderTrustBar(trustStats)}
 
 <section id="programme" class="section">
   <div class="container">
@@ -477,14 +521,15 @@ export function renderFitnessPage(spec: SiteSpec, slug: string): string {
   </div>
 </section>
 
-<footer>
-  <div class="brand">${businessName}</div>
-  <div>${escapeHtml(tagline)}</div>
-  <div class="legal">
-    <a href="/impressum">Impressum</a>
-    <a href="/datenschutz">Datenschutz</a>
-  </div>
-</footer>
+${renderPullQuote(pullQuote, spec.business_name)}
+
+${renderQuietFooter({
+  businessName: spec.business_name,
+  tagline: spec.tagline,
+  ctaText,
+  ctaHref: '#kontakt',
+  socials: spec.socials,
+})}
 
 <script>
   const io = new IntersectionObserver((entries) => {
