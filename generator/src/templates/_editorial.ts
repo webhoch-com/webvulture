@@ -355,6 +355,98 @@ export function renderBoardSection(board: Array<{ name: string; role: string }>)
 `;
 }
 
+/**
+ * XXL Wordmark footer — premium pattern from Locomotive / Lando Norris /
+ * i-D Magazine. Replaces the conventional "4-spalter mit Logo links + Links
+ * rechts" footer with a single huge type-set wordmark plus a single CTA
+ * and minimal link row. Accepts an explicit ctaText so each branch passes
+ * its own ("Tisch reservieren", "Erstberatung vereinbaren", etc.).
+ *
+ * Slots: socials icon-strip is auto-included when spec.socials is set.
+ * Defensive: returns empty string if businessName is empty (prevents the
+ * "blank giant block" failure mode on totally-broken scrapes).
+ */
+export function renderQuietFooter(opts: {
+  businessName: string;
+  tagline?: string;
+  ctaText: string;
+  ctaHref?: string;
+  legalLinks?: Array<{ label: string; href: string }>;
+  socials?: Record<string, string>;
+  creditText?: string;
+}): string {
+  if (!opts.businessName) return '';
+  const legal = (opts.legalLinks ?? [
+    { label: 'Impressum', href: '/impressum' },
+    { label: 'Datenschutz', href: '/datenschutz' },
+  ]).map(l => `<a href="${escapeHtml(l.href)}">${escapeHtml(l.label)}</a>`).join('<span aria-hidden="true">·</span>');
+  return `
+<footer class="quiet-footer">
+  <div class="quiet-footer-inner">
+    <div class="quiet-wordmark" aria-hidden="true">${escapeHtml(opts.businessName)}<span class="qf-dot">.</span></div>
+    ${opts.tagline ? `<p class="quiet-tagline">${escapeHtml(opts.tagline)}</p>` : ''}
+    <div class="quiet-cta-row">
+      <a href="${opts.ctaHref || '#kontakt'}" class="quiet-cta">${escapeHtml(opts.ctaText)} <span aria-hidden="true">→</span></a>
+    </div>
+    ${renderSocialStrip(opts.socials)}
+    <div class="quiet-bottom">
+      <div class="quiet-legal">${legal}</div>
+      <div class="quiet-credit">© ${new Date().getFullYear()} ${escapeHtml(opts.businessName)} · ${opts.creditText || 'Demo erstellt von <a href="https://webhoch.com" target="_blank" rel="noopener">Webagentur Hochmeir e.U.</a>'}</div>
+    </div>
+  </div>
+</footer>`;
+}
+
+/**
+ * Trust-bar — quantified stats row (Parsley Health, Modern Animal, Latham &
+ * Watkins). Replaces narrative-only about-us blocks with concrete numbers
+ * pulled from the orchestrator. Pass between 2-5 stats; the template auto-
+ * sizes the grid.
+ *
+ * Each stat: { value: "20+", label: "Jahre Erfahrung" }. Values are styled
+ * as huge display-numerals; labels as small uppercase tracking. Never
+ * invent numbers — callers should derive from spec.business.review_count,
+ * extractFoundedYear, etc.
+ */
+export function renderTrustBar(stats: Array<{ value: string; label: string }>): string {
+  if (stats.length === 0) return '';
+  const items = stats.slice(0, 5).map(s => `
+    <div class="trust-stat">
+      <div class="trust-value">${escapeHtml(s.value)}</div>
+      <div class="trust-label">${escapeHtml(s.label)}</div>
+    </div>
+  `).join('');
+  return `
+<section class="trust-bar" aria-label="Eckdaten">
+  <div class="trust-bar-inner">${items}</div>
+</section>`;
+}
+
+/**
+ * Newsletter capture — penultimate-section pattern from 9/12 premium hotels
+ * and 7/9 healthcare sites. Single email field + subscribe button, never a
+ * multi-field form. Optional kicker line above headline.
+ */
+export function renderNewsletterCTA(opts: {
+  kicker?: string;
+  headline: string;
+  body?: string;
+  actionHref?: string;
+}): string {
+  return `
+<section class="newsletter-cta">
+  <div class="newsletter-inner">
+    ${opts.kicker ? `<span class="nl-kicker">${escapeHtml(opts.kicker)}</span>` : ''}
+    <h2 class="nl-headline">${escapeHtml(opts.headline)}</h2>
+    ${opts.body ? `<p class="nl-body">${escapeHtml(opts.body)}</p>` : ''}
+    <form class="nl-form" action="${opts.actionHref || '#'}" method="post" onsubmit="event.preventDefault(); alert('Im Demo deaktiviert. Anfragen bitte per E-Mail.');">
+      <input type="email" name="email" placeholder="ihre@email.at" required aria-label="E-Mail" class="nl-input">
+      <button type="submit" class="nl-button">Eintragen</button>
+    </form>
+  </div>
+</section>`;
+}
+
 export function renderEventsSection(events: Array<{ date: string; title: string; description?: string }>): string {
   if (events.length === 0) return '';
   const rows = events.map(ev => `
@@ -611,4 +703,125 @@ export const EDITORIAL_CSS = `
   font-family: var(--serif, Georgia, serif); font-size: 1rem;
   line-height: 1.5; color: var(--ink-2, #4a4030);
 }
+
+/* ─── Quiet Footer (premium XXL-wordmark pattern) ─────────────────────── */
+.quiet-footer {
+  background: linear-gradient(180deg, var(--primary-deep, #1c2f1f) 0%, #0c1410 100%);
+  color: rgba(255,255,255,0.75);
+  padding: clamp(4rem, 8vw, 7rem) 1.5rem clamp(2rem, 3vw, 3rem);
+  border-top: 4px solid var(--accent, #b8893d);
+}
+.quiet-footer-inner {
+  max-width: 1400px; margin: 0 auto;
+}
+.quiet-wordmark {
+  font-family: var(--display, Georgia, serif); font-weight: 500;
+  font-size: clamp(3rem, 14vw, 12rem);
+  line-height: 0.92; letter-spacing: -0.045em;
+  color: #fff; word-break: break-word;
+  margin: 0 0 1rem;
+}
+.quiet-wordmark .qf-dot { color: var(--accent, #b8893d); }
+.quiet-tagline {
+  font-family: var(--serif, Georgia, serif); font-style: italic;
+  font-size: clamp(1.05rem, 1.6vw, 1.35rem); line-height: 1.5;
+  max-width: 48ch; color: rgba(255,255,255,0.65);
+  margin: 0 0 2.5rem;
+}
+.quiet-cta-row { margin: 0 0 3rem; }
+.quiet-cta {
+  display: inline-flex; align-items: center; gap: 0.85rem;
+  font-family: var(--display, Georgia, serif); font-weight: 600;
+  font-size: clamp(1.15rem, 2vw, 1.6rem); letter-spacing: -0.005em;
+  color: #fff; padding: 0.85rem 0 0.85rem 0;
+  border-bottom: 2px solid var(--accent, #b8893d);
+  transition: gap .25s ease, color .2s ease;
+}
+.quiet-cta:hover { gap: 1.4rem; color: var(--accent, #b8893d); }
+.quiet-bottom {
+  display: flex; justify-content: space-between; align-items: flex-end;
+  flex-wrap: wrap; gap: 1.5rem;
+  padding-top: 2rem; margin-top: 2rem;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  font-size: 0.86rem; color: rgba(255,255,255,0.45);
+}
+.quiet-legal { display: flex; gap: 1.25rem; flex-wrap: wrap; align-items: center; }
+.quiet-legal a {
+  color: rgba(255,255,255,0.65); border-bottom: 1px solid rgba(255,255,255,0.18);
+  transition: color .2s, border-color .2s;
+}
+.quiet-legal a:hover { color: var(--accent, #b8893d); border-color: var(--accent, #b8893d); }
+.quiet-legal span { color: rgba(255,255,255,0.3); }
+.quiet-credit a { color: rgba(255,255,255,0.55); border-bottom: 1px solid rgba(255,255,255,0.16); }
+.quiet-credit a:hover { color: var(--accent, #b8893d); border-color: var(--accent, #b8893d); }
+
+/* Trust-bar */
+.trust-bar {
+  background: var(--bg, #fff); padding: clamp(3rem, 5vw, 4.5rem) 1.5rem;
+  border-top: 1px solid var(--rule, rgba(0,0,0,0.08));
+  border-bottom: 1px solid var(--rule, rgba(0,0,0,0.08));
+}
+.trust-bar-inner {
+  max-width: 1300px; margin: 0 auto;
+  display: grid; gap: 2rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
+}
+.trust-stat {
+  text-align: center; padding: 0 1rem;
+}
+.trust-stat .trust-value {
+  font-family: var(--display, Georgia, serif); font-weight: 500;
+  font-size: clamp(2.2rem, 4.5vw, 3.6rem); line-height: 0.95;
+  letter-spacing: -0.02em; color: var(--primary, #1a1a1a);
+}
+.trust-stat .trust-label {
+  font-family: var(--display, Georgia, serif); font-weight: 600;
+  font-size: 0.78rem; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--ink-3, var(--ink-2, #4a4030));
+  margin-top: 0.75rem;
+}
+
+/* Newsletter CTA */
+.newsletter-cta {
+  background: color-mix(in oklch, var(--primary, #1a1a1a) 6%, white);
+  padding: clamp(4rem, 8vw, 7rem) 1.5rem;
+  border-top: 1px solid var(--rule, rgba(0,0,0,0.08));
+}
+.newsletter-inner { max-width: 760px; margin: 0 auto; text-align: center; }
+.newsletter-inner .nl-kicker {
+  display: inline-block; font-family: var(--display, Georgia, serif);
+  font-size: 0.82rem; letter-spacing: 0.22em; text-transform: uppercase;
+  color: var(--accent, #b8893d); font-weight: 600;
+  padding-bottom: 1rem; margin-bottom: 0.5rem;
+}
+.newsletter-inner .nl-headline {
+  font-family: var(--display, Georgia, serif); font-weight: 500;
+  font-size: clamp(2rem, 5vw, 3.5rem); line-height: 1.1;
+  letter-spacing: -0.02em; color: var(--ink, #1f1a14);
+  max-width: 22ch; margin: 0 auto 1.25rem;
+}
+.newsletter-inner .nl-body {
+  font-family: var(--serif, Georgia, serif); color: var(--ink-2, #4a4030);
+  font-size: 1.05rem; line-height: 1.7; max-width: 48ch; margin: 0 auto 2.5rem;
+}
+.newsletter-cta .nl-form {
+  display: flex; gap: 0.75rem; max-width: 480px; margin: 0 auto;
+  flex-wrap: wrap; justify-content: center;
+}
+.nl-input {
+  flex: 1 1 240px; min-width: 0; padding: 1rem 1.25rem;
+  font-family: var(--serif, Georgia, serif); font-size: 1rem;
+  background: #fff; color: var(--ink, #1f1a14);
+  border: 1px solid var(--rule, rgba(0,0,0,0.18)); border-radius: 4px;
+  transition: border-color .2s;
+}
+.nl-input:focus { outline: none; border-color: var(--accent, #b8893d); }
+.nl-button {
+  padding: 1rem 2rem; cursor: pointer;
+  font-family: var(--display, Georgia, serif); font-weight: 600;
+  font-size: 0.95rem; letter-spacing: 0.03em;
+  background: var(--primary, #1a1a1a); color: #fff; border: 0; border-radius: 4px;
+  transition: background .2s, transform .2s;
+}
+.nl-button:hover { background: var(--primary-deep, #000); transform: translateY(-2px); }
 `;

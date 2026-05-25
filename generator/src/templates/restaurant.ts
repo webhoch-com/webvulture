@@ -8,24 +8,24 @@
  */
 
 import type { SiteSpec } from '../types.js';
-import { getHeroImage, getGalleryImage } from './_media.js';
+import { getHeroImage, getGalleryImage, hasHeroImage, hasGalleryImages, galleryCount } from './_media.js';
 import { renderSeoHead } from './_seo.js';
-
-function escapeHtml(s: string): string {
-  return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
+import { getBranchPreset } from './_branch_presets.js';
+import {
+  escapeHtml,
+  extractFoundedYear,
+  buildMarqueeItems,
+  pickPullQuote,
+  renderMarquee,
+  renderPullQuote,
+  renderRatingPill,
+  renderQuietFooter,
+  renderTrustBar,
+  EDITORIAL_CSS,
+} from './_editorial.js';
 
 function heroPhoto(spec: SiteSpec, slug: string): string {
   return getHeroImage(spec, slug, 1800, 1100);
-}
-
-function dishPhoto(spec: SiteSpec, slug: string, idx: number): string {
-  return getGalleryImage(spec, slug, idx, 600, 420);
 }
 
 function galleryPhoto(spec: SiteSpec, slug: string, idx: number): string {
@@ -33,13 +33,53 @@ function galleryPhoto(spec: SiteSpec, slug: string, idx: number): string {
 }
 
 export function renderRestaurantPage(spec: SiteSpec, slug: string): string {
-  const primary = spec.brand.primary_color || '#a31621';
+  // Brand-preset for this branch — restaurant cluster (Noma/Mirazur/EMP).
+  // Real scraped brand values from the orchestrator override defaults via
+  // the CSS var declarations further down; the preset only steps in when
+  // the prospect's site had no detectable theme.
+  const PRESET = getBranchPreset('restaurant');
+  const primary = spec.brand.primary_color || PRESET.primary;
+  const secondary = spec.brand.secondary_color || PRESET.secondary;
+  const accent = spec.brand.accent_color || PRESET.accent;
+  const headingFont = spec.brand.heading_font_family
+    ? `'${spec.brand.heading_font_family}', ${PRESET.display_font}`
+    : PRESET.display_font;
+  const bodyFont = spec.brand.body_font_family
+    ? `'${spec.brand.body_font_family}', ${PRESET.body_font}`
+    : PRESET.body_font;
+  const fontImports = (spec.brand?.font_imports && spec.brand.font_imports.length > 0)
+    ? spec.brand.font_imports
+    : PRESET.font_imports;
+  const fontImportTags = fontImports
+    .map(u => `<link rel="stylesheet" href="${escapeHtml(u)}" crossorigin>`).join('\n  ');
+
   const businessName = escapeHtml(spec.business_name);
   const tagline = escapeHtml(spec.tagline);
   const headline = escapeHtml(spec.hero.headline);
   const subhead = escapeHtml(spec.hero.subheadline);
-  const ctaText = escapeHtml(spec.hero.cta_text || 'Reservieren');
+  const ctaText = escapeHtml(spec.hero.cta_text || PRESET.cta_text);
   const heroImage = heroPhoto(spec, slug);
+  const hasHero = hasHeroImage(spec);
+  const hasGallery = hasGalleryImages(spec);
+
+  // Editorial helpers
+  const foundedYear = extractFoundedYear(spec);
+  const marqueeItems = buildMarqueeItems(spec, foundedYear);
+  const pullQuote = pickPullQuote(spec);
+
+  // Trust-bar stats — only emit when we have real numbers, never invent.
+  const trustStats: Array<{ value: string; label: string }> = [];
+  if (foundedYear) {
+    const years = new Date().getFullYear() - foundedYear;
+    if (years > 0) trustStats.push({ value: `Seit ${foundedYear}`, label: `${years} Jahre Gastfreundschaft` });
+  }
+  if (spec.business?.rating && spec.business?.review_count && spec.business.review_count >= 5) {
+    trustStats.push({ value: `${spec.business.rating.toFixed(1).replace('.', ',')} ★`, label: `${spec.business.review_count} Google-Bewertungen` });
+  }
+  if (spec.contact?.address) {
+    const cityMatch = spec.contact.address.match(/\b\d{4,5}\s+([A-ZÄÖÜ][\wäöüÄÖÜß\s-]{2,30})/);
+    if (cityMatch) trustStats.push({ value: cityMatch[1].trim().split(' ')[0], label: 'Standort' });
+  }
 
   const menu = spec.menu ?? [
     {
@@ -79,8 +119,6 @@ export function renderRestaurantPage(spec: SiteSpec, slug: string): string {
   const email = spec.contact.email ? escapeHtml(spec.contact.email) : '';
   const address = spec.contact.address ? escapeHtml(spec.contact.address) : '';
 
-  const galleryCount = 6;
-  const dishCount = 4; // 4 first menu-items in the second category get a dish photo
 
   return `---
 ---
@@ -88,19 +126,23 @@ export function renderRestaurantPage(spec: SiteSpec, slug: string): string {
 <html lang="de">
 <head>
   ${renderSeoHead(spec, { slug, schemaKind: 'Restaurant' })}
-  <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
-  <link href="https://fonts.bunny.net/css?family=playfair-display:400,500,600,700,800,900|inter:400,500,600,700&display=swap" rel="stylesheet">
+  ${fontImportTags}
   <style>
     :root {
       --primary: ${escapeHtml(primary)};
-      --bg: #fdfbf6;          /* warm cream */
+      --primary-deep: color-mix(in oklch, ${escapeHtml(primary)} 70%, black);
+      --secondary: ${escapeHtml(secondary)};
+      --accent: ${escapeHtml(accent)};
+      --bg: ${PRESET.bg};
       --surface: #ffffff;
-      --ink: #1a1410;
+      --ink: ${PRESET.ink};
       --ink-2: #5a5147;
       --ink-3: #998c7e;
+      --rule: rgba(26,20,16,0.10);
       --border: rgba(26,20,16,0.10);
-      --serif: 'Playfair Display', 'Georgia', serif;
-      --sans: 'Inter', system-ui, sans-serif;
+      --display: ${headingFont};
+      --serif: ${headingFont};
+      --sans: ${bodyFont};
       --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
       --shadow: 0 8px 30px -8px rgba(0,0,0,0.18);
     }
@@ -415,6 +457,29 @@ export function renderRestaurantPage(spec: SiteSpec, slug: string): string {
     @media (prefers-reduced-motion: reduce) {
       .reveal, .hero-text * { opacity: 1 !important; transform: none !important; }
     }
+
+    /* ─── Hero fallback when no scraped photo (big-type wordmark) ── */
+    .hero.hero-no-img { background: linear-gradient(135deg, #1a1410 0%, ${escapeHtml(primary)} 100%); }
+    .hero-no-img .hero-img { display: none; }
+    .hero-decor-bigtype {
+      position: absolute; bottom: clamp(2rem, 4vw, 4rem); right: clamp(2rem, 5vw, 6rem); z-index: -1;
+      font-family: var(--display); font-weight: 500;
+      font-size: clamp(4.5rem, 14vw, 14rem); line-height: 0.92; letter-spacing: -0.04em;
+      color: rgba(255,255,255,0.10); text-align: right; max-width: 80vw;
+      pointer-events: none;
+    }
+
+    /* ─── About fallback when no gallery image ────────────────── */
+    .about-img.about-img-fallback {
+      background: linear-gradient(135deg, var(--primary), var(--primary-deep)); aspect-ratio: 3/4;
+      display: grid; place-items: center; padding: 2rem; border-radius: 4px;
+    }
+    .about-img-fallback::after {
+      content: attr(data-letter); font-family: var(--display); font-weight: 500;
+      font-size: clamp(8rem, 16vw, 14rem); line-height: 1; color: rgba(255,255,255,0.18);
+    }
+
+    ${EDITORIAL_CSS}
   </style>
 </head>
 <body>
@@ -447,18 +512,23 @@ export function renderRestaurantPage(spec: SiteSpec, slug: string): string {
   </div>
 </header>
 
-<section class="hero">
-  <div class="hero-img" style="background-image: url('${heroImage}');"></div>
+<section class="hero ${hasHero ? '' : 'hero-no-img'}">
+  ${hasHero ? `<div class="hero-img" style="background-image: url('${escapeHtml(heroImage)}');"></div>` : `<div class="hero-decor-bigtype" aria-hidden="true">${businessName}</div>`}
   <div class="hero-text">
-    <span class="hero-eyebrow">${escapeHtml(tagline.slice(0, 50))}</span>
+    <span class="hero-eyebrow">${escapeHtml(spec.tagline.slice(0, 50))}</span>
     <h1>${headline.replace(/\.([^.]*)$/, '<em>.$1</em>')}</h1>
     <p>${subhead}</p>
+    ${renderRatingPill(spec)}
     <div class="hero-ctas">
       <a href="#reservierung" class="cta-primary">${ctaText}</a>
       <a href="#menu" class="cta-secondary">Speisekarte ansehen</a>
     </div>
   </div>
 </section>
+
+${renderMarquee(marqueeItems)}
+
+${renderTrustBar(trustStats)}
 
 <section id="menu" class="section">
   <div class="container">
@@ -492,7 +562,10 @@ export function renderRestaurantPage(spec: SiteSpec, slug: string): string {
 <section id="ueber-uns" class="section">
   <div class="container">
     <div class="about-grid">
-      <div class="about-img reveal" aria-hidden="true"></div>
+      ${hasGallery
+        ? `<div class="about-img reveal" style="background-image: url('${escapeHtml(getGalleryImage(spec, slug, 0, 900, 1200))}'); background-size: cover; background-position: center;" aria-hidden="true"></div>`
+        : `<div class="about-img about-img-fallback reveal" data-letter="${escapeHtml(spec.business_name.charAt(0).toUpperCase())}" aria-hidden="true"></div>`
+      }
       <div class="about-text reveal">
         <span class="eyebrow">Über uns</span>
         <h2>${businessName} — gelebte Gastfreundschaft.</h2>
@@ -503,6 +576,9 @@ export function renderRestaurantPage(spec: SiteSpec, slug: string): string {
   </div>
 </section>
 
+${renderPullQuote(pullQuote, spec.business_name)}
+
+${hasGallery && galleryCount(spec) >= 1 ? `
 <section id="galerie" class="section">
   <div class="container">
     <div class="gallery-head reveal">
@@ -510,7 +586,7 @@ export function renderRestaurantPage(spec: SiteSpec, slug: string): string {
       <h2 class="section-title">Atmosphäre</h2>
     </div>
     <div class="gallery-grid">
-      ${Array.from({ length: galleryCount }, (_, i) => `
+      ${Array.from({ length: Math.min(galleryCount(spec), 6) }, (_, i) => `
         <div class="gallery-item reveal" style="transition-delay: ${i * 60}ms">
           <img src="${galleryPhoto(spec, slug, i + 1)}" alt="Eindruck ${i + 1}" loading="lazy" decoding="async" width="700" height="520" />
         </div>
@@ -518,6 +594,7 @@ export function renderRestaurantPage(spec: SiteSpec, slug: string): string {
     </div>
   </div>
 </section>
+` : ''}
 
 <section id="reservierung" class="section">
   <div class="container">
@@ -550,14 +627,13 @@ export function renderRestaurantPage(spec: SiteSpec, slug: string): string {
   </div>
 </section>
 
-<footer>
-  <div class="brand">${businessName}</div>
-  <div>${tagline}</div>
-  <div class="legal">
-    <a href="/impressum">Impressum</a>
-    <a href="/datenschutz">Datenschutz</a>
-  </div>
-</footer>
+${renderQuietFooter({
+  businessName: spec.business_name,
+  tagline: spec.tagline,
+  ctaText,
+  ctaHref: '#reservierung',
+  socials: spec.socials,
+})}
 
 <script>
   const io = new IntersectionObserver((entries) => {
@@ -568,5 +644,4 @@ export function renderRestaurantPage(spec: SiteSpec, slug: string): string {
 </body>
 </html>
 `;
-  void dishCount; void dishPhoto;
 }
