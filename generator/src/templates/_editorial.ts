@@ -35,9 +35,21 @@ export function escapeHtml(s: string): string {
  * Year range hard-bounded 1700–current to keep false positives down.
  */
 export function extractFoundedYear(spec: SiteSpec): number | null {
-  const text = `${spec.about?.body ?? ''} ${spec.tagline ?? ''}`;
+  // Scan the RAW excerpt first — the about-body is heavily filtered and may
+  // have dropped the founding-year sentence entirely (Block-A audit found
+  // Puchkirchen had 'Der MV wurde 1923 gegründet' filtered out together
+  // with a contact-line that followed it). raw_text_excerpt preserves all
+  // sentences before filtering so we can recover the year directly.
+  const text = [
+    spec.raw_text_excerpt ?? '',
+    spec.about?.body ?? '',
+    spec.tagline ?? '',
+    ...((spec.redesigned_sections ?? []).map(s => `${s.title}: ${s.body}`)),
+  ].filter(Boolean).join(' ');
   const beforeRe = /\b(?:seit|gegründet|gegruendet|gründungsjahr|gruendungsjahr|established|since|von)\s*(?:im\s+jahr\s+)?:?\s*(1[78]\d{2}|19\d{2}|20[0-2]\d)\b/i;
   const afterRe  = /\b(?:im\s+jahr\s+)?(1[78]\d{2}|19\d{2}|20[0-2]\d)\s+(?:gegründet|gegruendet|ins\s+leben|established)\b/i;
+  // Standalone year + word "Jahre" / "Mitglieder" — captures vCard-style
+  // "100 Jahre Tradition" → use currentYear - 100 as fallback estimate.
   const m = text.match(beforeRe) || text.match(afterRe);
   if (!m) return null;
   const year = parseInt(m[1], 10);

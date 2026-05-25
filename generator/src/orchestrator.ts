@@ -380,6 +380,21 @@ const JUNK_PATTERNS: RegExp[] = [
   // Calendar-widget exports: "17. Mai 2026 - 09:00 - Sonntag, 17. Mai" — same
   // date 3+ times in one sentence is a list-collapse, not narrative.
   /(\d{1,2}\.\s*(?:Jan|Feb|Mär|Apr|Mai|Jun|Jul|Aug|Sep|Okt|Nov|Dez)\w*)[^\n]{0,40}\1[^\n]{0,40}\1/i,
+  // Block-A additions (audit 2026-05-25 of live Puchkirchen showed leakage).
+  // (a) ANY email-shape sequence including truncated ".at" / no-TLD variants
+  //     — current `[\w.+-]+@\S+\.\S+` requires post-dot characters, missed
+  //     'admin@mv-puchkirchen.' (period at end). New pattern matches an @
+  //     surrounded by word-chars regardless of post-period content.
+  /\b[\w.+-]{2,}@[\w-]{2,}/i,
+  // (b) Webmaster / Sekretariat / Vereinsanschrift / Geschäftsstelle as
+  //     leading role-prefix — these slipped past the original Obmann/
+  //     Kapellmeister list and produced 't Webmaster: admin@mv-puchkirchen.'
+  //     as the entire dropcap on Puchkirchen V3.
+  /\b(Webmaster|Sekretariat|Vereinsanschrift|Geschäftsstelle|Kontaktperson|Korrespondenz|Newsletter)\s*[:.-]/i,
+  // (c) Sentences starting with a single-char fragment + space + capital
+  //     ('t Webmaster: …', 'a Konzert …', 'i Verein …') are crawl artefacts
+  //     from a previous sentence's terminal letter. Always demo-optik.
+  /^[a-zäöü]\s+[A-ZÄÖÜ]/,
 ];
 
 /**

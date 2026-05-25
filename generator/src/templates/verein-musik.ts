@@ -911,11 +911,29 @@ ${galleryCount(spec) >= 1 ? `
     </div>
     <div class="gallery-grid">
       ${spec.media!.gallery!.map((_url, i) => `
-        <div class="gallery-item reveal"><img src="${getGalleryImage(spec, slug, i, 800, 600)}" alt="" loading="lazy"></div>
+        <div class="gallery-item reveal"><img src="${getGalleryImage(spec, slug, i, 800, 600)}" alt="" loading="lazy" onerror="this.parentNode.classList.add('img-broken'); this.style.display='none';"></div>
       `).join('')}
     </div>
   </div>
 </section>
+<script>
+  // Block-A: hide the entire gallery section if every img is broken (Asset-
+  // Mirror serves 0-byte PNGs on some Verein-leads). Better than rendering
+  // a row of empty dark tiles.
+  document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => {
+      const grid = document.querySelector('#bilder .gallery-grid');
+      if (!grid) return;
+      const total = grid.querySelectorAll('.gallery-item').length;
+      const broken = grid.querySelectorAll('.gallery-item.img-broken').length;
+      if (broken === total && total > 0) {
+        const section = document.querySelector('#bilder')?.previousElementSibling;
+        if (section && section.classList.contains('section-anchor-wrap')) section.remove();
+        document.querySelector('#bilder')?.remove();
+      }
+    }, 1500);
+  });
+</script>
 ` : ''}
 
 ${/* Old mission-section IIFE removed — replaced by the editorial
