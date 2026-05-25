@@ -81,19 +81,64 @@ export function pickPullQuote(spec: SiteSpec): string | null {
   const subheadN = norm(spec.hero?.subheadline || '');
   const body = spec.about?.body || '';
   const sentences = body.match(/[^.!?]+[.!?]+/g) || [];
+  // Score-and-rank rather than first-match: the FIRST decent-length sentence
+  // is often the weakest one in scraped text (boilerplate intro line). The
+  // strongest editorial sentence usually appears later — characterised by
+  // higher word-count, presence of identity-anchors (year, location, member
+  // count) and absence of contact/UI vocabulary.
+  type Scored = { s: string; score: number };
+  const scored: Scored[] = [];
   for (const raw of sentences) {
     const s = raw.trim();
     if (s.length < 50 || s.length > 220) continue;
-    const n = norm(s);
-    if (n === subheadN) continue;
-    if (/zum inhalt|cookie|folgen sie|impressum/i.test(s)) continue;
-    return s;
+    if (norm(s) === subheadN) continue;
+    if (/zum inhalt|cookie|folgen sie|impressum|zuklappen|aufklappen|save the date/i.test(s)) continue;
+    if (looksLikeContactDataSnippet(s)) continue;
+    // Bracket-balance check: parenthetical fragments like "1889 als …) und
+    // … (gegr." that audit found on Bruckmühl read as broken. Reject any
+    // sentence with unbalanced ( ) or [ ] count.
+    const open = (s.match(/[(\[]/g) || []).length;
+    const close = (s.match(/[)\]]/g) || []).length;
+    if (open !== close) continue;
+    // Minimum word count to avoid 1-2 word fragments
+    const words = (s.match(/\b\w+\b/g) || []).length;
+    if (words < 8) continue;
+    // Score: longer is better, presence of year/anchor words is better,
+    // presence of "ist/sind/wir/uns" (narrative tone) is better.
+    let score = words;
+    if (/\b(seit|gegründet|gründungsjahr)\s+(1[78]\d{2}|19\d{2}|20[0-2]\d)\b/i.test(s)) score += 8;
+    if (/\b(wir|uns|unsere?)\b/i.test(s)) score += 4;
+    if (/\b(über \d+|mehr als \d+|\d+ aktiv)/i.test(s)) score += 3;
+    // Penalty for sentences that start with a lower-case fragment ("at Kapellmeister")
+    if (/^[a-zäöü]/.test(s)) score -= 10;
+    scored.push({ s, score });
+  }
+  if (scored.length > 0) {
+    scored.sort((a, b) => b.score - a.score);
+    if (scored[0].score >= 8) return scored[0].s;
   }
   const tagline = (spec.tagline || '').trim();
-  if (tagline.length >= 40 && norm(tagline) !== subheadN) {
+  if (tagline.length >= 40 && norm(tagline) !== subheadN && !looksLikeContactDataSnippet(tagline)) {
     return tagline;
   }
   return null;
+}
+
+/**
+ * Mirror of `looksLikeContactData` from orchestrator.ts — duplicated here so
+ * the _editorial helpers stay independent from the orchestrator. Keep both
+ * implementations in sync.
+ */
+function looksLikeContactDataSnippet(s: string): boolean {
+  if (/[\w.+-]+@[\w-]+\.[\w.-]+/.test(s)) return true;
+  const digitGroups = (s.match(/\b\d{3,}\b/g) || []).length;
+  if (digitGroups >= 2) return true;
+  const roleMatches = (s.match(/\b(Obmann|Kapellmeister|Schriftführer|Kassier|Trainer|Vorsitzend|Präsident|Stabführer|Geschäftsführer)\s*[:.-]/gi) || []).length;
+  if (roleMatches >= 1) return true;
+  if (/^(at|com|de|net|org|info)\b/i.test(s)) return true;
+  if (/\bTel\.?\s*[:.]/i.test(s)) return true;
+  if (/\b\d{4,5}\s+[A-ZÄÖÜ][\wäöüß-]+/.test(s)) return true;
+  return false;
 }
 
 /**

@@ -47,10 +47,29 @@ export async function orchestrate(pkg: RebuildPackage): Promise<OrchestrationRes
   // Hero headline: keep under ~45 chars or it overflows the oversized
   // display-serif typography in branch templates. NEVER append the city —
   // it produced ugly "Verein · Stadt" suffixes that read like a slug.
+  //
+  // Audit 2026-05-25: generic "Blasmusikverein Oberösterreich" was hitting
+  // 3 of 5 production previews — reads as SEO-headline not brand-headline.
+  // Heuristic: if the niche-from-enrichment is just "Category + Bundesland"
+  // (≤ 3 words, all from a known geo-category vocabulary), reject it and
+  // fall through to the business name.
+  const isGenericCategoryGeo = (s: string): boolean => {
+    const words = s.trim().split(/\s+/);
+    if (words.length > 3) return false;
+    const lower = s.toLowerCase();
+    // Categories — match anywhere because compounds like "Blasmusikverein"
+    // contain the root "musikverein", and "Stadtmusik" contains "musik".
+    const categoryNeedles = ['musikverein', 'sportverein', 'trachtenverein',
+      'schützenverein', 'kunstverein', 'sängerverein', 'kulturverein',
+      'blasmusik', 'musikkapelle', 'stadtmusik', 'fanfarenzug'];
+    const hasCategory = categoryNeedles.some(n => lower.includes(n));
+    const geoTokens = /(oberösterreich|niederösterreich|salzburg|tirol|vorarlberg|kärnten|burgenland|wien|steiermark|bayern|bayer|deutschland|österreich|austria|germany)$/i;
+    return hasCategory && geoTokens.test(lower);
+  };
   let headline: string;
-  if (headlineFromEnrich) {
+  if (headlineFromEnrich && !isGenericCategoryGeo(headlineFromEnrich)) {
     headline = headlineFromEnrich;
-  } else if (niche && niche.length <= 45) {
+  } else if (niche && niche.length <= 45 && !isGenericCategoryGeo(niche)) {
     headline = niche;
   } else {
     headline = businessName;
@@ -328,6 +347,12 @@ function truncate(s: string, max: number): string {
  * cookie banners, skip-links, social CTAs). When the first sentence of a
  * source matches any of these, it gets dropped — the text-content scraper
  * should ideally remove these but defence-in-depth helps when it doesn't.
+ *
+ * Expanded 2026-05-25 after production-audit revealed 5 distinct failure
+ * modes in about.body across all 5 deployed Verein previews: contact-card
+ * leakage, schema.org slugs (association_or_organization), JS UI labels
+ * ('zuklappen' / 'Save the date!'), calendar-widget exports with repeated
+ * dates, and pull-quote substring cuts that break sentence boundaries.
  */
 const JUNK_PATTERNS: RegExp[] = [
   /^skip( to)?\s/i,
@@ -338,7 +363,45 @@ const JUNK_PATTERNS: RegExp[] = [
   /\bcopyright\b|©/i,
   /^[\s\d.\-/]+$/,
   /impressum|datenschutz|agb/i,
+  // Widget / UI labels accidentally crawled as fließtext
+  /zuklappen|aufklappen|mehr lesen|read more|weiterlesen|save the date/i,
+  /^(suchen|search|menü öffnen|cookies?\s+akzeptieren|hauptnavigation)\b/i,
+  /^startseite|^home|^aktuelles$|^termine$|^chronik$/i,
+  // Schema.org type slugs / API response tokens leaked from enrichment
+  /\b(association_or_organization|local_business|point_of_interest|tourist_attraction|premise|sublocality)\b/i,
+  /\b\w+_\w+_\w+\b/,  // any 3-underscore snake_case token (catches future Google Places types)
+  // Contact-data signals — if a sentence reads like a vCard line, drop it.
+  /\bTel\.?\s*[:.]/i,
+  /\bMobil\.?\s*[:.]/i,
+  /\bFax\.?\s*[:.]/i,
+  /\b(Mo|Di|Mi|Do|Fr|Sa|So)[-–]?(Mo|Di|Mi|Do|Fr|Sa|So)\b/,
+  /(\+43|0043|0049|\+49)\s*[\d\s\/-]{6,}/,
+  /\b\d{4,5}\s+[A-ZÄÖÜ][\wäöüß-]+(?:\s*,|\s*$|\s+(?:Tel|Mobil|Fax)\b)/,
+  // Calendar-widget exports: "17. Mai 2026 - 09:00 - Sonntag, 17. Mai" — same
+  // date 3+ times in one sentence is a list-collapse, not narrative.
+  /(\d{1,2}\.\s*(?:Jan|Feb|Mär|Apr|Mai|Jun|Jul|Aug|Sep|Okt|Nov|Dez)\w*)[^\n]{0,40}\1[^\n]{0,40}\1/i,
 ];
+
+/**
+ * STRICT junk-detection for the pull-quote slot specifically. Pull-quotes
+ * are the most-visible single editorial element on the page; if a quote
+ * reads like contact-card data, the whole page collapses to "Demo". This
+ * adds checks beyond the loose JUNK_PATTERNS used for about.body where
+ * some leakage is tolerable.
+ */
+function looksLikeContactData(s: string): boolean {
+  // Has an email address
+  if (/[\w.+-]+@[\w-]+\.[\w.-]+/.test(s)) return true;
+  // Has 2+ digits in close proximity (phone-fragment, postal-code, etc.)
+  const digitGroups = (s.match(/\b\d{3,}\b/g) || []).length;
+  if (digitGroups >= 2) return true;
+  // Has multiple role-with-name patterns
+  const roleMatches = (s.match(/\b(Obmann|Kapellmeister|Schriftführer|Kassier|Trainer|Vorsitzend|Präsident|Stabführer)\s*[:.-]/gi) || []).length;
+  if (roleMatches >= 1) return true;
+  // Starts with a fragment that looks like .com TLD or domain ("at Kapellmeister: ...")
+  if (/^(at|com|de|net|org|info)\b/i.test(s)) return true;
+  return false;
+}
 
 function isJunkSentence(s: string): boolean {
   const trimmed = s.trim();
