@@ -2,6 +2,14 @@
 
 Diese Datei ergänzt die globalen Anweisungen aus `~/.claude/CLAUDE.md`. Hier projekt-spezifische Konventionen — gilt für jede Session in diesem Repo.
 
+## Branch-Workflow (seit 2026-05-26)
+
+- **`main` ist der Production-Branch.** GitHub: `webhoch-com/webvulture`.
+- **Arbeite immer auf einem Feature-Branch von main** (`feature/...`, `fix/...`, `claude/<topic>`). Direkter Push auf main ist nur für Hotfixes erlaubt.
+- **Deploy-Flow**: commit → push feature-branch → fast-forward merge in main → push main → auf Server `webvulture-deploy` ausführen.
+- **Server-Production-Repo**: `/var/www/webvulture` ist seit 2026-05-26 ein Git-Repo. SSH-Alias `webvulture` (siehe `~/.ssh/config`). Niemals direkt am Server editieren — immer durch git pull.
+- **Auto-Deploy ohne Nachfrage** (laut globaler User-Memory): Code-Änderungen via deploy-Script direkt deployen, keine Bestätigung nötig.
+
 ## Frontend-Konvention
 
 - **Volt-First**: Neue UI-Komponenten als Single-File Volt-Dateien unter `resources/views/livewire/`. Klassische Livewire-Komponenten unter `app/Livewire/` nur, wenn Volt das nicht abdeckt (Forms, große State-Machines).
@@ -53,11 +61,17 @@ Geplante Erweiterung — siehe Plan in `~/.claude/plans/alalysiere-diese-gesamte
 
 ## Deploy-Flow
 
-1. `composer install --no-dev`, `npm ci && npm run build`
-2. `php artisan migrate --force && php artisan config:cache && php artisan route:cache && php artisan view:cache`
-3. `supervisorctl restart webvulture-queue:* webvulture-reverb webvulture-generator`
+Deploy läuft via `webvulture-deploy` auf dem Server (`/usr/local/bin/webvulture-deploy`). Das Skript macht:
 
-Generator separat builden: `cd generator && npm ci && npm run build`.
+1. `git pull origin main` in `/var/www/webvulture`
+2. `composer install --no-dev --optimize-autoloader`
+3. `npm ci && npm run build` (Vite)
+4. `cd generator && npm ci && npm run build` (Node-Service)
+5. `php artisan migrate --force`
+6. `php artisan config:cache && php artisan route:cache && php artisan view:cache && php artisan event:cache`
+7. `supervisorctl restart webvulture-queue:* webvulture-reverb webvulture-generator`
+
+Vom lokalen Mac aus: `ssh webvulture 'webvulture-deploy'` (SSH-Alias siehe `~/.ssh/config`).
 
 ## Bekannte Eigenheiten
 
