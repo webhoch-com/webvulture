@@ -2,19 +2,6 @@
 
 Diese Datei ergänzt die globalen Anweisungen aus `~/.claude/CLAUDE.md`. Hier projekt-spezifische Konventionen — gilt für jede Session in diesem Repo.
 
-## Single-Branch-Policy (seit 2026-05-09)
-
-**Es gibt nur einen aktiven Arbeits-Branch: `claude/jovial-brahmagupta-678554`** (= dieser Worktree hier).
-
-- **Keine parallelen Claude-Branches mehr anlegen.** Wenn du den Drang verspürst, einen experimentellen Branch zu bauen — frag den User vorher.
-- **Den Master-Branch (`/Users/webhoch/Desktop/Projekte/WebVulture/`) NICHT anfassen.** Das ist legacy Node/Express-Code.
-- **Den eingefrorenen `claude/nifty-kowalevski-b5bc47`-Worktree NICHT anfassen.** Alle nützlichen Patches daraus wurden am 2026-05-09 hierher portiert (Commit `a4008f8`: AssetDownloader, CostAggregator, Brand-Extraction-Migration, Status-Badge-Fix, etc.).
-- Wenn du in einer neuen Session unsicher bist, ob du im richtigen Verzeichnis bist:
-  ```bash
-  pwd  # muss enden auf .claude/worktrees/jovial-brahmagupta-678554
-  git branch --show-current  # muss claude/jovial-brahmagupta-678554 sein
-  ```
-
 ## Frontend-Konvention
 
 - **Volt-First**: Neue UI-Komponenten als Single-File Volt-Dateien unter `resources/views/livewire/`. Klassische Livewire-Komponenten unter `app/Livewire/` nur, wenn Volt das nicht abdeckt (Forms, große State-Machines).

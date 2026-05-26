@@ -20,6 +20,7 @@ import {
   renderRatingPill,
   renderQuietFooter,
   renderTrustBar,
+  renderHeritageStatement,
   EDITORIAL_CSS,
 } from './_editorial.js';
 
@@ -419,6 +420,8 @@ ${renderMarquee(marqueeItems) || `<div class="marquee">
     <span>FREIES PROBETRAINING</span>
   </div>
 </div>`}
+
+${renderHeritageStatement(spec, foundedYear)}
 
 ${renderTrustBar(trustStats)}
 

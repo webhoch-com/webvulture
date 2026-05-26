@@ -25,6 +25,11 @@ import {
   renderBoardSection,
   renderEventsSection,
   renderHeritageStatement,
+  extractHeritageMilestones,
+  renderHeritageTimeline,
+  extractEnsembles,
+  renderEnsembleGrid,
+  renderKuenstlerischeLeitung,
   EDITORIAL_CSS,
 } from './_editorial.js';
 
@@ -62,6 +67,11 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
   const address = spec.contact.address ? escapeHtml(spec.contact.address) : '';
 
   // Pre-computed editorial data — all extractors are pure and module-shared.
+  // Block-C v2: extractFoundedYear falls back to oldest milestone if no
+  // before/after-trigger match, so milestones must be computed FIRST. We
+  // also pass the pre-computed array to renderHeritageTimeline below so
+  // the regex doesn't run twice per render.
+  const heritageMilestones = extractHeritageMilestones(spec);
   const foundedYear = extractFoundedYear(spec);
   const marqueeItems = buildMarqueeItems(spec, foundedYear);
   const pullQuote = pickPullQuote(spec);
@@ -74,6 +84,13 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
   // Board: extracted from "Obmann: Name" patterns. Empty unless ≥2 valid
   // matches (single-match is usually a false-positive contact line).
   const board = extractBoardMembers(spec);
+
+  // Block-C content: sub-band names → Ensemble-Grid, Kapellmeister →
+  // Künstlerische-Leitung card. Both return '' / [] when source data is
+  // insufficient — pure graceful-degrade, no invented content.
+  // heritageMilestones is already computed above (must precede extractFoundedYear).
+  const ensembles = extractEnsembles(spec);
+  const kuenstlerischeLeitungHtml = renderKuenstlerischeLeitung(board);
 
   // Membership info comes from `spec.membership` only — we never invent
   // tiers/prices/features because we cannot verify them against the
@@ -800,6 +817,8 @@ ${marqueeItems.length > 0 ? `
 
 ${renderHeritageStatement(spec, foundedYear)}
 
+${renderHeritageTimeline(heritageMilestones)}
+
 ${events.length > 0 ? `
 <div class="section-anchor-wrap on-dark"><span class="section-anchor">${nextAnchor()}</span></div>
 ${renderEventsSection(events.map(ev => ({
@@ -808,20 +827,30 @@ ${renderEventsSection(events.map(ev => ({
 })))}
 ` : ''}
 
-${spec.about?.body ? `
+${spec.about?.body ? (() => {
+  // Block-G polish: derive a personalized eyebrow from the business name when
+  // it begins with a recognizable Verein-prefix. Falls back to the generic
+  // "Wer wir sind" when the name doesn't match a known pattern.
+  const VEREIN_PREFIX_RE = /^(Musikverein|Musikkapelle|MV|Trachtenmusikkapelle|TMK|Stadtmusikkapelle|Bürgerkapelle|Marktmusik|Werkskapelle)\b\s*/i;
+  const match = spec.business_name.match(VEREIN_PREFIX_RE);
+  const place = match ? spec.business_name.slice(match[0].length).replace(/^\W+/, '').trim() : '';
+  const ueberTitle = place ? `Der Musikverein <em>${escapeHtml(place)}</em>.` : 'Über <em>uns</em>.';
+  return `
 <div class="section-anchor-wrap"><span class="section-anchor">${nextAnchor()}</span></div>
 <section id="ueber-uns" class="section tone-tint">
   <div class="container">
     <div class="section-head">
       <span class="section-eyebrow">Wer wir sind</span>
-      <h2 class="section-title">Über <em>uns</em>.</h2>
+      <h2 class="section-title">${ueberTitle}</h2>
     </div>
     <div class="about-text" style="max-width: 760px; margin: 0 auto;">
       <p class="dropcap">${escapeHtml(spec.about.body)}</p>
     </div>
   </div>
-</section>
-` : ''}
+</section>`;
+})() : ''}
+
+${renderEnsembleGrid(ensembles)}
 
 ${pullQuote ? `
 <section class="pullquote-section">
@@ -833,6 +862,7 @@ ${pullQuote ? `
 </section>
 ` : ''}
 
+${kuenstlerischeLeitungHtml}
 
 ${/* Klangkörper, Instrumente und Meilensteine wurden entfernt — diese
        Inhalte konnten nicht aus der gescrapten Quellseite verifiziert werden.
@@ -911,15 +941,16 @@ ${galleryCount(spec) >= 1 ? `
     </div>
     <div class="gallery-grid">
       ${spec.media!.gallery!.map((_url, i) => `
-        <div class="gallery-item reveal"><img src="${getGalleryImage(spec, slug, i, 800, 600)}" alt="" loading="lazy" onerror="this.parentNode.classList.add('img-broken'); this.style.display='none';"></div>
+        <div class="gallery-item reveal"><img src="${getGalleryImage(spec, slug, i, 800, 600)}" alt="" loading="lazy" onerror="this.parentNode.classList.add('img-broken'); this.style.display='none';" onload="if(this.naturalWidth<20||this.naturalHeight<20){this.parentNode.classList.add('img-broken');this.style.display='none';}"></div>
       `).join('')}
     </div>
   </div>
 </section>
 <script>
-  // Block-A: hide the entire gallery section if every img is broken (Asset-
-  // Mirror serves 0-byte PNGs on some Verein-leads). Better than rendering
-  // a row of empty dark tiles.
+  // Block-A: hide the entire gallery section if every img is broken or
+  // 0-byte (Asset-Mirror serves 200-OK empty PNGs on some Verein-leads,
+  // which don't trigger onerror — the naturalWidth check on onload catches
+  // those). Better than rendering a row of empty dark tiles.
   document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => {
       const grid = document.querySelector('#bilder .gallery-grid');
@@ -931,7 +962,7 @@ ${galleryCount(spec) >= 1 ? `
         if (section && section.classList.contains('section-anchor-wrap')) section.remove();
         document.querySelector('#bilder')?.remove();
       }
-    }, 1500);
+    }, 2000);
   });
 </script>
 ` : ''}

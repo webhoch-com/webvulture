@@ -19,6 +19,7 @@ import {
   renderRatingPill,
   renderQuietFooter,
   renderTrustBar,
+  renderHeritageStatement,
   EDITORIAL_CSS,
 } from './_editorial.js';
 
@@ -418,6 +419,8 @@ export function renderBestattungPage(spec: SiteSpec, slug: string): string {
 </section>
 
 ${renderMarquee(marqueeItems)}
+
+${renderHeritageStatement(spec, foundedYear)}
 
 ${trustStats.length >= 2 ? renderTrustBar(trustStats) : `<section class="trust">
   <div class="trust-inner">

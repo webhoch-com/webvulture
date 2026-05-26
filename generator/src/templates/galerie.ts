@@ -18,6 +18,7 @@ import {
   renderRatingPill,
   renderQuietFooter,
   renderTrustBar,
+  renderHeritageStatement,
   EDITORIAL_CSS,
 } from './_editorial.js';
 
@@ -369,6 +370,8 @@ export function renderGaleriePage(spec: SiteSpec, slug: string): string {
 </section>
 
 ${renderMarquee(marqueeItems)}
+
+${renderHeritageStatement(spec, foundedYear)}
 
 ${renderTrustBar(trustStats)}
 

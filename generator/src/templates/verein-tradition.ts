@@ -27,6 +27,7 @@ import {
   renderRatingPill,
   renderBoardSection,
   renderEventsSection,
+  renderHeritageStatement,
   EDITORIAL_CSS,
 } from './_editorial.js';
 
@@ -297,6 +298,8 @@ export function renderVereinTraditionPage(spec: SiteSpec, slug: string): string 
   </section>
 
   ${renderMarquee(marqueeItems)}
+
+  ${renderHeritageStatement(spec, foundedYear)}
 
   ${spec.about?.body ? `
   <section class="section about">

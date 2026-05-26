@@ -28,14 +28,14 @@ export async function buildAstroProject(
     throw new Error(`Invalid slug "${slug}" — must match ${SLUG_RE}`);
   }
 
-  await execAsync('npm install', {
+  await execAsync('npm install --prefer-offline --no-audit --no-fund', {
     cwd: astroProjectPath,
-    timeout: 120_000,
+    timeout: 360_000,
   });
 
   await execAsync('npx astro build', {
     cwd: astroProjectPath,
-    timeout: 180_000,
+    timeout: 360_000,
     env: { ...process.env, NODE_ENV: 'production' },
   });
 

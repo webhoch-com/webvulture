@@ -48,14 +48,22 @@ export function extractFoundedYear(spec: SiteSpec): number | null {
   ].filter(Boolean).join(' ');
   const beforeRe = /\b(?:seit|gegründet|gegruendet|gründungsjahr|gruendungsjahr|established|since|von)\s*(?:im\s+jahr\s+)?:?\s*(1[78]\d{2}|19\d{2}|20[0-2]\d)\b/i;
   const afterRe  = /\b(?:im\s+jahr\s+)?(1[78]\d{2}|19\d{2}|20[0-2]\d)\s+(?:gegründet|gegruendet|ins\s+leben|established)\b/i;
-  // Standalone year + word "Jahre" / "Mitglieder" — captures vCard-style
-  // "100 Jahre Tradition" → use currentYear - 100 as fallback estimate.
-  const m = text.match(beforeRe) || text.match(afterRe);
-  if (!m) return null;
-  const year = parseInt(m[1], 10);
   const currentYear = new Date().getFullYear();
-  if (year < 1700 || year > currentYear) return null;
-  return year;
+  const m = text.match(beforeRe) || text.match(afterRe);
+  if (m) {
+    const year = parseInt(m[1], 10);
+    if (year >= 1700 && year <= currentYear) return year;
+  }
+  // Fallback: use the oldest milestone year if extractHeritageMilestones
+  // found ≥2 history-anchored years. This catches sites like Bruckmühl-
+  // Thomasroith where "gegr. 1878" appears but our before/after-regexes
+  // don't fire (the trigger word is abbreviated).
+  const milestones = extractHeritageMilestones(spec);
+  if (milestones.length >= 2) {
+    const oldest = milestones.reduce((a, b) => a.year < b.year ? a : b);
+    if (oldest.year < currentYear - 5) return oldest.year;
+  }
+  return null;
 }
 
 /**
@@ -377,9 +385,14 @@ export function renderSocialStrip(socials: Record<string, string> | undefined): 
  * isn't extractable.
  */
 export function renderHeritageStatement(spec: SiteSpec, foundedYear: number | null): string {
-  if (!foundedYear) return '';
-  const years = new Date().getFullYear() - foundedYear;
+  // Defense-in-depth: TS guarantees `foundedYear: number | null`, but at runtime
+  // a caller may have read it from spec JSON (string-typed). Coerce explicitly
+  // so we never interpolate a non-numeric value into the HTML output.
+  const yr = Number(foundedYear);
+  if (!Number.isFinite(yr) || yr < 1700) return '';
+  const years = new Date().getFullYear() - yr;
   if (years <= 0) return '';
+  foundedYear = yr;  // shadow with the coerced int for the rest of the function
   // Try to extract the city from the address
   let city = '';
   if (spec.contact?.address) {
@@ -394,6 +407,174 @@ export function renderHeritageStatement(spec: SiteSpec, foundedYear: number | nu
   <div class="heritage-inner">
     <span class="heritage-kicker">${years} Jahre Tradition</span>
     <h2 class="heritage-headline">${statement}</h2>
+  </div>
+</section>`;
+}
+
+/**
+ * Heritage Milestones: harvest distinct year-anchors from raw text + the
+ * surrounding sentence as the milestone label. Returns up to 4 chronologically
+ * sorted milestones with the line of context that mentioned each year.
+ *
+ * Inspired by Bruckmühl-Thomasroith which has 1878 (Bergknappenkapelle
+ * gegründet) → 1889 (Feuerwehr-Musikkapelle) → 2024 (Fusion) in its
+ * about-text but no current template renders this as a timeline.
+ */
+export function extractHeritageMilestones(spec: SiteSpec): Array<{ year: number; label: string }> {
+  const sources = new Set<string>();
+  if (spec.raw_text_excerpt) sources.add(spec.raw_text_excerpt);
+  if (spec.about?.body) sources.add(spec.about.body);
+  for (const s of (spec.redesigned_sections ?? [])) sources.add(s.body);
+  const text = Array.from(sources).join('\n');
+
+  const currentYear = new Date().getFullYear();
+  // Anchor on a HISTORY trigger word so we don't mistake event dates or
+  // UI-text years for milestones. Pattern: "(gegründet|fusioniert|...)"
+  // within ±80 chars of the year. Also accept the inverse — year preceded
+  // by "Im Jahr|Anno|Seit".
+  const HISTORY_TRIGGER = /(gegr[üu]ndet|gegr\.|gegruendet|entstanden|fusioniert|fusion|gr[üu]ndung|jubil[äa]um|verein\s+wurde|kapelle\s+wurde|geburtsstunde|ins\s+leben|wiederbelebt|erbaut|seit)/i;
+  const yearWithContext = /\b(1[78]\d{2}|19\d{2}|20[0-2]\d)\b([^.!?\n]{0,150})/gi;
+  const reverseTrigger = /(?:im\s+jahr|anno|seit)\s+\b(1[78]\d{2}|19\d{2}|20[0-2]\d)\b([^.!?\n]{0,150})/gi;
+  // UI-junk filter — these strings indicate the year matched event-list
+  // or login-widget text, not a heritage statement.
+  const UI_JUNK = /(login|passwort|benutzer|iframes?|save\s+the\s+date|registr|cookie|impressum|newsletter|abmelden|anmelden|datenschutz)/i;
+
+  const seen = new Set<number>();
+  const out: Array<{ year: number; label: string }> = [];
+
+  function tryAdd(year: number, ctx: string) {
+    if (year < 1700 || year > currentYear - 1) return;  // exclude future + current year (= event date)
+    if (seen.has(year)) return;
+    if (UI_JUNK.test(ctx)) return;
+    seen.add(year);
+    let label = ctx.trim().replace(/^[\s,;:.)\]>}\-]+/, '');  // strip leading punctuation
+    if (label.length > 60) label = label.slice(0, 60).replace(/\s+\S*$/, '') + '…';
+    if (label.length < 8) label = 'Bedeutendes Jahr in unserer Geschichte';
+    out.push({ year, label });
+  }
+
+  for (const m of text.matchAll(yearWithContext)) {
+    if (out.length >= 6) break;
+    const year = parseInt(m[1], 10);
+    const ctx = m[2] || '';
+    // Window check — only accept if HISTORY_TRIGGER appears within the 150-char
+    // window or in the 60-char window BEFORE the year.
+    const beforeIdx = Math.max(0, (m.index ?? 0) - 60);
+    const before = text.slice(beforeIdx, m.index);
+    if (HISTORY_TRIGGER.test(ctx) || HISTORY_TRIGGER.test(before)) {
+      tryAdd(year, ctx);
+    }
+  }
+  for (const m of text.matchAll(reverseTrigger)) {
+    if (out.length >= 6) break;
+    tryAdd(parseInt(m[1], 10), m[2] || '');
+  }
+
+  out.sort((a, b) => a.year - b.year);
+  return out.length >= 2 ? out.slice(0, 4) : [];
+}
+
+/**
+ * Renders a horizontal heritage timeline. Three to four chronological
+ * nodes with year + short label. Only emit when extractHeritageMilestones
+ * returned ≥2 entries.
+ */
+export function renderHeritageTimeline(milestones: Array<{ year: number; label: string }>): string {
+  if (milestones.length < 2) return '';
+  const nodes = milestones.map(m => `
+    <li class="ht-node">
+      <div class="ht-year">${m.year}</div>
+      <div class="ht-label">${escapeHtml(m.label)}</div>
+    </li>
+  `).join('');
+  return `
+<section class="heritage-timeline">
+  <div class="container">
+    <div class="section-head center">
+      <span class="section-eyebrow">Chronik</span>
+      <h2 class="section-title">Unser <em>Werdegang</em>.</h2>
+    </div>
+    <ol class="ht-track">${nodes}</ol>
+  </div>
+</section>`;
+}
+
+/**
+ * Ensemble extractor — finds sub-band names like Jugendkapelle, Big Band,
+ * Bläserklasse that real Vereine often present as separate brand-tiles.
+ * Returns at most 5 distinct ensembles. Used by renderEnsembleGrid.
+ */
+export function extractEnsembles(spec: SiteSpec): Array<{ name: string; context: string }> {
+  const sources = new Set<string>();
+  if (spec.raw_text_excerpt) sources.add(spec.raw_text_excerpt);
+  if (spec.about?.body) sources.add(spec.about.body);
+  for (const s of (spec.redesigned_sections ?? [])) sources.add(`${s.title}\n${s.body}`);
+  const text = Array.from(sources).join('\n');
+
+  const ENSEMBLE_RE = /\b(Jugendkapelle|Jungbläser|Bläserklasse|Bläserbande|Big[\s-]?Band|Marschformation|Junior[\s-]?Band|Schülerorchester|Hauptkapelle|Stammkapelle|Salonorchester|Brass[\s-]?Ensemble|Holzbläser-?Ensemble|Blechbläser-?Ensemble|Senioren-?Kapelle)\b[^.!?\n]{0,80}/gi;
+  const seen = new Set<string>();
+  const out: Array<{ name: string; context: string }> = [];
+  for (const m of text.matchAll(ENSEMBLE_RE)) {
+    const name = m[1].trim();
+    const key = name.toLowerCase().replace(/[\s-]/g, '');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    let context = m[0].slice(name.length).replace(/^[\s,;:.-]+/, '').trim();
+    if (context.length > 100) context = context.slice(0, 100).replace(/\s+\S*$/, '') + '…';
+    out.push({ name, context });
+    if (out.length >= 5) break;
+  }
+  return out;
+}
+
+export function renderEnsembleGrid(ensembles: Array<{ name: string; context: string }>): string {
+  if (ensembles.length === 0) return '';
+  const tiles = ensembles.map((e, i) => `
+    <article class="ensemble-card">
+      <div class="ensemble-num">${String(i + 1).padStart(2, '0')} / ${String(ensembles.length).padStart(2, '0')}</div>
+      <h3>${escapeHtml(e.name)}</h3>
+      ${e.context ? `<p>${escapeHtml(e.context)}</p>` : ''}
+    </article>
+  `).join('');
+  return `
+<section class="ensemble-grid-section">
+  <div class="container">
+    <div class="section-head">
+      <span class="section-eyebrow">Unsere Klangkörper</span>
+      <h2 class="section-title">Vielfalt unter <em>einem Dach</em>.</h2>
+    </div>
+    <div class="ensemble-grid">${tiles}</div>
+  </div>
+</section>`;
+}
+
+/**
+ * Künstlerische-Leitung-Card: when board contains a Kapellmeister/Stabführer
+ * with a name, surface them in a single tall card with focus emphasis,
+ * BEFORE the regular Vorstand-grid. Premium pattern from Algunder (Mozarteum-
+ * graduate Kapellmeister profile).
+ */
+export function renderKuenstlerischeLeitung(board: Array<{ name: string; role: string }>): string {
+  // Find the first Kapellmeister-equivalent role
+  // Keep this list tight — generic roles like "Trainer" would let a sport-
+  // club coach get promoted to a "Künstlerische Leitung"-card with a music-
+  // specific blurb. Only roles that unambiguously imply musical leadership.
+  const LEITER_RE = /^(Kapellmeister|Musikalische?\s+Leitung|Dirigent|Chorleiter|Stabführer|Stabfuehrer)/i;
+  const leiter = board.find(m => LEITER_RE.test(m.role));
+  if (!leiter) return '';
+  const initials = leiter.name.split(/\s+/).map(w => w[0] || '').slice(0, 2).join('').toUpperCase();
+  return `
+<section class="leitung-section">
+  <div class="container">
+    <div class="leitung-inner">
+      <div class="leitung-portrait" aria-hidden="true">${escapeHtml(initials)}</div>
+      <div class="leitung-body">
+        <span class="section-eyebrow">Künstlerische Leitung</span>
+        <h2 class="section-title leitung-name">${escapeHtml(leiter.name)}</h2>
+        <div class="leitung-role">${escapeHtml(leiter.role)}</div>
+        <p class="leitung-blurb">Verantwortlich für die musikalische Ausrichtung und das künstlerische Programm. Probenarbeit, Werkauswahl, klangliche Identität — alles aus einer Hand.</p>
+      </div>
+    </div>
   </div>
 </section>`;
 }
@@ -937,4 +1118,122 @@ export const EDITORIAL_CSS = `
   max-width: 22ch; margin: 0 auto;
 }
 .heritage-headline em { font-style: italic; color: var(--primary, #2d4a32); font-weight: 500; }
+
+/* Heritage-Timeline (horizontal chronik with 3-4 nodes) — Bruckmühl pattern */
+.heritage-timeline {
+  padding: clamp(5rem, 9vw, 7rem) 1.5rem;
+  background: color-mix(in oklch, var(--primary, #2d4a32) 6%, white);
+}
+.heritage-timeline .container { max-width: 1200px; margin: 0 auto; }
+.heritage-timeline .ht-track {
+  list-style: none; padding: 0; margin: 4rem 0 0;
+  display: grid; gap: 2.5rem;
+  grid-template-columns: 1fr;
+  position: relative;
+}
+@media (min-width: 760px) {
+  .heritage-timeline .ht-track {
+    grid-auto-flow: column; grid-auto-columns: 1fr;
+    gap: 0; padding-top: 3rem;
+  }
+  .heritage-timeline .ht-track::before {
+    content: ''; position: absolute; top: 1.5rem; left: 5%; right: 5%;
+    height: 1px; background: var(--accent, #b8893d); opacity: 0.4;
+  }
+}
+.ht-node {
+  position: relative; text-align: center; padding: 0 0.5rem;
+}
+@media (min-width: 760px) {
+  .ht-node::before {
+    content: ''; position: absolute; top: -1.55rem; left: 50%; transform: translateX(-50%);
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--accent, #b8893d);
+    border: 3px solid color-mix(in oklch, var(--primary, #2d4a32) 6%, white);
+  }
+}
+.ht-year {
+  font-family: var(--display, Georgia, serif); font-weight: 500;
+  font-size: clamp(2.4rem, 5vw, 4rem); line-height: 0.95;
+  letter-spacing: -0.02em; color: var(--primary, #2d4a32);
+  margin-bottom: 1rem;
+}
+.ht-label {
+  font-family: var(--serif, Georgia, serif); font-size: 0.96rem;
+  color: var(--ink-2, #4a4030); line-height: 1.6;
+}
+
+/* Ensemble-Grid — sub-bands as 3-4 brand tiles (Brixen/Eppingen pattern) */
+.ensemble-grid-section {
+  padding: clamp(5rem, 9vw, 8rem) 1.5rem;
+  background: var(--bg, #fff);
+}
+.ensemble-grid-section .container { max-width: 1300px; margin: 0 auto; }
+.ensemble-grid {
+  display: grid; gap: 1.5rem; margin-top: 3rem;
+  grid-template-columns: 1fr;
+}
+@media (min-width: 720px) { .ensemble-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 1000px) { .ensemble-grid { grid-template-columns: repeat(3, 1fr); } }
+.ensemble-card {
+  background: var(--surface, #fff);
+  border: 1px solid var(--rule, rgba(0,0,0,0.08));
+  border-top: 3px solid var(--accent, #b8893d);
+  padding: 2.5rem 2rem;
+  transition: transform .25s ease, box-shadow .25s ease;
+}
+.ensemble-card:hover { transform: translateY(-4px); box-shadow: 0 18px 36px -16px rgba(0,0,0,0.12); }
+.ensemble-card .ensemble-num {
+  font-family: var(--display, Georgia, serif); font-size: 0.78rem;
+  letter-spacing: 0.22em; text-transform: uppercase;
+  color: var(--accent, #b8893d); font-weight: 600;
+  margin-bottom: 1.25rem;
+}
+.ensemble-card h3 {
+  font-family: var(--display, Georgia, serif); font-weight: 500;
+  font-size: clamp(1.4rem, 2.5vw, 1.85rem); line-height: 1.15;
+  color: var(--ink, #1a1a1a); margin-bottom: 0.9rem;
+}
+.ensemble-card p {
+  font-family: var(--serif, Georgia, serif); font-size: 0.98rem;
+  line-height: 1.7; color: var(--ink-2, #4a4030);
+}
+
+/* Künstlerische-Leitung-Card — single tall card before Vorstand-grid */
+.leitung-section {
+  padding: clamp(5rem, 9vw, 8rem) 1.5rem;
+  background: color-mix(in oklch, var(--primary, #2d4a32) 4%, white);
+}
+.leitung-section .container { max-width: 1200px; margin: 0 auto; }
+.leitung-inner {
+  display: grid; gap: 3rem;
+  grid-template-columns: 1fr; align-items: center;
+}
+@media (min-width: 760px) { .leitung-inner { grid-template-columns: 240px 1fr; gap: 4rem; } }
+.leitung-portrait {
+  width: clamp(180px, 28vw, 240px); height: clamp(180px, 28vw, 240px);
+  margin: 0 auto;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary, #2d4a32) 0%, var(--primary-deep, #1c2f1f) 100%);
+  display: grid; place-items: center;
+  font-family: var(--display, Georgia, serif); font-weight: 500;
+  font-size: clamp(3.5rem, 6vw, 5rem); color: var(--accent, #b8893d);
+  letter-spacing: 0.04em;
+  border: 4px solid var(--accent, #b8893d);
+  box-shadow: 0 24px 60px -24px rgba(0,0,0,0.4);
+}
+.leitung-body .leitung-name {
+  margin-top: 0.4rem; margin-bottom: 0.5rem;
+}
+.leitung-body .leitung-role {
+  font-family: var(--display, Georgia, serif); font-size: 0.86rem;
+  letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--accent, #b8893d); font-weight: 600;
+  margin-bottom: 1.5rem;
+}
+.leitung-body .leitung-blurb {
+  font-family: var(--serif, Georgia, serif); font-size: 1.1rem;
+  line-height: 1.75; color: var(--ink-2, #4a4030);
+  max-width: 56ch;
+}
 `;
