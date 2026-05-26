@@ -23,3 +23,18 @@ _ide_helper.php
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# generator (Node-Service) — build output & deps
+/generator/node_modules
+/generator/dist
+
+# playwright-mcp & windsurf temp dirs (local-only)
+/.playwright-mcp
+/.windsurf
+
+# claude session metadata (local-only)
+/.claude/worktrees
+
+# PHP backup files
+*.bak
+*.bak-*
