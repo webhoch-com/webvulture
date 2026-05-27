@@ -121,6 +121,8 @@ new class extends Component {
     <form wire:submit="save" class="settings-card">
         <div class="settings-card-glow"></div>
 
+        <!-- DEBUG: slot keys = {{ implode(',', array_keys($slots ?? [])) }} | tab = {{ $tab }} | tab-slots = {{ is_array($slots[$tab] ?? null) ? count($slots[$tab]) : 'NULL' }} -->
+
         @foreach ($slots[$tab] ?? [] as $slot)
             @php
                 $formKey = $slot['group'].'|'.$slot['key'];
