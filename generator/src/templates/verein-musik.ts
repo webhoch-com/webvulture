@@ -1020,7 +1020,7 @@ ${spec.about?.body ? (() => {
         // dropcap that reads as broken mid-sentence. Strip everything after
         // a clear feed-pollution marker. Also strip leading non-letter chars
         // so :first-letter never renders a digit.
-        const FEED_MARKER = /\s*(?:Social Media|Frühschoppen|Save the date|Save-the-date|Gestern\b|Heute\b|Morgen\b|Kirchenkonzert\b|Maiblasen\b|🎶|🥁|☀️|⛪️|»\s*Bildergalerie|» Seiten|nächste Seite|🎵|🎺)/i;
+        const FEED_MARKER = /\s*(?:Social Media|Frühschoppen|Save the date|Save-the-date|Gestern\b|Heute\b|Morgen\b|Kirchenkonzert\b|Maiblasen\b|🎶|🥁|☀️|⛪️|»\s*Bildergalerie|» Seiten|nächste Seite|🎵|🎺|Neuigkeiten und Termine|Der erste wichtige Termin|Der nächste\s+(?:wichtige\s+)?Termin|Frühlingskonzert|Frühlngskonzert|Herbstkonzert|Adventskonzert|in diesem Jahr,\s+das|Termin in diesem Jahr|Konzertwertung|haben\s+wir\s+(?:bereits|schon)|fand\s+statt|Folgen Sie uns|Termin\s*[:.]|Veranstaltung\s*[:.])/i;
         let body = spec.about!.body.trim();
         body = body.replace(/^[^A-Za-zÄÖÜäöü(]+/, '');  // strip leading non-letter
         const cut = body.search(FEED_MARKER);
