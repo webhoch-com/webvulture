@@ -376,34 +376,76 @@ class HomepageExtractor
         return null;
     }
 
+    /**
+     * Sammle ALLE internen Links (Haupt-Nav + Footer + Sidebar + Content-Body),
+     * Same-Domain-only, mit Junk-Pfaden gefiltert. Vorher: nur Header-Nav, cap 10.
+     * Jetzt: alle a[href], cap 30 — der ScraperService crawled davon dann
+     * die ersten N für die Konsolidierung (Sections + Gallery).
+     */
     protected function navLinks(Crawler $c, string $baseUrl): array
     {
         $base = parse_url($baseUrl);
         $host = $base['host'] ?? '';
         $links = [];
 
-        $selectors = ['nav a[href]', 'header a[href]', '.menu a[href]', '#menu a[href]', '.navigation a[href]'];
+        // Junk-Pfade die wir nie crawlen wollen — Login/Admin sind sensitive,
+        // Files (PDFs, ZIPs) sind nicht HTML, fragment-only Links (#xyz)
+        // sind reiner Anchor-Sprung.
+        $junkPathRe = '#^/?(wp-admin|wp-login|admin|login|logout|signin|signup|register|cart|checkout|account|user/|node/edit|search|feed|rss|atom|sitemap|robots\.txt)#i';
+        $junkExtRe = '#\.(pdf|zip|tar|gz|jpg|jpeg|png|gif|svg|mp4|mp3|doc|docx|xls|xlsx|ics)(\?|$)#i';
+
+        // Selectors in priority order — Header-Nav zuerst (wichtige Top-Level-
+        // Pages wie /chronik, /galerie), dann Content-Links, dann Footer.
+        $selectors = [
+            'nav a[href]',
+            'header a[href]',
+            '.menu a[href]',
+            '#menu a[href]',
+            '.navigation a[href]',
+            'main a[href]',
+            'article a[href]',
+            '.content a[href]',
+            'aside a[href]',
+            'footer a[href]',
+            'a[href]', // catch-all als letzter Fall
+        ];
 
         foreach ($selectors as $sel) {
             try {
-                $c->filter($sel)->each(function (Crawler $node) use (&$links, $host, $baseUrl) {
+                $c->filter($sel)->each(function (Crawler $node) use (&$links, $host, $baseUrl, $junkPathRe, $junkExtRe) {
                     $href = trim($node->attr('href') ?? '');
-                    $label = trim($node->text(''));
-                    if (! $href || ! $label || str_starts_with($href, '#') || strlen($label) > 40) {
+                    $label = trim(preg_replace('/\s+/', ' ', $node->text('')));
+                    if (! $href || str_starts_with($href, '#') || str_starts_with(strtolower($href), 'mailto:') || str_starts_with(strtolower($href), 'tel:')) {
+                        return;
+                    }
+                    if ($label === '' || mb_strlen($label) > 80) {
+                        // Bilder-Links ohne Text-Label überspringen — die führen
+                        // meist auf Galerie-Detail-Seiten die uns nichts bringen.
                         return;
                     }
                     $resolved = $this->resolveUrl($href, $baseUrl);
                     $parsed = parse_url($resolved);
-                    // Same-domain only
-                    if (($parsed['host'] ?? '') === $host) {
-                        $links[$label] = $resolved;
+                    if (($parsed['host'] ?? '') !== $host) {
+                        return; // Same-domain only
                     }
+                    $path = $parsed['path'] ?? '/';
+                    if (preg_match($junkPathRe, $path) || preg_match($junkExtRe, $path)) {
+                        return;
+                    }
+                    // Dedupe: erstes Label-Vorkommen pro URL gewinnt. Ohne den
+                    // Path-Dedupe würden wir Footer-Wiederholungen der Header-
+                    // Nav als Duplikate sammeln.
+                    foreach ($links as $existingHref) {
+                        if ($existingHref === $resolved) return;
+                    }
+                    $links[$label] = $resolved;
                 });
-            } catch (\Throwable $e) { \Log::debug("HomepageExtractor: extraction step failed", ["error" => $e->getMessage()]); 
+            } catch (\Throwable $e) {
+                \Log::debug('HomepageExtractor: navLinks selector failed', ['sel' => $sel, 'error' => $e->getMessage()]);
             }
         }
 
-        return array_slice($links, 0, 10);
+        return array_slice($links, 0, 30);
     }
 
     protected function brandColors(string $html): array

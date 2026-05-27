@@ -53,19 +53,28 @@ class ScraperService
             // ── Extract structured data ────────────────────────────────────────
             $extracted = $this->extractor->extract($html, $finalUrl);
 
-            // ── Crawl nav pages (same domain, up to 5) ────────────────────────
+            // ── Crawl nav pages (same domain, up to 20) ───────────────────────
+            // Vorher: 5 — viel zu wenig für eine ordentliche Inventur einer
+            // Vereins- oder Firmenseite. HomepageExtractor::navLinks() liefert
+            // jetzt bis zu 30 deduplizierte Same-Domain-Links (Header + Content
+            // + Footer); wir crawlen davon die ersten 20 für sections/gallery
+            // -Konsolidierung. Hard-Cap als Schutz gegen unbegrenztes Crawlen.
             $navPages = [];
             $navHtmls = [];
-            foreach (array_slice($extracted['nav_links'] ?? [], 0, 5) as $label => $navUrl) {
-                if ($navUrl === $finalUrl) {
+            $crawledUrls = [strtolower($finalUrl) => true];
+            $navCap = 20;
+            foreach (array_slice($extracted['nav_links'] ?? [], 0, $navCap) as $label => $navUrl) {
+                $key = strtolower(rtrim($navUrl, '/'));
+                if (isset($crawledUrls[$key]) || isset($crawledUrls[$key.'/'])) {
                     continue;
                 }
                 try {
                     [$navHtml] = $this->fetch($navUrl);
-                    $filename = 'page-'.preg_replace('/[^a-z0-9]/', '-', strtolower($label)).'.html';
+                    $filename = 'page-'.substr(preg_replace('/[^a-z0-9]+/', '-', strtolower($label)), 0, 40).'.html';
                     $this->store->writeRaw($lead->id, $filename, $navHtml);
                     $navPages[$label] = $navUrl;
                     $navHtmls[$navUrl] = $navHtml;
+                    $crawledUrls[$key] = true;
                 } catch (\Throwable $e) {
                     Log::debug("Nav page [{$label}] failed: {$e->getMessage()}");
                 }

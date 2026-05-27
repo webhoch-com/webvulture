@@ -25,16 +25,25 @@ class SearchForm extends Form
     )]
     public ?string $keyword = null;
 
+    /**
+     * Nullable int — `public int $limit` crashed Livewire mit TypeError sobald
+     * der User das Input-Feld leert (wire:model schickt empty-string, kann
+     * nicht in int gecastet werden). Mit `?int` und nullable-Validation lebt
+     * das Feld solche Edge-Cases sauber durch.
+     *
+     * Max 60 = Google Places "Text Search (New)" harte Obergrenze pro
+     * Query (3 Pagination-Seiten à 20). Höhere Werte würden im Backend
+     * silently gekappt.
+     */
     #[Validate(
-        rule: 'required|integer|min:1|max:20',
+        rule: 'nullable|integer|min:1|max:60',
         as: 'Ergebnis-Limit',
         message: [
-            'required' => 'Ergebnis-Limit ist erforderlich.',
             'min' => 'Limit muss mindestens 1 sein.',
-            'max' => 'Limit darf maximal 20 sein.',
+            'max' => 'Limit darf maximal 60 sein (Google Places API-Cap).',
         ]
     )]
-    public int $limit = 10;
+    public ?int $limit = 20;
 
     #[Validate('boolean')]
     public bool $only_without_website = false;

@@ -15,7 +15,9 @@ new class extends Component {
         $run = SearchRun::create([
             'city' => $this->form->city,
             'keyword' => $this->form->keyword,
-            'limit' => $this->form->limit,
+            // Wenn der User das Feld leert, fällt limit auf Default 20 zurück
+            // statt die DB mit NULL/0 zu spammen (Spalte ist int unsigned, NOT NULL).
+            'limit' => $this->form->limit ?: 20,
             'filters' => [
                 'only_without_website' => $this->form->only_without_website,
                 'min_rating' => $this->form->min_rating,
@@ -71,7 +73,8 @@ new class extends Component {
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></svg>
                     Ergebnisse · Limit
                 </label>
-                <input id="search-limit" type="number" min="1" max="20" wire:model="form.limit" class="search-input" />
+                <input id="search-limit" type="number" min="1" max="60" step="1" wire:model.lazy="form.limit" placeholder="20" class="search-input" />
+                @error('form.limit') <span class="search-error">{{ $message }}</span> @enderror
             </div>
 
             <div class="search-field">
