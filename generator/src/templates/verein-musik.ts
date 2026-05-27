@@ -598,7 +598,37 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
     /* Members-Section is the simple CTA wrapper (.member-cta-wrap above).
        The 3-tier-pricing block was removed: we never have verified per-tier
        data and the placeholder rendered as obvious filler. */
-    .members-section { background: var(--bg); }
+    .members-section { background: var(--bg-2); position: relative; }
+    .member-perks {
+      display: grid; gap: 1.25rem; max-width: 1100px; margin: 3rem auto 1rem;
+      grid-template-columns: 1fr;
+    }
+    @media (min-width: 760px) { .member-perks { grid-template-columns: repeat(3, 1fr); gap: 2rem; } }
+    .member-perk {
+      display: flex; gap: 1.25rem; align-items: flex-start;
+      background: var(--surface);
+      padding: 1.75rem 1.5rem;
+      border-radius: 10px;
+      border-left: 3px solid var(--accent);
+      transition: transform .25s ease, box-shadow .25s ease;
+    }
+    .member-perk:hover { transform: translateY(-3px); box-shadow: 0 14px 28px -12px rgba(45,74,50,0.18); }
+    .member-perk svg {
+      width: 42px; height: 42px; flex-shrink: 0;
+      color: var(--primary);
+      padding: 8px; background: color-mix(in oklch, var(--primary) 8%, white);
+      border-radius: 50%;
+    }
+    .member-perk strong {
+      display: block;
+      font-family: var(--display); font-size: 1.05rem; font-weight: 600;
+      color: var(--ink); margin-bottom: 0.25rem;
+    }
+    .member-perk span {
+      display: block;
+      font-family: var(--serif); font-size: 0.92rem; line-height: 1.55;
+      color: var(--ink-2);
+    }
 
     /* ─── Board ──────────────────────────────────────────── */
     .board-section { background: var(--bg-2); }
@@ -1046,20 +1076,53 @@ ${(spec.redesigned_sections && spec.redesigned_sections.length > 0) ? `
 </section>
 ` : ''}
 
-${membership && membership.description ? `
-<section id="mitglied" class="section members-section">
+${(() => {
+  // Mitgliedschafts-Section: always rendered for Verein templates since
+  // every Amateur-Verein actively recruits. Falls back to a Verein-
+  // appropriate generic copy if spec.membership.description is empty.
+  // The instrument-quartet icon row adds visual texture without needing
+  // photos of actual members.
+  const descr = membership?.description?.trim();
+  const cta = membership?.cta?.trim() || 'Probespiel vereinbaren';
+  const fallback = `Wir freuen uns über jeden, der mit uns musizieren möchte. Egal ob Anfänger, Wiedereinsteiger oder erfahrener Musiker — nehmen Sie unverbindlich Kontakt mit uns auf.`;
+  return `
+<div class="section-anchor-wrap"><span class="section-anchor">${nextAnchor()}</span></div>
+<section id="mitglied" class="section members-section pattern-notes" style="position:relative">
   <div class="container">
     <div class="section-head center reveal">
       <span class="section-eyebrow">Mitgliedschaft</span>
       <h2 class="section-title">Werden Sie <em>Teil von uns</em>.</h2>
-      <p class="section-lead">${escapeHtml(membership.description)}</p>
+      <p class="section-lead">${escapeHtml(descr || fallback)}</p>
+    </div>
+    <div class="member-perks stagger-group" aria-hidden="true">
+      <div class="member-perk reveal">
+        <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="16" cy="11" r="5"/><path d="M5 28c0-5 5-9 11-9s11 4 11 9"/></svg>
+        <div>
+          <strong>Gemeinschaft</strong>
+          <span>Gemeinsam musizieren, gemeinsam erleben.</span>
+        </div>
+      </div>
+      <div class="member-perk reveal">
+        <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M16 4v24"/><circle cx="11" cy="24" r="3" fill="currentColor"/><path d="M16 4l8 4"/></svg>
+        <div>
+          <strong>Ausbildung</strong>
+          <span>Vom ersten Ton bis zum Solo — wir begleiten Sie.</span>
+        </div>
+      </div>
+      <div class="member-perk reveal">
+        <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="6" y="10" width="20" height="14" rx="2"/><path d="M6 14h20M10 18h8"/></svg>
+        <div>
+          <strong>Auftritte</strong>
+          <span>Konzerte, Feste, Reisen — werden Sie Teil unseres Programms.</span>
+        </div>
+      </div>
     </div>
     <div class="member-cta-wrap reveal">
-      <a href="#kontakt" class="member-cta">${escapeHtml(membership.cta || 'Mitglied werden')}</a>
+      <a href="#kontakt" class="member-cta">${escapeHtml(cta)} →</a>
     </div>
   </div>
-</section>
-` : ''}
+</section>`;
+})()}
 
 ${board.length > 0 ? `
 <div class="section-anchor-wrap"><span class="section-anchor">${nextAnchor()}</span></div>
