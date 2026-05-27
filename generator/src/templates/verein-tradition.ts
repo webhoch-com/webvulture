@@ -54,9 +54,25 @@ export function renderVereinTraditionPage(spec: SiteSpec, slug: string): string 
   const pullQuote = pickPullQuote(spec);
   const board = extractBoardMembers(spec);
 
-  const primary = spec.brand?.primary_color || '#7c2d12';
+  // Warm-festive forcer: Verein-template is a TRACHTEN aesthetic — warm
+  // wood + brass-gold + tannengrün + burgundy. Scraped brand colors are
+  // often corporate-cold; we force-fallback to warm Verein defaults
+  // unless the scraped color is already in the warm spectrum.
+  const isWarmColor = (hex: string): boolean => {
+    const m = hex.match(/^#?([0-9a-f]{6})$/i);
+    if (!m) return false;
+    const n = parseInt(m[1], 16);
+    const r = (n >> 16) & 0xff, g = (n >> 8) & 0xff, b = n & 0xff;
+    if (b > r + 30 && b > g + 20) return false;
+    if (r < 80 && g < 80 && b < 80) return false;
+    if (r > 230 && g > 230 && b > 230) return false;
+    return true;
+  };
+  const rawPrimary = spec.brand?.primary_color || '';
+  const primary = isWarmColor(rawPrimary) ? rawPrimary : '#7c2d12';
   const secondary = spec.brand?.secondary_color || primary;
-  const accent = spec.brand?.accent_color || '#b89968';
+  const rawAccent = spec.brand?.accent_color || '';
+  const accent = (isWarmColor(rawAccent) && rawAccent !== rawPrimary) ? rawAccent : '#b8893d';
   const headingFont = spec.brand?.heading_font_family
     ? `'${spec.brand.heading_font_family}', 'Cinzel', 'Times New Roman', serif`
     : "'Cinzel', 'Times New Roman', serif";
