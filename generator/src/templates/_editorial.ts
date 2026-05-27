@@ -542,7 +542,7 @@ export function renderHeritageTimeline(milestones: Array<{ year: number; label: 
     </li>
   `).join('');
   return `
-<section class="heritage-timeline pattern-notes" style="position:relative">
+<section class="heritage-timeline pattern-notes pattern-staff" style="position:relative;overflow:hidden">
   <div class="container">
     <div class="section-head center reveal">
       <span class="section-eyebrow">Chronik</span>
@@ -1001,28 +1001,50 @@ export function renderTrustBadgeSection(
     </div>
   `).join('');
   return `
-<section class="trust-section reveal">
+<section class="trust-section pattern-staff reveal">
   <div class="container">
     <div class="trust-wrap">
       ${verband ? `
       <div class="trust-verband">
-        <svg class="trust-wreath" viewBox="0 0 120 120" aria-hidden="true">
-          <!-- Eichenlaub-Kranz: zwei Halbkränze mit Blattranken -->
-          <g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
-            <path d="M60 18 C 32 22, 18 50, 22 78 C 26 96, 40 106, 60 108" />
-            <path d="M60 18 C 88 22, 102 50, 98 78 C 94 96, 80 106, 60 108" />
-            <!-- Blätter links -->
-            <path d="M28 38 Q 22 32, 18 38 Q 24 42, 28 38 Z" fill="currentColor"/>
-            <path d="M22 56 Q 14 52, 14 60 Q 20 62, 22 56 Z" fill="currentColor"/>
-            <path d="M26 76 Q 18 76, 18 84 Q 26 84, 26 76 Z" fill="currentColor"/>
-            <path d="M36 92 Q 30 90, 30 98 Q 38 98, 36 92 Z" fill="currentColor"/>
-            <!-- Blätter rechts (mirrored) -->
-            <path d="M92 38 Q 98 32, 102 38 Q 96 42, 92 38 Z" fill="currentColor"/>
-            <path d="M98 56 Q 106 52, 106 60 Q 100 62, 98 56 Z" fill="currentColor"/>
-            <path d="M94 76 Q 102 76, 102 84 Q 94 84, 94 76 Z" fill="currentColor"/>
-            <path d="M84 92 Q 90 90, 90 98 Q 82 98, 84 92 Z" fill="currentColor"/>
-            <!-- Bow at bottom -->
-            <circle cx="60" cy="108" r="3" fill="currentColor"/>
+        <svg class="trust-wreath" viewBox="0 0 200 200" aria-hidden="true">
+          <!-- PR-A10: refined Eichenlaub-Kranz — 7 Blätter pro Seite + Ribbon-Bow.
+               Inspired by Verbands-Wappen-Tradition. currentColor → uses var(--accent). -->
+          <g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <!-- Linker Halbkranz: zwei Stränge geflochten -->
+            <path d="M100 30 C 60 32, 32 70, 30 110 C 28 145, 50 168, 80 178" opacity="0.85"/>
+            <path d="M100 30 C 70 36, 42 76, 40 112 C 38 138, 58 156, 80 168" opacity="0.5"/>
+            <!-- Rechter Halbkranz: zwei Stränge geflochten -->
+            <path d="M100 30 C 140 32, 168 70, 170 110 C 172 145, 150 168, 120 178" opacity="0.85"/>
+            <path d="M100 30 C 130 36, 158 76, 160 112 C 162 138, 142 156, 120 168" opacity="0.5"/>
+          </g>
+          <g fill="currentColor">
+            <!-- Linke Blätter (7 Stück, gestaffelt) -->
+            <path d="M52 50 Q 40 44, 38 52 Q 42 60, 50 58 Q 54 54, 52 50 Z" opacity="0.95"/>
+            <path d="M40 72 Q 26 70, 26 80 Q 32 86, 42 82 Q 44 76, 40 72 Z" opacity="0.95"/>
+            <path d="M34 96 Q 20 96, 20 106 Q 28 110, 38 106 Q 38 100, 34 96 Z" opacity="0.95"/>
+            <path d="M34 122 Q 22 124, 24 134 Q 32 136, 40 130 Q 40 124, 34 122 Z" opacity="0.95"/>
+            <path d="M44 146 Q 32 150, 36 158 Q 46 158, 52 152 Q 50 146, 44 146 Z" opacity="0.95"/>
+            <path d="M62 166 Q 50 170, 56 178 Q 66 178, 70 170 Q 68 164, 62 166 Z" opacity="0.95"/>
+            <path d="M62 60 Q 70 52, 76 58 Q 72 66, 64 66 Z" opacity="0.6"/>
+            <!-- Rechte Blätter (mirrored) -->
+            <path d="M148 50 Q 160 44, 162 52 Q 158 60, 150 58 Q 146 54, 148 50 Z" opacity="0.95"/>
+            <path d="M160 72 Q 174 70, 174 80 Q 168 86, 158 82 Q 156 76, 160 72 Z" opacity="0.95"/>
+            <path d="M166 96 Q 180 96, 180 106 Q 172 110, 162 106 Q 162 100, 166 96 Z" opacity="0.95"/>
+            <path d="M166 122 Q 178 124, 176 134 Q 168 136, 160 130 Q 160 124, 166 122 Z" opacity="0.95"/>
+            <path d="M156 146 Q 168 150, 164 158 Q 154 158, 148 152 Q 150 146, 156 146 Z" opacity="0.95"/>
+            <path d="M138 166 Q 150 170, 144 178 Q 134 178, 130 170 Q 132 164, 138 166 Z" opacity="0.95"/>
+            <path d="M138 60 Q 130 52, 124 58 Q 128 66, 136 66 Z" opacity="0.6"/>
+          </g>
+          <!-- Center crown/star detail at top -->
+          <g fill="currentColor">
+            <path d="M100 18 L 103 26 L 111 26 L 105 31 L 108 39 L 100 34 L 92 39 L 95 31 L 89 26 L 97 26 Z" opacity="0.9"/>
+          </g>
+          <!-- Ribbon-Bow at bottom -->
+          <g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
+            <path d="M82 174 Q 100 184, 118 174" opacity="0.9"/>
+            <path d="M82 174 L 70 188 L 88 184 Z" fill="currentColor" opacity="0.85"/>
+            <path d="M118 174 L 130 188 L 112 184 Z" fill="currentColor" opacity="0.85"/>
+            <circle cx="100" cy="178" r="3.5" fill="currentColor"/>
           </g>
         </svg>
         <div class="trust-verband-body">
@@ -1220,7 +1242,7 @@ export function renderEventsSection(events: Array<{ date: string; title: string;
     </article>
   `).join('');
   return `
-<section class="section events-section">
+<section class="section events-section pattern-staff" style="position:relative;overflow:hidden">
   <div class="container">
     <div class="section-head center">
       <span class="section-eyebrow">Termine</span>
@@ -1820,8 +1842,10 @@ export const EDITORIAL_CSS = `
   background: color-mix(in oklch, var(--accent, #b8893d) 6%, var(--bg, #fbf7ee));
   border-top: 1px solid color-mix(in oklch, var(--accent, #b8893d) 22%, transparent);
   border-bottom: 1px solid color-mix(in oklch, var(--accent, #b8893d) 22%, transparent);
+  position: relative;
+  overflow: hidden;
 }
-.trust-section .container { max-width: 1100px; margin: 0 auto; }
+.trust-section .container { max-width: 1100px; margin: 0 auto; position: relative; z-index: 1; }
 .trust-wrap {
   display: grid; gap: 3rem; align-items: center;
   grid-template-columns: 1fr;
@@ -1874,6 +1898,65 @@ export const EDITORIAL_CSS = `
   font-family: var(--serif, Georgia, serif); font-size: 0.85rem;
   line-height: 1.5; color: var(--ink-2, #4a4030);
 }
+
+/* PR-A10: Notenlinien-Pattern — echtes 5-Liniensystem-SVG als subtiles
+   Repeat-Background. Wird auf Sektionen mit .pattern-staff angewendet
+   (trust-section + optional weitere bg-2-Sektionen).
+   Die Bass- und Violinschlüssel-Glyphen sind weggelassen — pure 5-Linien
+   wirken eleganter als zusätzliche Symbolik und stören die Lesbarkeit nicht. */
+.pattern-staff { position: relative; }
+.pattern-staff::before {
+  content: '';
+  position: absolute; inset: 0;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 7px,
+    color-mix(in oklch, var(--accent, #b8893d) 30%, transparent) 7px,
+    color-mix(in oklch, var(--accent, #b8893d) 30%, transparent) 7.5px,
+    transparent 7.5px,
+    transparent 15px,
+    color-mix(in oklch, var(--accent, #b8893d) 30%, transparent) 15px,
+    color-mix(in oklch, var(--accent, #b8893d) 30%, transparent) 15.5px,
+    transparent 15.5px,
+    transparent 23px,
+    color-mix(in oklch, var(--accent, #b8893d) 30%, transparent) 23px,
+    color-mix(in oklch, var(--accent, #b8893d) 30%, transparent) 23.5px,
+    transparent 23.5px,
+    transparent 31px,
+    color-mix(in oklch, var(--accent, #b8893d) 30%, transparent) 31px,
+    color-mix(in oklch, var(--accent, #b8893d) 30%, transparent) 31.5px,
+    transparent 31.5px,
+    transparent 39px,
+    color-mix(in oklch, var(--accent, #b8893d) 30%, transparent) 39px,
+    color-mix(in oklch, var(--accent, #b8893d) 30%, transparent) 39.5px,
+    transparent 39.5px,
+    transparent 96px /* gap before next staff-system */
+  );
+  opacity: 0.45;
+  mask-image: linear-gradient(to right, transparent 0, black 18%, black 82%, transparent 100%),
+              linear-gradient(to bottom, transparent 0, black 25%, black 75%, transparent 100%);
+  mask-composite: intersect;
+  -webkit-mask-image: linear-gradient(to right, transparent 0, black 18%, black 82%, transparent 100%),
+                      linear-gradient(to bottom, transparent 0, black 25%, black 75%, transparent 100%);
+  -webkit-mask-composite: source-in;
+  z-index: 0;
+}
+
+/* PR-A10: Duotone-Filter für sw-Archivbilder (Cream + Brass).
+   Anwenden auf <img class="duotone-archive"> in Heritage/Chronik-Sektionen
+   wenn das Bild sw oder sepia ist. CSS-Filter-Chain produziert warm-tonige
+   Zweifarb-Look ohne SVG-Filter (CSP-friendly).
+   - grayscale(1) entfernt Restfarben
+   - brightness(1.05) hebt mittlere Tonwerte
+   - sepia(0.4) gibt warmen Brass-Touch
+   - hue-rotate(-12deg) zieht Richtung Cream-Gold */
+.duotone-archive {
+  filter: grayscale(1) brightness(1.05) contrast(1.05) sepia(0.42) hue-rotate(-12deg) saturate(1.2);
+  transition: filter .35s ease;
+}
+.duotone-archive:hover { filter: none; }
 
 /* Ensemble-Grid — sub-bands as 3-4 brand tiles (Brixen/Eppingen pattern) */
 .ensemble-grid-section {
