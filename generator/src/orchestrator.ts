@@ -784,11 +784,13 @@ function extractTeam(text: string): SiteSpec['team'] {
     'Stabführer', 'Stabführerin',
     'Schriftführer', 'Schriftführerin', 'Sekretär', 'Sekretärin',
     'Kassier', 'Kassierin', 'Kassenwart', 'Kassenwartin',
-    'Jugendreferent', 'Jugendreferentin', 'Jugendleiter', 'Jugendleiterin',
+    'Jugendreferent', 'Jugendreferentin', 'Jugendreferenten',
+    'Jugendleiter', 'Jugendleiterin',
     'Musikalische Leitung', 'Künstlerische Leitung', 'Organisatorische Leitung',
     'Stellvertreter', 'Stellvertreterin',
-    'Beisitzer', 'Beisitzerin',
+    'Beisitzer', 'Beisitzerin', 'Beirat', 'Beiräte',
     'Notenwart', 'Notenwartin', 'Archivar', 'Archivarin',
+    'Pressereferent', 'Pressereferentin', 'Pressereferentinnen',
   ];
 
   // Name-Pattern: Vorname (groß) Leerzeichen Nachname (groß), beide ≥ 2 Zeichen,
@@ -807,6 +809,12 @@ function extractTeam(text: string): SiteSpec['team'] {
     'iu'
   );
 
+  // Chronik-Filter: vor der Rolle stehen Wörter wie "unter", "vom",
+  // "ersten", "damaligen" oder eine 4-stellige Jahreszahl → historisch,
+  // nicht aktueller Vorstand. Beispiel: "1920 Neuformierung unter Obmann
+  // Matthias Rieder" soll nicht als heutiger Obmann gewertet werden.
+  const CHRONIK_TRIGGERS = /\b(unter|vom|von|ersten?|damalige[mr]|dama(ls|ligen)|gründungs|gründer|nach|ab|seit|von der gründung)\s+$|\b\d{4}\.?\s+\w*\s*$|\bgegr(ündet|\.)\s*(als\s+|von\s+|durch\s+)?\w*\s*$/iu;
+
   for (const role of roles) {
     // Rolle gefolgt von optionalem Doppelpunkt + 1-3 Leerzeichen + Name.
     // Wichtig: `[:\s]+` matched auch nur Whitespace ohne Doppelpunkt.
@@ -815,6 +823,11 @@ function extractTeam(text: string): SiteSpec['team'] {
     let match;
     while ((match = re.exec(text)) !== null) {
       let fullName = match[1].trim();
+      // Chronik-Context skippen: schau dir die 40 Zeichen VOR dem Match an
+      const ctxStart = Math.max(0, match.index - 40);
+      const preContext = text.slice(ctxStart, match.index + 1);
+      if (CHRONIK_TRIGGERS.test(preContext)) continue;
+
       // Trailing-Cleanup: wenn das letzte Wort eine andere Rolle ist (oder
       // "Stv."), schneide es ab — die Name-Capture hat dann zu viel
       // geschluckt ("Lukas Schmidt Obmann" → "Lukas Schmidt").
@@ -823,6 +836,9 @@ function extractTeam(text: string): SiteSpec['team'] {
         prev = fullName;
         fullName = fullName.replace(roleWordsRe, '').trim();
       }
+      // Soft-Hyphens raus, Bindestriche im Namens-Inneren normalisieren.
+      // Drupal-Output hat oft U+00AD im Mitte langer Namen ("Matt­hias").
+      fullName = fullName.replace(/[­]/g, '').replace(/(\w)-(\w)/g, '$1$2');
       // Nach dem Trim muss noch mindestens Vor+Nachname übrig sein.
       if (!/^[A-ZÄÖÜ][a-zäöüß-]+\s+[A-ZÄÖÜ][a-zäöüß-]+/u.test(fullName)) continue;
       // Sanity: Namen mit "Verein", "Musik" etc. sind keine Personen
