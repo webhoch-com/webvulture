@@ -26,24 +26,24 @@ const app = Fastify({ logger: true });
 const MAX_PARALLEL_BUILDS = Number(process.env.MAX_PARALLEL_BUILDS ?? 2);
 let activeBuilds = 0;
 const buildQueue: Array<() => Promise<void>> = [];
-async function withBuildSlot(work: () => Promise<void>): Promise<void> {
-  if (activeBuilds >= MAX_PARALLEL_BUILDS) {
-    await new Promise<void>(resolve => buildQueue.push(async () => {
-      try { await work(); } finally { resolve(); }
-    }));
-    return;
+
+function drainBuildQueue(): void {
+  // Pump the queue as long as slots are free AND items are waiting.
+  // CRITICAL: the previous version only dequeued ONE item per finish event,
+  // leaving the queue stuck whenever ≥3 builds piled up (v316 case).
+  while (activeBuilds < MAX_PARALLEL_BUILDS && buildQueue.length > 0) {
+    const next = buildQueue.shift()!;
+    activeBuilds++;
+    next().finally(() => {
+      activeBuilds--;
+      drainBuildQueue();
+    });
   }
-  activeBuilds++;
-  try {
-    await work();
-  } finally {
-    activeBuilds--;
-    const next = buildQueue.shift();
-    if (next) {
-      activeBuilds++;
-      next().finally(() => { activeBuilds--; });
-    }
-  }
+}
+
+function withBuildSlot(work: () => Promise<void>): void {
+  buildQueue.push(work);
+  drainBuildQueue();
 }
 
 // Capture raw body BEFORE JSON parsing so HMAC verification matches exactly
@@ -148,8 +148,7 @@ app.post<{ Body: BuildRequest }>('/build', async (req, reply) => {
 
   reply.status(202).send({ job_id: `build-${prototype_version_id}-${Date.now()}` });
 
-  setImmediate(() => {
-    withBuildSlot(async () => {
+  setImmediate(() => withBuildSlot(async () => {
       try {
         app.log.info(`[build] starting v${prototype_version_id} (slug=${slug}, active=${activeBuilds}/${MAX_PARALLEL_BUILDS}, queued=${buildQueue.length})`);
 
@@ -180,8 +179,7 @@ app.post<{ Body: BuildRequest }>('/build', async (req, reply) => {
           meta: { error: msg },
         }).catch((e) => app.log.error(`[build] webhook also failed: ${e.message}`));
       }
-    });
-  });
+  }));
 });
 
 const port = Number(process.env.PORT ?? 4000);
