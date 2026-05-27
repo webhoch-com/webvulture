@@ -168,6 +168,13 @@ function looksLikeContactDataSnippet(s: string): boolean {
  * Matches are bounded — Name must be 4–60 chars, alphabet/space/hyphen only.
  */
 export function extractBoardMembers(spec: SiteSpec): Array<{ name: string; role: string }> {
+  // Prefer spec.team wenn vom orchestrator schon befüllt (neuerer Pfad mit
+  // breiterer Rollen-Liste + Separator-toleranter Pattern). Fallback auf die
+  // regex-basierte Extraktion aus raw_text_excerpt.
+  if (spec.team && spec.team.length > 0) {
+    return spec.team.map(m => ({ name: m.name, role: m.role }));
+  }
+
   // Set-based join: raw_text_excerpt already contains about.body and the
   // redesigned_sections, so a list-join would scan the same characters twice.
   // The dedupe set keys on the raw source-string identity (cheapest cap on

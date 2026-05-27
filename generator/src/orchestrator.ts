@@ -313,6 +313,15 @@ export async function orchestrate(pkg: RebuildPackage): Promise<OrchestrationRes
     baseSpec.raw_text_excerpt = textContent.slice(0, 6000);
   }
 
+  // ─── Vorstand / Team-Extraktion aus text_content + extracted pages ────
+  // Bei Vereins-Sites stehen Rollen + Namen meist als „Obmann: Hans Müller"
+  // oder „Kapellmeister Anna Schmidt" im Fließtext. Wir scannen den gesamten
+  // raw text + nav-page-Inhalte und extrahieren bekannte Verein-Rollen.
+  const team = extractTeam(textContent);
+  if (team.length > 0) {
+    baseSpec.team = team;
+  }
+
   // Pass through the *real* page sections from the prospect's site so the
   // template can render a premium redesign of their actual content. Strict
   // filter against duplicates of headline/about and against junk titles.
@@ -743,4 +752,64 @@ function scoreImage(src: string, alt: string): number {
   if (depth >= 4) score += 10;
 
   return score;
+}
+
+/**
+ * Extrahiert Verein-Vorstandsmitglieder aus dem gescrapten Fließtext.
+ *
+ * Pattern (Verein-Sprache, fast immer in Kontakt-Subpage):
+ *   "Obmann: Hans Müller …"
+ *   "Kapellmeister Anna Schmidt 4840 …"
+ *   "Stabführer Alfred Steiner …"
+ *
+ * Deduplizierung über Namen — wenn jemand Obmann UND Kapellmeister ist
+ * (unwahrscheinlich aber möglich), wird nur die ERSTE Rolle gespeichert.
+ */
+function extractTeam(text: string): SiteSpec['team'] {
+  if (!text || text.length < 50) return [];
+
+  // Vereinsrollen (in absteigender Priorität — wenn jemand mehrere hat,
+  // bekommt er die wichtigste).
+  const roles = [
+    'Obmann', 'Obfrau', 'Obperson', 'Vorsitzender', 'Vorsitzende', 'Präsident', 'Präsidentin',
+    'Kapellmeister', 'Kapellmeisterin', 'Dirigent', 'Dirigentin',
+    'Stabführer', 'Stabführerin',
+    'Schriftführer', 'Schriftführerin', 'Sekretär', 'Sekretärin',
+    'Kassier', 'Kassierin', 'Kassenwart', 'Kassenwartin',
+    'Jugendreferent', 'Jugendreferentin', 'Jugendleiter', 'Jugendleiterin',
+    'Musikalische Leitung', 'Künstlerische Leitung', 'Organisatorische Leitung',
+    'Stellvertreter', 'Stellvertreterin',
+    'Beisitzer', 'Beisitzerin',
+    'Notenwart', 'Notenwartin', 'Archivar', 'Archivarin',
+  ];
+
+  // Name-Pattern: Vorname (groß) Leerzeichen Nachname (groß), beide ≥ 2 Zeichen,
+  // erlaubt Bindestrich + ä/ö/ü. Cap 2 Wörter zwischen Vor- und Nachname
+  // (z.B. "Hans Peter Müller", "Anna-Maria Schmidt"). Schließt Adressen aus
+  // (4-stellige PLZ direkt danach).
+  const namePattern = '([A-ZÄÖÜ][a-zäöüß-]+(?:\\s+[A-ZÄÖÜ][a-zäöüß-]+){1,2})';
+
+  const team: NonNullable<SiteSpec['team']> = [];
+  const seenNames = new Set<string>();
+
+  for (const role of roles) {
+    // Rolle gefolgt von optionalem Doppelpunkt + 1-3 Leerzeichen + Name.
+    // Wichtig: `[:\s]+` matched auch nur Whitespace ohne Doppelpunkt.
+    const re = new RegExp(`\\b${role.replace(/\s/g, '\\s')}[:\\s]+${namePattern}\\b`, 'g');
+    let match;
+    while ((match = re.exec(text)) !== null) {
+      const fullName = match[1].trim();
+      // Sanity: Namen mit "Verein", "Musik" etc. sind keine Personen
+      if (/\b(Verein|Musik|Gemeinde|Stadt|Markt|Pfarre|Sponsor|Partner)\b/i.test(fullName)) continue;
+      // Schon erfasst?
+      const key = fullName.toLowerCase();
+      if (seenNames.has(key)) continue;
+      seenNames.add(key);
+      team.push({ role, name: fullName });
+      // Pro Rolle max. 2 Personen (z.B. Obmann + Obmann-Stv)
+      if (team.length >= 12) return team;
+    }
+  }
+
+  return team;
 }

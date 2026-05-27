@@ -203,6 +203,12 @@ export interface SiteSpec {
   emergency?: { available: boolean; phone?: string; note?: string };
   events?: Array<{ date: string; title: string; description?: string }>;
   membership?: { cta: string; description: string };
+  /**
+   * Vorstand / Team-Mitglieder extrahiert aus der gescrapten Site
+   * (typischerweise Kontakt-Subpage). Templates rendern als Personen-
+   * Karten — wenn Photo-URL fehlt, mit Initialen-Placeholder.
+   */
+  team?: Array<{ role: string; name: string; photo?: string }>;
 }
 
 export interface GenerateRequest {
