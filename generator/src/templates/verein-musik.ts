@@ -97,12 +97,10 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
   // prospect's actual offering.
   const membership = spec.membership;
 
-  // Number anchors track section order so they read 01/02/03 vertically.
-  let anchorIdx = 0;
-  const nextAnchor = () => {
-    anchorIdx += 1;
-    return String(anchorIdx).padStart(2, '0');
-  };
+  // Section-anchor numbering is driven by a CSS counter (see EDITORIAL_CSS
+  // .section-anchor-wrap counter-increment + .section-anchor::before
+  // counter() rules). No server-side counter needed — JS-removed wrappers
+  // skip in the count automatically.
 
   // Brand-token resolution: real scraped values override the template's
   // hardcoded defaults. The CSS `color-mix()` calls derive `-soft` and `-deep`
@@ -396,21 +394,27 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
     .section.tone-carbon .section-title em { color: var(--accent); }
     .section.tone-carbon .section-lead { color: rgba(255,255,255,0.78); }
 
-    /* Big-number anchor — outline-stroke numerals between sections,
-       2026 magazine pacing element. */
+    /* Big-number anchor — outline-stroke numerals between sections.
+       Numbering driven by CSS counter so JS-removed wraps (e.g. empty
+       gallery) auto-skip in the visible sequence. */
+    body { counter-reset: section-anchor; }
     .section-anchor-wrap {
       max-width: 1400px; margin: 0 auto;
       padding: clamp(2rem, 4vw, 3.5rem) clamp(1.5rem, 5vw, 5rem) 0;
       pointer-events: none; overflow: hidden;
+      counter-increment: section-anchor;
     }
     .section-anchor {
       display: block;
       font-family: var(--display); font-weight: 700;
-      font-size: clamp(6rem, 18vw, 16rem);
       line-height: 0.85; letter-spacing: -0.04em;
       -webkit-text-stroke: 1px var(--accent);
       color: transparent;
       opacity: 0.45;
+    }
+    .section-anchor::before {
+      content: counter(section-anchor, decimal-leading-zero);
+      font-size: clamp(6rem, 18vw, 16rem);
     }
     .section.tone-carbon + .section-anchor-wrap .section-anchor,
     .section-anchor-wrap.on-dark .section-anchor {
@@ -985,7 +989,7 @@ ${renderHeritageStatement(spec, foundedYear)}
 ${renderHeritageTimeline(heritageMilestones)}
 
 ${events.length > 0 ? `
-<div class="section-anchor-wrap on-dark"><span class="section-anchor">${nextAnchor()}</span></div>
+<div class="section-anchor-wrap on-dark"><span class="section-anchor" aria-hidden="true"></span></div>
 ${renderEventsSection(events.map(ev => ({
   date: (ev as any).date || '',
   title: (ev as any).title || (ev as any).name || 'Veranstaltung',
@@ -1001,7 +1005,7 @@ ${spec.about?.body ? (() => {
   const place = match ? spec.business_name.slice(match[0].length).replace(/^\W+/, '').trim() : '';
   const ueberTitle = place ? `Der Musikverein <em>${escapeHtml(place)}</em>.` : 'Über <em>uns</em>.';
   return `
-<div class="section-anchor-wrap"><span class="section-anchor">${nextAnchor()}</span></div>
+<div class="section-anchor-wrap"><span class="section-anchor" aria-hidden="true"></span></div>
 <section id="ueber-uns" class="section tone-tint">
   <div class="container">
     <div class="section-head">
@@ -1035,7 +1039,7 @@ ${/* Klangkörper, Instrumente und Meilensteine wurden entfernt — diese
 
 
 ${spec.testimonials && spec.testimonials.length > 0 ? `
-<div class="section-anchor-wrap"><span class="section-anchor">${nextAnchor()}</span></div>
+<div class="section-anchor-wrap"><span class="section-anchor" aria-hidden="true"></span></div>
 <section class="section press-section tone-tint">
   <div class="container">
     <div class="section-head center reveal">
@@ -1056,7 +1060,7 @@ ${spec.testimonials && spec.testimonials.length > 0 ? `
 ` : ''}
 
 ${(spec.redesigned_sections && spec.redesigned_sections.length > 0) ? `
-<div class="section-anchor-wrap"><span class="section-anchor">${nextAnchor()}</span></div>
+<div class="section-anchor-wrap"><span class="section-anchor" aria-hidden="true"></span></div>
 <section class="stories-section">
   <div class="container">
     <div class="section-head">
@@ -1086,7 +1090,7 @@ ${(() => {
   const cta = membership?.cta?.trim() || 'Probespiel vereinbaren';
   const fallback = `Wir freuen uns über jeden, der mit uns musizieren möchte. Egal ob Anfänger, Wiedereinsteiger oder erfahrener Musiker — nehmen Sie unverbindlich Kontakt mit uns auf.`;
   return `
-<div class="section-anchor-wrap"><span class="section-anchor">${nextAnchor()}</span></div>
+<div class="section-anchor-wrap"><span class="section-anchor" aria-hidden="true"></span></div>
 <section id="mitglied" class="section members-section pattern-notes" style="position:relative">
   <div class="container">
     <div class="section-head center reveal">
@@ -1125,12 +1129,12 @@ ${(() => {
 })()}
 
 ${board.length > 0 ? `
-<div class="section-anchor-wrap"><span class="section-anchor">${nextAnchor()}</span></div>
+<div class="section-anchor-wrap"><span class="section-anchor" aria-hidden="true"></span></div>
 ${renderBoardSection(board)}
 ` : ''}
 
 ${galleryCount(spec) >= 1 ? `
-<div class="section-anchor-wrap on-dark"><span class="section-anchor">${nextAnchor()}</span></div>
+<div class="section-anchor-wrap on-dark"><span class="section-anchor" aria-hidden="true"></span></div>
 <section id="bilder" class="section tone-carbon">
   <div class="container">
     <div class="section-head center reveal">
@@ -1193,7 +1197,7 @@ ${address ? `
 </section>
 ` : ''}
 
-<div class="section-anchor-wrap"><span class="section-anchor">${nextAnchor()}</span></div>
+<div class="section-anchor-wrap"><span class="section-anchor" aria-hidden="true"></span></div>
 <section id="kontakt" class="section contact-section tone-cream">
   <div class="container">
     <div class="section-head center reveal">
