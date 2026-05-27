@@ -340,6 +340,30 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
       color: rgba(255,255,255,0.6); margin-top: 1rem;
     }
     .hero-decor-since strong { color: var(--accent); font-size: 1.1rem; letter-spacing: 0; font-weight: 600; }
+    /* "Tradition-Anchor" — when foundedYear ≥ 50 years ago, show the
+       count as a large editorial number in the hero corner. Subtle but
+       it communicates pedigree at a glance. Position is absolute so it
+       doesn't fight the bigtype wordmark for layout space. */
+    .hero-tradition-anchor {
+      position: absolute; top: clamp(5rem, 10vh, 8rem); right: clamp(1.5rem, 4vw, 4rem);
+      text-align: right; pointer-events: none;
+    }
+    .hero-tradition-anchor .num {
+      font-family: var(--display); font-weight: 500;
+      font-size: clamp(4rem, 10vw, 8rem); line-height: 0.9;
+      letter-spacing: -0.04em;
+      color: var(--accent);
+      display: block;
+      text-shadow: 0 6px 24px rgba(0,0,0,0.3);
+    }
+    .hero-tradition-anchor .lbl {
+      font-family: var(--display); font-size: 0.8rem;
+      letter-spacing: 0.2em; text-transform: uppercase;
+      color: rgba(255,255,255,0.7); margin-top: 0.5rem; display: block;
+    }
+    @media (max-width: 720px) {
+      .hero-tradition-anchor { display: none; }  /* preserve hierarchy on mobile */
+    }
     .btn-primary { background: var(--accent); color: var(--ink); padding: 1.05rem 2.2rem; border-radius: 6px; font-weight: 700; font-size: 0.96rem; font-family: var(--display); letter-spacing: 0.02em; transition: background .2s, transform .2s; box-shadow: 0 10px 28px -12px rgba(184,137,61,0.6); }
     .btn-primary:hover { background: var(--accent-deep); color: #fff; transform: translateY(-2px); }
     .btn-outline { background: transparent; color: #fff; border: 1.5px solid rgba(255,255,255,0.4); padding: 1rem 2rem; border-radius: 6px; font-weight: 600; font-size: 0.95rem; font-family: var(--display); transition: border-color .2s, background .2s; }
@@ -808,9 +832,14 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
     </div>
   </div>
   ${hasHeroImage(spec) ? '' : (() => {
-    const foundedYear = extractFoundedYear(spec);
     const currentYear = new Date().getFullYear();
+    const yearsSince = foundedYear ? currentYear - foundedYear : 0;
     return `
+  ${(foundedYear && yearsSince >= 50) ? `
+  <div class="hero-tradition-anchor" aria-hidden="true">
+    <span class="num">${yearsSince}</span>
+    <span class="lbl">Jahre Tradition</span>
+  </div>` : ''}
   <div class="hero-decor-bigtype" aria-hidden="true">${escapeHtml(businessName)}</div>
   <div>
     <div class="hero-decor-stripes" aria-hidden="true">
@@ -818,7 +847,7 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
       <span class="s-secondary"></span>
       <span class="s-accent"></span>
     </div>
-    ${foundedYear ? `<div class="hero-decor-since">Seit <strong>${foundedYear}</strong> · ${currentYear - foundedYear} Jahre in der Region</div>` : ''}
+    ${foundedYear ? `<div class="hero-decor-since">Seit <strong>${foundedYear}</strong> · ${yearsSince} Jahre in der Region</div>` : ''}
   </div>`;
   })()}
 </section>
