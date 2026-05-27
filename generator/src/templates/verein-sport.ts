@@ -56,19 +56,35 @@ export function renderVereinSportPage(spec: SiteSpec, slug: string): string {
   const pullQuote = pickPullQuote(spec);
   const board = extractBoardMembers(spec);
 
-  const primary = spec.brand?.primary_color || '#15803d';
-  const secondary = spec.brand?.secondary_color || primary;
-  const accent = spec.brand?.accent_color || '#facc15';
+  // Warm-festive forcer: Verein-template is a TRACHTEN aesthetic — warm
+  // wood + brass-gold + tannengrün + burgundy. Scraped brand colors are
+  // often corporate-cold; we force-fallback to warm Verein defaults
+  // unless the scraped color is already in the warm spectrum.
+  const isWarmColor = (hex: string): boolean => {
+    const m = hex.match(/^#?([0-9a-f]{6})$/i);
+    if (!m) return false;
+    const n = parseInt(m[1], 16);
+    const r = (n >> 16) & 0xff, g = (n >> 8) & 0xff, b = n & 0xff;
+    if (b > r + 30 && b > g + 20) return false;
+    if (r < 80 && g < 80 && b < 80) return false;
+    if (r > 230 && g > 230 && b > 230) return false;
+    return true;
+  };
+  const rawPrimary = spec.brand?.primary_color || '';
+  const primary = isWarmColor(rawPrimary) ? rawPrimary : '#2d4a32';
+  const secondary = isWarmColor(spec.brand?.secondary_color || '') ? spec.brand!.secondary_color! : primary;
+  const rawAccent = spec.brand?.accent_color || '';
+  const accent = (isWarmColor(rawAccent) && rawAccent !== rawPrimary) ? rawAccent : '#b8893d';
   const headingFont = spec.brand?.heading_font_family
-    ? `'${spec.brand.heading_font_family}', 'Bricolage Grotesque', system-ui, sans-serif`
-    : "'Bricolage Grotesque', system-ui, sans-serif";
+    ? `'${spec.brand.heading_font_family}', 'Fraunces', Georgia, serif`
+    : "'Fraunces', Georgia, serif";
   const bodyFont = spec.brand?.body_font_family
-    ? `'${spec.brand.body_font_family}', 'Inter', system-ui, sans-serif`
-    : "'Inter', system-ui, sans-serif";
+    ? `'${spec.brand.body_font_family}', 'Lora', Georgia, serif`
+    : "'Lora', Georgia, serif";
   const fontImportTags = (spec.brand?.font_imports && spec.brand.font_imports.length > 0)
     ? spec.brand.font_imports.map(u => `<link rel="stylesheet" href="${u}" crossorigin>`).join('\n  ')
     : `<link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
-  <link href="https://fonts.bunny.net/css?family=bricolage-grotesque:500,600,700,800|inter:400,500,600,700&display=swap" rel="stylesheet">`;
+  <link href="https://fonts.bunny.net/css?family=fraunces:400,500,600,700|lora:400,500,600,700&display=swap" rel="stylesheet">`;
 
   return `---
 ---
@@ -83,13 +99,13 @@ export function renderVereinSportPage(spec: SiteSpec, slug: string): string {
       --primary-deep: color-mix(in oklch, ${escapeHtml(primary)} 70%, black);
       --secondary: ${escapeHtml(secondary)};
       --accent: ${escapeHtml(accent)};
-      --bg: #f8fafc;
-      --bg-2: #ecfdf5;
+      --bg: #fbf7ee;            /* warm cream */
+      --bg-2: #f0e8d3;          /* deeper cream */
       --surface: #ffffff;
-      --ink: #0f172a;
-      --ink-2: #334155;
-      --ink-3: #94a3b8;
-      --rule: rgba(15,23,42,0.08);
+      --ink: #1f1a14;           /* warm dark brown */
+      --ink-2: #4a4030;
+      --ink-3: #877a64;
+      --rule: rgba(31,26,20,0.10);
       --display: ${headingFont};
       --sans: ${bodyFont};
     }
