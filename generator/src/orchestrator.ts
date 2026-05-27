@@ -800,6 +800,13 @@ function extractTeam(text: string): SiteSpec['team'] {
   const team: NonNullable<SiteSpec['team']> = [];
   const seenNames = new Set<string>();
 
+  // Set aller Rollen-Wörter (für Trailing-Cleanup nach Name-Capture).
+  // "Lukas Schmidt Obmann Stv." → wir wollen nur "Lukas Schmidt".
+  const roleWordsRe = new RegExp(
+    `\\s+(?:${roles.flatMap(r => r.split(/\s+/)).join('|')}|Stv\\.?|Stellvertreter(?:in)?)$`,
+    'iu'
+  );
+
   for (const role of roles) {
     // Rolle gefolgt von optionalem Doppelpunkt + 1-3 Leerzeichen + Name.
     // Wichtig: `[:\s]+` matched auch nur Whitespace ohne Doppelpunkt.
@@ -807,7 +814,17 @@ function extractTeam(text: string): SiteSpec['team'] {
     const re = new RegExp(`(?:^|[\\s.,;:!?])${role.replace(/\s/g, '\\s')}[:\\s]+${namePattern}`, 'gu');
     let match;
     while ((match = re.exec(text)) !== null) {
-      const fullName = match[1].trim();
+      let fullName = match[1].trim();
+      // Trailing-Cleanup: wenn das letzte Wort eine andere Rolle ist (oder
+      // "Stv."), schneide es ab — die Name-Capture hat dann zu viel
+      // geschluckt ("Lukas Schmidt Obmann" → "Lukas Schmidt").
+      let prev = '';
+      while (prev !== fullName) {
+        prev = fullName;
+        fullName = fullName.replace(roleWordsRe, '').trim();
+      }
+      // Nach dem Trim muss noch mindestens Vor+Nachname übrig sein.
+      if (!/^[A-ZÄÖÜ][a-zäöüß-]+\s+[A-ZÄÖÜ][a-zäöüß-]+/u.test(fullName)) continue;
       // Sanity: Namen mit "Verein", "Musik" etc. sind keine Personen
       if (/\b(Verein|Musik|Gemeinde|Stadt|Markt|Pfarre|Sponsor|Partner)\b/i.test(fullName)) continue;
       // Schon erfasst?
