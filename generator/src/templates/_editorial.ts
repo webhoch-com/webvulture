@@ -113,6 +113,22 @@ export function pickPullQuote(spec: SiteSpec): string | null {
     if (s.length < 50 || s.length > 220) continue;
     if (norm(s) === subheadN) continue;
     if (/zum inhalt|cookie|folgen sie|impressum|zuklappen|aufklappen|save the date/i.test(s)) continue;
+    // Event-news / time-bound recap snippets read as broken outside their
+    // calendar context — Bruckmühl audit caught "2026 durften wi Was tut
+    // sich eigentlich bei den Fourtissimos?" picked as a pullquote.
+    if (/\b(der\s+(?:erste|nächste|letzte|kommende)\s+(?:wichtige\s+)?termin|in diesem jahr|nächstes konzert|save\s+the\s+date|frühlingskonzert|frühlngskonzert|herbstkonzert|wochenende\s+vom|am\s+\d|sonntag\s+\d|samstag\s+\d|veranstaltungs(?:hinweis|kalender)|haben\s+wir\s+(?:bereits|schon)|absolviert|fand\s+statt|geht\s+(?:weiter|los|es\s+aber|es\s+auch\s+schon)|schlag\s+auf\s+schlag|aber\s+auch\s+schon\s+wieder|durften\s+wi(?:r)?\b|tut\s+sich\s+(?:eigentlich|bei|was))/i.test(s)) continue;
+    // Reject sentences starting with a year (event-snippets often start with
+    // "2026 durften wir...") or any other digit.
+    if (/^\d/.test(s)) continue;
+    // Reject sentences with truncated 2-char words ("wi" instead of "wir",
+    // "ein" missing letters) — a strong tell that the sentence was chopped
+    // mid-word by HTML-strip artifacts.
+    const ALLOWED_2CHAR = /^(im|in|an|am|um|zu|zum|zur|bei|wo|du|er|es|so|da|ja|na|ob|ne|ab|ob)$/i;
+    const hasTwoCharOrphan = s.split(/\s+/).some(w => {
+      const clean = w.replace(/[^\wäöüÄÖÜß]/g, '');
+      return clean.length === 2 && !ALLOWED_2CHAR.test(clean);
+    });
+    if (hasTwoCharOrphan) continue;
     if (looksLikeContactDataSnippet(s)) continue;
     // Bracket-balance check: parenthetical fragments like "1889 als …) und
     // … (gegr." that audit found on Bruckmühl read as broken. Reject any
