@@ -107,15 +107,31 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
   // accordingly darker hover-states without us hand-tuning per club.
   // Strict allow-list of font-family characters and font-import hosts is
   // enforced upstream in the orchestrator — safe to interpolate raw here.
-  const PRIMARY = spec.brand?.primary_color || '#2d4a32';
-  const SECONDARY = spec.brand?.secondary_color || PRIMARY;
-  // Drupal- und WP-Themes haben oft `#0066ff` / `#06c` als pflichtiges
-  // Link-Default in der CSS — das ist KEINE Brand-Accent-Farbe sondern
-  // System-Standard. Filtern und auf Gold zurückfallen falls erkannt.
+  // Warm-festive forcer: Verein-template is a TRACHTEN aesthetic — warm
+  // wood + brass-gold + tannengrün + burgundy. Scraped brand colors are
+  // often corporate-cold (Drupal-blau, WP-defaults). We KEEP the scraped
+  // primary only if it's already in the warm spectrum (greens, browns,
+  // burgundy, gold); otherwise force-fallback to Tannengrün so the
+  // template always reads as warm/festive.
+  const rawPrimary = spec.brand?.primary_color || '';
+  const isWarmColor = (hex: string): boolean => {
+    const m = hex.match(/^#?([0-9a-f]{6})$/i);
+    if (!m) return false;
+    const n = parseInt(m[1], 16);
+    const r = (n >> 16) & 0xff, g = (n >> 8) & 0xff, b = n & 0xff;
+    // Reject COLD/CORPORATE colors: high blue, low warmth
+    if (b > r + 30 && b > g + 20) return false;  // blue-dominant
+    if (r < 80 && g < 80 && b < 80) return false; // near-black
+    if (r > 230 && g > 230 && b > 230) return false; // near-white
+    // Accept warm: red/orange/brown/green/gold dominant
+    return true;
+  };
+  const PRIMARY = isWarmColor(rawPrimary) ? rawPrimary : '#2d4a32';  // Tannengrün fallback
+  const SECONDARY = isWarmColor(spec.brand?.secondary_color || '') ? spec.brand!.secondary_color! : PRIMARY;
+  // Accent: always force brass-gold for the warm-festive aesthetic, unless
+  // the scraped accent is itself a clearly warm color (gold/burgundy/orange).
   const rawAccent = spec.brand?.accent_color || '';
-  const ACCENT = (rawAccent === '#0066ff' || rawAccent === '#06c' || rawAccent === '' || rawAccent === '#0000ee')
-    ? '#b8893d'
-    : rawAccent;
+  const ACCENT = (isWarmColor(rawAccent) && rawAccent !== rawPrimary) ? rawAccent : '#b8893d';
   // PRIMARY als RGB-Tupel für den Hero-Overlay (CSS rgba() braucht Numbers).
   const primaryRgb = (() => {
     const m = PRIMARY.match(/^#?([0-9a-f]{6})$/i);
@@ -249,19 +265,21 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
     .nav-cta:hover { background: var(--primary-deep); transform: translateY(-1px); }
     @media (max-width: 879px) { .nav-cta { display: none; } }
 
-    /* ─── Hero — photo overlay if real, else CSS-only gradient ────── */
+    /* ─── Hero — photo with WARM lower-third gradient (let photo breathe) ── */
     .hero {
       position: relative; min-height: clamp(560px, 84vh, 740px);
       ${hasHeroImage(spec)
         ? `background:
-        linear-gradient(135deg, rgba(${primaryRgb.r},${primaryRgb.g},${primaryRgb.b},0.55) 0%, rgba(${primaryRgb.r},${primaryRgb.g},${primaryRgb.b},0.78) 60%, rgba(0,0,0,0.85) 100%),
+        /* Strong gradient ONLY at the bottom-third for text legibility,
+           top 2/3 stays photo-bright. Sepia-warm tone instead of cold dark wash. */
+        linear-gradient(to bottom, transparent 0%, transparent 45%, rgba(44,28,16,0.45) 70%, rgba(44,28,16,0.88) 100%),
         url('${getHeroImage(spec, slug)}') center/cover;`
         : `background:
-        radial-gradient(ellipse at 20% 20%, rgba(184,137,61,0.16) 0%, transparent 55%),
+        radial-gradient(ellipse at 20% 20%, rgba(184,137,61,0.22) 0%, transparent 55%),
         radial-gradient(ellipse at 80% 80%, rgba(45,74,50,0.6) 0%, transparent 50%),
         linear-gradient(135deg, #1c2f1f 0%, #2d4a32 60%, #1a2419 100%);`
       }
-      display: flex; align-items: center; padding: 4rem 1.5rem;
+      display: flex; align-items: flex-end; padding: 4rem 1.5rem 5rem;
       color: #fff;
     }
     ${hasHeroImage(spec) ? '' : `
@@ -273,28 +291,30 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
       pointer-events: none;
     }
     `}
-    .hero-inner { max-width: 1100px; margin: 0 auto; width: 100%; }
+    .hero-inner { max-width: 1100px; margin: 0 auto; width: 100%; position: relative; z-index: 2; }
     .hero-eyebrow {
       display: inline-flex; align-items: center; gap: 0.7rem;
-      background: rgba(184,137,61,0.18); border: 1px solid rgba(184,137,61,0.5);
-      color: #f3e5c1; padding: 0.5rem 1.1rem; border-radius: 999px;
-      font-size: 0.78rem; letter-spacing: 0.16em; text-transform: uppercase;
+      background: color-mix(in oklch, var(--accent) 28%, transparent);
+      border: 1px solid color-mix(in oklch, var(--accent) 65%, transparent);
+      color: #fff8e8; padding: 0.55rem 1.2rem; border-radius: 999px;
+      font-size: 0.78rem; letter-spacing: 0.18em; text-transform: uppercase;
       font-family: var(--display); font-weight: 600;
-      margin-bottom: 2rem;
+      margin-bottom: 1.5rem;
+      backdrop-filter: blur(8px);
+      text-shadow: 0 1px 2px rgba(0,0,0,0.4);
     }
-    .hero-eyebrow .crest { width: 18px; height: 18px; border-radius: 50%; background: var(--accent); }
+    .hero-eyebrow .crest { width: 18px; height: 18px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent) 40%, transparent); }
     .hero h1 {
       font-family: var(--display); font-weight: 500;
-      font-size: clamp(2rem, 6.5vw, 5rem); line-height: 1.05;
+      font-size: clamp(2.2rem, 6.5vw, 5rem); line-height: 1.05;
       letter-spacing: -0.025em; max-width: 18ch;
       text-wrap: balance;
-      /* Don't auto-hyphenate inside compound words like "Blasmusik" — produced
-         the visible "Blas-/musik" break that looked broken. */
       overflow-wrap: normal; word-break: normal; hyphens: manual;
+      text-shadow: 0 2px 16px rgba(0,0,0,0.55);
     }
     .hero h1 em { font-style: italic; color: var(--accent); font-weight: 500; }
-    .hero p { color: rgba(255,255,255,0.92); font-size: 1.2rem; margin-top: 2rem; max-width: 56ch; line-height: 1.65; font-family: var(--serif); }
-    .hero-cta-row { display: flex; gap: 1rem; margin-top: 2.5rem; flex-wrap: wrap; }
+    .hero p { color: rgba(255,250,240,0.94); font-size: 1.2rem; margin-top: 1.5rem; max-width: 56ch; line-height: 1.65; font-family: var(--serif); text-shadow: 0 1px 8px rgba(0,0,0,0.6); }
+    .hero-cta-row { display: flex; gap: 1rem; margin-top: 2rem; flex-wrap: wrap; }
 
     /* Rating pill — appears under the subhead only when rating ≥ 4.0 and ≥ 5
        reviews. The stars are styled with a tighter letter-spacing so the row
@@ -393,27 +413,56 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
     .section.tone-carbon .section-title em { color: var(--accent); }
     .section.tone-carbon .section-lead { color: rgba(255,255,255,0.78); }
 
-    /* Big-number anchor — outline-stroke numerals between sections.
-       Numbering driven by CSS counter so JS-removed wraps (e.g. empty
-       gallery) auto-skip in the visible sequence. */
+    /* Section divider — Trachten-Ornament statt magazine outline-numbers.
+       Wider rule + central edelweiss-glyph. Subtle, festive, doesn't
+       compete with content. */
     body { counter-reset: section-anchor; }
     .section-anchor-wrap {
-      max-width: 1400px; margin: 0 auto;
-      padding: clamp(2rem, 4vw, 3.5rem) clamp(1.5rem, 5vw, 5rem) 0;
-      pointer-events: none; overflow: hidden;
+      max-width: 920px; margin: 0 auto;
+      padding: clamp(1.25rem, 3vw, 2.5rem) clamp(1.5rem, 5vw, 5rem);
+      pointer-events: none;
       counter-increment: section-anchor;
+      display: flex; align-items: center; justify-content: center;
+      gap: 1.5rem;
     }
+    .section-anchor-wrap::before,
+    .section-anchor-wrap::after {
+      content: ''; flex: 1; height: 1px;
+      background: linear-gradient(to var(--dir, right),
+        transparent,
+        color-mix(in oklch, var(--accent) 40%, transparent) 40%,
+        color-mix(in oklch, var(--accent) 40%, transparent) 60%,
+        transparent);
+    }
+    .section-anchor-wrap::after { --dir: left; }
     .section-anchor {
-      display: block;
-      font-family: var(--display); font-weight: 700;
-      line-height: 0.85; letter-spacing: -0.04em;
-      -webkit-text-stroke: 1px var(--accent);
-      color: transparent;
-      opacity: 0.45;
+      display: inline-flex; align-items: center; gap: 0.75rem;
+      font-family: var(--display); font-weight: 500;
+      font-size: 1.1rem; letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--accent);
+      flex-shrink: 0;
     }
     .section-anchor::before {
+      content: '✦'; font-size: 0.95rem; opacity: 0.85;
+    }
+    .section-anchor::after {
       content: counter(section-anchor, decimal-leading-zero);
-      font-size: clamp(6rem, 18vw, 16rem);
+      font-family: var(--display); font-weight: 600;
+      font-size: 0.95rem; letter-spacing: 0.05em;
+      color: color-mix(in oklch, var(--accent) 70%, var(--ink));
+    }
+    .section-anchor-wrap.on-dark .section-anchor,
+    .section-anchor-wrap.on-dark .section-anchor::after {
+      color: var(--accent);
+    }
+    .section-anchor-wrap.on-dark::before,
+    .section-anchor-wrap.on-dark::after {
+      background: linear-gradient(to var(--dir, right),
+        transparent,
+        rgba(255,255,255,0.25) 40%,
+        rgba(255,255,255,0.25) 60%,
+        transparent);
     }
     .section.tone-carbon + .section-anchor-wrap .section-anchor,
     .section-anchor-wrap.on-dark .section-anchor {
@@ -478,7 +527,7 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
 
     /* "Stories" cards — editorial magazine grid for redesigned_sections.
        Replaces the previous linear sequence of equal-height blocks. */
-    .stories-section { padding: clamp(5rem, 9vw, 8rem) 1.5rem; background: var(--bg); }
+    .stories-section { padding: clamp(3.25rem, 6vw, 5.5rem) 1.5rem; background: var(--bg); }
     .stories-grid {
       max-width: 1300px; margin: 4rem auto 0;
       display: grid; gap: 3rem;
@@ -523,7 +572,7 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
     .vf-wordmark .accent { color: var(--accent); }
 
     /* ─── Section base ───────────────────────────────────── */
-    .section { padding: clamp(5rem, 9vw, 8rem) 1.5rem; }
+    .section { padding: clamp(3.25rem, 6vw, 5.5rem) 1.5rem; }
     .container { max-width: 1300px; margin: 0 auto; }
     .section-eyebrow { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0; color: var(--accent); font-family: var(--display); font-size: 0.8rem; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 600; margin-bottom: 1rem; }
     .section-eyebrow::before { content: ""; width: 32px; height: 1.5px; background: var(--accent); }

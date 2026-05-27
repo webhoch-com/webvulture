@@ -990,16 +990,31 @@ export const EDITORIAL_CSS = `
 }
 .board-card { text-align: center; }
 .board-monogram {
-  width: clamp(80px, 12vw, 120px); height: clamp(80px, 12vw, 120px);
-  margin: 0 auto 1.5rem;
+  width: clamp(86px, 13vw, 128px); height: clamp(86px, 13vw, 128px);
+  margin: 0 auto 1.25rem;
   border-radius: 50%;
-  background: color-mix(in oklch, var(--primary, #2d4a32) 18%, white);
-  color: var(--primary, #2d4a32);
+  /* Warm-festive: cream BG, brass-gold ring, ink-brown letters.
+     Tracht-inspired: like a medal/crest, not a corporate avatar. */
+  background:
+    radial-gradient(circle at 30% 30%, #fff7e8 0%, #f0e8d3 70%, #e0d3b3 100%);
+  color: var(--ink, #1f1a14);
   display: grid; place-items: center;
   font-family: var(--display, Georgia, serif); font-weight: 600;
-  font-size: clamp(1.8rem, 3vw, 2.4rem);
-  letter-spacing: 0.04em;
-  border: 2px solid var(--primary, #2d4a32);
+  font-size: clamp(2rem, 3.3vw, 2.6rem);
+  letter-spacing: 0.02em;
+  border: 3px double var(--accent, #b8893d);
+  box-shadow:
+    0 0 0 4px color-mix(in oklch, var(--accent, #b8893d) 18%, transparent),
+    0 12px 28px -14px rgba(124, 45, 45, 0.25),
+    inset 0 -8px 16px -10px rgba(184, 137, 61, 0.3);
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s;
+}
+.board-card:hover .board-monogram {
+  transform: translateY(-3px) rotate(-1deg);
+  box-shadow:
+    0 0 0 5px color-mix(in oklch, var(--accent, #b8893d) 28%, transparent),
+    0 18px 36px -14px rgba(124, 45, 45, 0.35),
+    inset 0 -8px 16px -10px rgba(184, 137, 61, 0.4);
 }
 .board-card h4 {
   font-family: var(--display, Georgia, serif); font-weight: 500;
