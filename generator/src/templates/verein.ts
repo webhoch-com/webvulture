@@ -534,7 +534,7 @@ export function renderVereinPage(spec: SiteSpec, slug: string): string {
 <header class="nav">
   <div class="nav-inner">
     <a class="brand-mark" href="#">${spec.media?.logo
-      ? `<img class="brand-logo" src="${escapeHtml(spec.media.logo)}" alt="${escapeHtml(spec.business_name)} Logo" width="44" height="44" />`
+      ? `<img class="brand-logo" src="${escapeHtml(spec.media.logo)}" alt="${escapeHtml(spec.business_name)} Logo" width="76" height="76" />`
       : `<span class="brand-crest">${escapeHtml(spec.business_name.split(/\s+/).map(w => w[0] || '').slice(0, 2).join('').toUpperCase() || 'V')}</span>`
     }${businessName}</a>
     <input type="checkbox" id="nav-toggle" class="nav-toggle" aria-label="Menü öffnen" />

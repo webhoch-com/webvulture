@@ -284,7 +284,7 @@ export function renderVereinSportPage(spec: SiteSpec, slug: string): string {
     <div class="nav-inner">
       <a class="brand-mark" href="#">
         ${getLogo(spec)
-          ? `<img class="brand-logo" src="${escapeHtml(getLogo(spec)!)}" alt="${businessName} Logo" width="42" height="42" />`
+          ? `<img class="brand-logo" src="${escapeHtml(getLogo(spec)!)}" alt="${businessName} Logo" width="76" height="76" />`
           : `<span class="brand-crest">${escapeHtml(spec.business_name.split(/\s+/).map(w => w[0] || '').slice(0, 2).join('').toUpperCase() || 'SV')}</span>`
         }
         <span class="brand-name">${businessName}</span>
