@@ -804,8 +804,13 @@ function extractTeam(text: string): SiteSpec['team'] {
 
   // Set aller Rollen-Wörter (für Trailing-Cleanup nach Name-Capture).
   // "Lukas Schmidt Obmann Stv." → wir wollen nur "Lukas Schmidt".
+  // Lenzing-Audit ergänzt: Archivar-Spezialisierungen (Noten/Medien/
+  // Uniformen/Instrumenten/Bekleidung/Probenlokal) und sonstige Verein-
+  // Funktionswörter, die in concatenierten Listenrows ans Namensende
+  // wandern können.
+  const TRAILING_SPECIALTIES = 'Noten|Medien|Uniformen|Instrumenten?|Bekleidung|Probenlokal|Verwaltung|Beziehungen|Marketing|Sponsoring|Veranstaltungen|EDV|IT';
   const roleWordsRe = new RegExp(
-    `\\s+(?:${roles.flatMap(r => r.split(/\s+/)).join('|')}|Stv\\.?|Stellvertreter(?:in)?)$`,
+    `\\s+(?:${roles.flatMap(r => r.split(/\s+/)).join('|')}|${TRAILING_SPECIALTIES}|Stv\\.?|Stellvertreter(?:in)?)$`,
     'iu'
   );
 
