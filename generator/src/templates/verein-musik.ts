@@ -1186,28 +1186,49 @@ ${galleryCount(spec) >= 1 ? `
     </div>
     <div class="gallery-grid">
       ${spec.media!.gallery!.map((_url, i) => `
-        <div class="gallery-item reveal"><img src="${getGalleryImage(spec, slug, i, 800, 600)}" alt="" loading="lazy" onerror="this.parentNode.classList.add('img-broken'); this.style.display='none';" onload="if(this.naturalWidth<20||this.naturalHeight<20){this.parentNode.classList.add('img-broken');this.style.display='none';}"></div>
+        <div class="gallery-item reveal"><img src="${getGalleryImage(spec, slug, i, 800, 600)}" alt="" onerror="this.parentNode.classList.add('img-broken'); this.style.display='none';" onload="if(this.naturalWidth<20||this.naturalHeight<20){this.parentNode.classList.add('img-broken');this.style.display='none';} else if(this.naturalWidth<360){this.parentNode.classList.add('img-small');}"></div>
       `).join('')}
     </div>
   </div>
 </section>
 <script>
-  // Block-A: hide the entire gallery section if every img is broken or
-  // 0-byte (Asset-Mirror serves 200-OK empty PNGs on some Verein-leads,
-  // which don't trigger onerror — the naturalWidth check on onload catches
-  // those). Better than rendering a row of empty dark tiles.
+  // Gallery self-heal v4: hide the entire #bilder section when no image
+  // actually rendered. Polls naturalWidth every 800ms for up to 8s.
+  // Catches the hung-load case (Asset-Mirror sometimes returns 0-byte
+  // 200-OK that NEVER triggers onload OR onerror) — after 4s of no
+  // pixels, treats as broken even without an event.
   document.addEventListener('DOMContentLoaded', () => {
-    setTimeout(() => {
-      const grid = document.querySelector('#bilder .gallery-grid');
-      if (!grid) return;
-      const total = grid.querySelectorAll('.gallery-item').length;
+    const grid = document.querySelector('#bilder .gallery-grid');
+    if (!grid) return;
+    const items = [...grid.querySelectorAll('.gallery-item')];
+    const total = items.length;
+    let attempts = 0;
+    const check = () => {
+      attempts++;
+      items.forEach(item => {
+        if (item.classList.contains('img-broken')) return;
+        const img = item.querySelector('img');
+        if (!img) return;
+        if (img.complete && (img.naturalWidth < 20 || img.naturalHeight < 20)) {
+          item.classList.add('img-broken');
+          img.style.display = 'none';
+        } else if (attempts >= 5 && img.naturalWidth === 0) {
+          item.classList.add('img-broken');
+          img.style.display = 'none';
+        } else if (img.naturalWidth > 0 && img.naturalWidth < 360 && !item.classList.contains('img-small')) {
+          item.classList.add('img-small');
+        }
+      });
       const broken = grid.querySelectorAll('.gallery-item.img-broken').length;
       if (broken === total && total > 0) {
-        const section = document.querySelector('#bilder')?.previousElementSibling;
-        if (section && section.classList.contains('section-anchor-wrap')) section.remove();
+        const anchor = document.querySelector('#bilder')?.previousElementSibling;
+        if (anchor && anchor.classList.contains('section-anchor-wrap')) anchor.remove();
         document.querySelector('#bilder')?.remove();
+        return;
       }
-    }, 2000);
+      if (attempts < 10) setTimeout(check, 800);
+    };
+    setTimeout(check, 800);
   });
 </script>
 ` : ''}
