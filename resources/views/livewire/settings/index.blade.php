@@ -49,6 +49,11 @@ new class extends Component {
      */
     public function render(): mixed
     {
+        \Log::info('Volt settings render() called', [
+            'sections_count' => count(SettingsSchema::sections()),
+            'slots_count' => count(SettingsSchema::all()),
+        ]);
+
         return view('livewire.settings.index', [
             'sections' => SettingsSchema::sections(),
             'slots' => collect(SettingsSchema::all())->groupBy('section')->toArray(),
