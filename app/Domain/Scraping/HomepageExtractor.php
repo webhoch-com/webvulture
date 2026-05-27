@@ -333,6 +333,18 @@ class HomepageExtractor
             '/^(home|startseite|start)$/i',
             '/^(login|anmelden|logout|abmelden)$/i',
             '/^[\s\d\-.\/©]+$/',
+            // Impressum/Datenschutz-Subsections — wenn der Subpage-Crawl
+            // die Impressum-Seite mit-konsolidiert, kommen hier z.B.
+            // "1. Haftungsbeschränkung", "3. Urheber- und Leistungsschutzrechte",
+            // "Erklärung zur Informationspflicht" rein. Reine Legal-Texte
+            // gehören nicht in die generierte Vorschau.
+            '/^\s*\d+\.\s*(haftung|urheber|leistungsschutz|datenschutz|informationspflicht|geltungsbereich|nutzungsbedingung|gewährleistung|streit|verbraucher|widerruf|kündigung|salvatorisch)/i',
+            '/^(geltungsbereich|haftungsbeschr[äa]nkung|urheberrecht|leistungsschutz|informationspflicht|widerrufsrecht|streitbeilegung|salvatorische klausel)/i',
+            // Footer-/Sidebar-Navigation-Labels die kein Inhalt sind
+            '/^(seiten|sitemap|footer|sidebar|aside|kategorien|archive|tags|labels)$/i',
+            '/^(letzte beiträge|neueste|aktuelle beiträge|recent posts)$/i',
+            // Cookie-Banner Subsections
+            '/^(cookie[- ]?einstellungen|cookie[- ]?richtlinie|tracking|analytics-cookies)/i',
         ];
         foreach ($junk as $re) {
             if (preg_match($re, $title)) {
