@@ -69,16 +69,26 @@ class SettingsRepository
     {
         $isSecret = SettingsSchema::isSecret($group, $key);
 
-        $row = AppSetting::updateOrCreate(
-            ['group' => $group, 'key' => $key],
-            [
-                'value' => $value,
-                'is_secret' => $isSecret,
-                'updated_by' => $user?->id,
-            ],
-        );
+        // Wichtig: `is_secret` muss VOR `value` gesetzt werden — der value-
+        // Mutator entscheidet anhand `$this->is_secret` ob Encryption greift.
+        // Bei updateOrCreate-Bulk-Fill ist die Reihenfolge nicht garantiert,
+        // bei Inserts war is_secret noch default=false → Klartext in DB.
+        $row = AppSetting::firstOrNew(['group' => $group, 'key' => $key]);
+        $row->is_secret = $isSecret;
+        $row->updated_by = $user?->id;
+        $row->value = $value;
+        $row->save();
 
         $this->forget();
+
+        // Config zur Laufzeit nachziehen — sonst sieht ein laufender
+        // Request-Thread (z.B. das Volt-Component selber das gerade speichert)
+        // weiter den alten .env-Wert via config(). SettingsServiceProvider
+        // patcht das normalerweise erst beim Boot.
+        $configKey = SettingsSchema::configKey($group, $key);
+        if ($configKey && $value !== null && $value !== '') {
+            config([$configKey => $value]);
+        }
 
         return $row;
     }
