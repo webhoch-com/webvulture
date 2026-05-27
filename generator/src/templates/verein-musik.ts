@@ -26,6 +26,9 @@ import {
   renderHeritageStatement,
   extractHeritageMilestones,
   renderHeritageTimeline,
+  extractKonzertwertung,
+  extractVerbandsmitgliedschaft,
+  renderTrustBadgeSection,
   extractEnsembles,
   renderEnsembleGrid,
   renderKuenstlerischeLeitung,
@@ -71,6 +74,9 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
   // also pass the pre-computed array to renderHeritageTimeline below so
   // the regex doesn't run twice per render.
   const heritageMilestones = extractHeritageMilestones(spec);
+  // PR-A4: Trust signals — Verband-Mitgliedschaft + Konzertwertung-Ergebnisse
+  const verband = extractVerbandsmitgliedschaft(spec);
+  const wertungen = extractKonzertwertung(spec);
   const foundedYear = extractFoundedYear(spec);
   const marqueeItems = buildMarqueeItems(spec, foundedYear);
   const pullQuote = pickPullQuote(spec);
@@ -1207,6 +1213,8 @@ ${marqueeItems.length > 0 ? `
 ` : ''}
 
 ${renderHeritageStatement(spec, foundedYear)}
+
+${renderTrustBadgeSection(verband, wertungen)}
 
 ${renderHeritageTimeline(heritageMilestones)}
 
