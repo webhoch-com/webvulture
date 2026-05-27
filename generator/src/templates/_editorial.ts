@@ -618,6 +618,137 @@ export function renderEnsembleGrid(ensembles: Array<{ name: string; context: str
 }
 
 /**
+ * PR-A4: Konzertwertung-Ergebnisse. Im Blasmusik-Kontext sind Stufen
+ * A (ausgezeichnet) bis E (genügend) die Standard-Qualitätsnachweise
+ * — fast jeder ÖBV-Verein nennt die Wertungen seiner letzten Jahre
+ * auf der eigenen Webseite. Extractor sucht "Stufe A/B/C/D/E" mit
+ * optionalem Jahr im Kontext. Returns max 4 most-recent Wertungen.
+ */
+export function extractKonzertwertung(spec: SiteSpec): Array<{ year: number | null; level: string; note: string }> {
+  const sources = new Set<string>();
+  if (spec.raw_text_excerpt) sources.add(spec.raw_text_excerpt);
+  if (spec.about?.body) sources.add(spec.about.body);
+  for (const s of (spec.redesigned_sections ?? [])) sources.add(`${s.title}\n${s.body}`);
+  const text = Array.from(sources).join('\n').replace(/([a-zäöüß])([A-ZÄÖÜ])/g, '$1 $2');
+
+  // Patterns: "Stufe A", "Stufe B (Sehr gut)", "Konzertwertung 2024: Stufe B"
+  // Also: "in Stufe B mit ausgezeichnetem Erfolg"
+  const RE = /\b(?:Konzertwertung|Wertungsspiel|Wertung|Marschwertung)?\s*(?:[^\n]{0,50}?(20\d{2}|19\d{2}))?\s*[^\n]{0,30}?\bStufe\s+([A-E])\b[^.!?\n]{0,80}/gi;
+  const seen = new Set<string>();
+  const out: Array<{ year: number | null; level: string; note: string }> = [];
+  for (const m of text.matchAll(RE)) {
+    const year = m[1] ? parseInt(m[1], 10) : null;
+    const level = m[2].toUpperCase();
+    if (year && (year < 1980 || year > new Date().getFullYear())) continue;
+    const key = `${year ?? '-'}-${level}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    // Note = context after "Stufe X", stripped to first sentence-end
+    let note = m[0].slice(m[0].toLowerCase().indexOf(`stufe ${level.toLowerCase()}`) + 7).trim();
+    note = note.replace(/^[\s,;:.()\-]+/, '').replace(/\s+\S{0,6}$/, '');
+    if (note.length > 60) note = note.slice(0, 60).replace(/\s+\S*$/, '') + '…';
+    out.push({ year, level, note });
+    if (out.length >= 4) break;
+  }
+  // Sort newest first (years), unknown years last
+  out.sort((a, b) => (b.year ?? 0) - (a.year ?? 0));
+  return out;
+}
+
+/**
+ * PR-A4: Verbandsmitgliedschaft. Österreichische Blasmusik-Vereine
+ * sind in der Regel im Österreichischen Blasmusikverband (ÖBV) +
+ * einem Landesverband (NÖBV/OÖBV/SBV/TBV/VBV/BBV/KBV/WBV) organisiert.
+ * Returns first match.
+ */
+export function extractVerbandsmitgliedschaft(spec: SiteSpec): string | null {
+  const sources = new Set<string>();
+  if (spec.raw_text_excerpt) sources.add(spec.raw_text_excerpt);
+  if (spec.about?.body) sources.add(spec.about.body);
+  if (spec.tagline) sources.add(spec.tagline);
+  for (const s of (spec.redesigned_sections ?? [])) sources.add(`${s.title}\n${s.body}`);
+  const text = Array.from(sources).join('\n');
+
+  // Map regex-match to canonical Verbands-Label
+  const VERBANDS: Array<[RegExp, string]> = [
+    [/\b(Österreichische[rn]?\s+Blasmusikverband|ÖBV)\b/i, 'Österreichischer Blasmusikverband'],
+    [/\b(Niederösterreichische[rn]?\s+Blasmusikverband|NÖBV)\b/i, 'Niederösterreichischer Blasmusikverband (NÖBV)'],
+    [/\b(Oberösterreichische[rn]?\s+Blasmusikverband|OÖBV)\b/i, 'Oberösterreichischer Blasmusikverband (OÖBV)'],
+    [/\b(Steirische[rn]?\s+Blasmusikverband|StBV)\b/i, 'Steirischer Blasmusikverband (StBV)'],
+    [/\b(Salzburger\s+Blasmusikverband|SBV)\b/i, 'Salzburger Blasmusikverband (SBV)'],
+    [/\b(Tiroler\s+Blasmusikverband|TBV)\b/i, 'Tiroler Blasmusikverband (TBV)'],
+    [/\b(Kärntner\s+Blasmusikverband|KBV)\b/i, 'Kärntner Blasmusikverband (KBV)'],
+    [/\b(Vorarlberger\s+Blasmusikverband|VBV)\b/i, 'Vorarlberger Blasmusikverband (VBV)'],
+    [/\b(Burgenländische[rn]?\s+Blasmusikverband|BBV)\b/i, 'Burgenländischer Blasmusikverband (BBV)'],
+    [/\b(Wiener\s+Blasmusikverband|WBV)\b/i, 'Wiener Blasmusikverband (WBV)'],
+  ];
+
+  for (const [re, label] of VERBANDS) {
+    if (re.test(text)) return label;
+  }
+  return null;
+}
+
+/**
+ * PR-A4: renders a Trust-Badge with Eichenlaub-Kranz SVG framing.
+ * Combines Verbandsmitgliedschaft + Konzertwertungen into a single
+ * compact section that sits below the Heritage-Statement / above About.
+ */
+export function renderTrustBadgeSection(
+  verband: string | null,
+  wertungen: Array<{ year: number | null; level: string; note: string }>
+): string {
+  if (!verband && wertungen.length === 0) return '';
+  const wertungBlocks = wertungen.slice(0, 3).map(w => `
+    <div class="trust-wertung">
+      <div class="trust-wertung-level">Stufe ${escapeHtml(w.level)}</div>
+      ${w.year ? `<div class="trust-wertung-year">${w.year}</div>` : ''}
+      ${w.note ? `<div class="trust-wertung-note">${escapeHtml(w.note)}</div>` : ''}
+    </div>
+  `).join('');
+  return `
+<section class="trust-section reveal">
+  <div class="container">
+    <div class="trust-wrap">
+      ${verband ? `
+      <div class="trust-verband">
+        <svg class="trust-wreath" viewBox="0 0 120 120" aria-hidden="true">
+          <!-- Eichenlaub-Kranz: zwei Halbkränze mit Blattranken -->
+          <g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+            <path d="M60 18 C 32 22, 18 50, 22 78 C 26 96, 40 106, 60 108" />
+            <path d="M60 18 C 88 22, 102 50, 98 78 C 94 96, 80 106, 60 108" />
+            <!-- Blätter links -->
+            <path d="M28 38 Q 22 32, 18 38 Q 24 42, 28 38 Z" fill="currentColor"/>
+            <path d="M22 56 Q 14 52, 14 60 Q 20 62, 22 56 Z" fill="currentColor"/>
+            <path d="M26 76 Q 18 76, 18 84 Q 26 84, 26 76 Z" fill="currentColor"/>
+            <path d="M36 92 Q 30 90, 30 98 Q 38 98, 36 92 Z" fill="currentColor"/>
+            <!-- Blätter rechts (mirrored) -->
+            <path d="M92 38 Q 98 32, 102 38 Q 96 42, 92 38 Z" fill="currentColor"/>
+            <path d="M98 56 Q 106 52, 106 60 Q 100 62, 98 56 Z" fill="currentColor"/>
+            <path d="M94 76 Q 102 76, 102 84 Q 94 84, 94 76 Z" fill="currentColor"/>
+            <path d="M84 92 Q 90 90, 90 98 Q 82 98, 84 92 Z" fill="currentColor"/>
+            <!-- Bow at bottom -->
+            <circle cx="60" cy="108" r="3" fill="currentColor"/>
+          </g>
+        </svg>
+        <div class="trust-verband-body">
+          <span class="trust-eyebrow">Verbands-Mitglied</span>
+          <strong>${escapeHtml(verband)}</strong>
+        </div>
+      </div>
+      ` : ''}
+      ${wertungen.length > 0 ? `
+      <div class="trust-wertungen">
+        <span class="trust-eyebrow">Konzertwertung — Qualitätsnachweis</span>
+        <div class="trust-wertung-grid">${wertungBlocks}</div>
+      </div>
+      ` : ''}
+    </div>
+  </div>
+</section>`;
+}
+
+/**
  * Künstlerische-Leitung-Card: when board contains a Kapellmeister/Stabführer
  * with a name, surface them in a single tall card with focus emphasis,
  * BEFORE the regular Vorstand-grid. Premium pattern from Algunder (Mozarteum-
@@ -1245,6 +1376,68 @@ export const EDITORIAL_CSS = `
 .ht-label {
   font-family: var(--serif, Georgia, serif); font-size: 0.96rem;
   color: var(--ink-2, #4a4030); line-height: 1.6;
+}
+
+/* Trust-Section (PR-A4) — Verband-Mitgliedschaft + Konzertwertungen
+   als prominenter Qualitätsnachweis direkt nach Heritage-Statement. */
+.trust-section {
+  padding: clamp(3rem, 5vw, 4.5rem) 1.5rem;
+  background: color-mix(in oklch, var(--accent, #b8893d) 6%, var(--bg, #fbf7ee));
+  border-top: 1px solid color-mix(in oklch, var(--accent, #b8893d) 22%, transparent);
+  border-bottom: 1px solid color-mix(in oklch, var(--accent, #b8893d) 22%, transparent);
+}
+.trust-section .container { max-width: 1100px; margin: 0 auto; }
+.trust-wrap {
+  display: grid; gap: 3rem; align-items: center;
+  grid-template-columns: 1fr;
+}
+@media (min-width: 760px) {
+  .trust-wrap { grid-template-columns: auto 1fr; gap: 4rem; }
+}
+.trust-verband {
+  display: flex; align-items: center; gap: 1.25rem;
+}
+.trust-wreath {
+  width: 88px; height: 88px;
+  color: var(--accent, #b8893d);
+  flex-shrink: 0;
+}
+.trust-verband-body { display: flex; flex-direction: column; gap: 0.4rem; }
+.trust-eyebrow {
+  font-family: var(--display, Georgia, serif); font-size: 0.72rem;
+  letter-spacing: 0.22em; text-transform: uppercase;
+  color: var(--accent, #b8893d); font-weight: 600;
+}
+.trust-verband-body strong {
+  font-family: var(--display, Georgia, serif); font-size: 1.1rem;
+  color: var(--ink, #1f1a14); font-weight: 600; line-height: 1.35;
+}
+.trust-wertung-grid {
+  display: grid; gap: 1rem; margin-top: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+.trust-wertung {
+  background: var(--surface, #fff);
+  border: 1px solid var(--rule, rgba(0,0,0,0.08));
+  border-left: 3px solid var(--accent, #b8893d);
+  padding: 1rem 1.25rem;
+  border-radius: 6px;
+  transition: transform .25s, box-shadow .25s;
+}
+.trust-wertung:hover { transform: translateY(-2px); box-shadow: 0 12px 28px -14px rgba(0,0,0,0.12); }
+.trust-wertung-level {
+  font-family: var(--display, Georgia, serif); font-size: 1.5rem;
+  font-weight: 600; color: var(--primary, #2d4a32); line-height: 1;
+  margin-bottom: 0.25rem;
+}
+.trust-wertung-year {
+  font-family: var(--display, Georgia, serif); font-size: 0.78rem;
+  letter-spacing: 0.14em; color: var(--ink-3, #877a64);
+  margin-bottom: 0.5rem;
+}
+.trust-wertung-note {
+  font-family: var(--serif, Georgia, serif); font-size: 0.85rem;
+  line-height: 1.5; color: var(--ink-2, #4a4030);
 }
 
 /* Ensemble-Grid — sub-bands as 3-4 brand tiles (Brixen/Eppingen pattern) */
