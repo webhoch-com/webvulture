@@ -32,6 +32,10 @@ import {
   extractMediaEmbeds,
   renderMediaEmbeds,
   renderEventsJsonLd,
+  extractClubStats,
+  renderBigNumberStats,
+  extractSponsors,
+  renderSponsorsStrip,
   extractEnsembles,
   renderEnsembleGrid,
   renderKuenstlerischeLeitung,
@@ -83,6 +87,9 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
   // PR-A5: YouTube/Soundcloud-Embeds für Hörproben
   const mediaEmbeds = extractMediaEmbeds(spec);
   const foundedYear = extractFoundedYear(spec);
+  // PR-A7: Big-Number Stats + Sponsoren — nach foundedYear berechnen
+  const clubStats = extractClubStats(spec, foundedYear);
+  const sponsors = extractSponsors(spec);
   const marqueeItems = buildMarqueeItems(spec, foundedYear);
   const pullQuote = pickPullQuote(spec);
   // Events: prefer explicit spec.events (rarely populated), fall back to
@@ -1250,6 +1257,8 @@ ${renderHeritageStatement(spec, foundedYear)}
 
 ${renderTrustBadgeSection(verband, wertungen)}
 
+${renderBigNumberStats(clubStats)}
+
 ${renderHeritageTimeline(heritageMilestones)}
 
 ${events.length > 0 ? `
@@ -1651,6 +1660,8 @@ ${email ? `
   <button class="wv-lightbox-next" type="button" aria-label="Nächstes Bild">›</button>
   <div class="wv-lightbox-counter"></div>
 </div>
+
+${renderSponsorsStrip(sponsors)}
 
 <!-- Cookie-Banner (DSGVO/ePrivacy): erscheint nur wenn 'wv-consent' Cookie
      fehlt. Map-iframe wird erst nach Accept geladen. -->

@@ -690,6 +690,122 @@ export function extractVerbandsmitgliedschaft(spec: SiteSpec): string | null {
 }
 
 /**
+ * PR-A7: Extract member count + concerts-per-year + jubilee-years from
+ * scraped text. Used by Hero Big-Number-Stats-Block.
+ *
+ * Patterns: "65 aktive Musiker", "ca. 50 Mitglieder", "über 100 Auftritte",
+ * "30+ Konzerte pro Jahr", "100-jähriges Jubiläum", "150 Jahre".
+ */
+export function extractClubStats(spec: SiteSpec, foundedYear: number | null): {
+  members: number | null;
+  performancesPerYear: number | null;
+  years: number | null;
+} {
+  const text = [
+    spec.raw_text_excerpt ?? '',
+    spec.about?.body ?? '',
+    spec.tagline ?? '',
+  ].join(' ').replace(/([a-zäöüß])([A-ZÄÖÜ])/g, '$1 $2');
+
+  // Member count: "65 aktive Musiker", "ca. 50 Mitglieder", "etwa 80 Musikerinnen"
+  const memberRe = /(?:ca\.?|etwa|rund|über|mehr\s+als|circa|approx\.?)?\s*(\d{2,4})\s+(?:aktive\s+)?(?:Musiker(?:innen)?|Mitglieder|Musikanten)/i;
+  const mm = text.match(memberRe);
+  const members = mm ? parseInt(mm[1], 10) : null;
+  // Sanity: 5–500 members realistic
+  const cleanMembers = (members && members >= 5 && members <= 500) ? members : null;
+
+  // Performances: "30 Auftritte pro Jahr", "über 20 Konzerte jährlich"
+  const perfRe = /(?:über|mehr\s+als|rund|ca\.?)?\s*(\d{1,3})\+?\s+(?:Auftritte|Konzerte|Veranstaltungen)(?:\s+(?:pro|im)\s+Jahr|\s+jährlich)/i;
+  const pm = text.match(perfRe);
+  const performances = pm ? parseInt(pm[1], 10) : null;
+  const cleanPerf = (performances && performances >= 2 && performances <= 200) ? performances : null;
+
+  const currentYear = new Date().getFullYear();
+  const years = foundedYear ? (currentYear - foundedYear) : null;
+
+  return { members: cleanMembers, performancesPerYear: cleanPerf, years };
+}
+
+/**
+ * PR-A7: Render a Big-Number-Stats-Block. Used in the hero or as a
+ * standalone band below the heritage-statement. Returns empty string
+ * when no stats are extractable. Each stat is animated via .count-up
+ * (the existing IntersectionObserver in verein-musik picks it up).
+ */
+export function renderBigNumberStats(stats: {
+  members: number | null;
+  performancesPerYear: number | null;
+  years: number | null;
+}): string {
+  const items: Array<{ value: number; label: string; suffix?: string }> = [];
+  if (stats.years && stats.years >= 5) items.push({ value: stats.years, label: 'Jahre Tradition' });
+  if (stats.members) items.push({ value: stats.members, label: 'aktive Musiker' });
+  if (stats.performancesPerYear) items.push({ value: stats.performancesPerYear, label: 'Auftritte / Jahr', suffix: '+' });
+  if (items.length < 2) return '';  // Need at least 2 stats to be meaningful
+  return `
+<section class="bignum-stats reveal">
+  <div class="container">
+    <div class="bignum-grid">
+      ${items.map(s => `
+        <div class="bignum-item">
+          <div class="bignum-value"><span class="count-up" data-target="${s.value}">${s.value}</span>${s.suffix || ''}</div>
+          <div class="bignum-label">${escapeHtml(s.label)}</div>
+        </div>
+      `).join('')}
+    </div>
+  </div>
+</section>`;
+}
+
+/**
+ * PR-A7: Extract sponsor logos from scraped images. The orchestrator's
+ * Asset-Mirror downloads all <img> tags from the source page; we look
+ * for ones with alt-text containing "Sponsor|Partner|Förderer" or that
+ * sit in a section labelled the same way.
+ */
+export function extractSponsors(spec: SiteSpec): Array<{ name: string; logoUrl: string }> {
+  // spec.media has no 'images' field in SiteSpec — read via any-cast
+  // because the orchestrator pipes asset-mirror entries through as
+  // optional metadata, and we want to support both shapes.
+  const images: any[] = (spec.media as any)?.images || (spec as any)?.images || [];
+  if (images.length === 0) return [];
+  const SPONSOR_RE = /sponsor|partner|förder|forderer|gönner|mitgliedsbetrieb/i;
+  const seen = new Set<string>();
+  const out: Array<{ name: string; logoUrl: string }> = [];
+  for (const img of images) {
+    const alt = (img.alt || '').trim();
+    const src = img.src || img.url || '';
+    if (!src) continue;
+    if (!SPONSOR_RE.test(alt)) continue;
+    if (seen.has(src)) continue;
+    seen.add(src);
+    const name = alt.replace(SPONSOR_RE, '').replace(/[-_:|]+/g, ' ').trim() || 'Partner';
+    out.push({ name, logoUrl: src });
+    if (out.length >= 8) break;
+  }
+  return out;
+}
+
+/**
+ * PR-A7: Render Sponsors logo strip. Hidden when no sponsors found.
+ */
+export function renderSponsorsStrip(sponsors: Array<{ name: string; logoUrl: string }>): string {
+  if (sponsors.length === 0) return '';
+  const tiles = sponsors.slice(0, 8).map(s => `
+    <div class="sponsor-tile" title="${escapeHtml(s.name)}">
+      <img src="${escapeHtml(s.logoUrl)}" alt="${escapeHtml(s.name)}" loading="lazy" onerror="this.parentNode.style.display='none';" />
+    </div>
+  `).join('');
+  return `
+<section class="sponsors-section reveal">
+  <div class="container">
+    <span class="sponsors-eyebrow">In Partnerschaft mit</span>
+    <div class="sponsors-strip">${tiles}</div>
+  </div>
+</section>`;
+}
+
+/**
  * PR-A6: Build an iCal (RFC 5545) feed from extracted events. Each event
  * becomes one VEVENT block with DTSTART/SUMMARY/UID. Returns the full
  * iCalendar text ready for download.
@@ -1632,6 +1748,70 @@ export const EDITORIAL_CSS = `
 .media-card.is-playing iframe {
   position: absolute; inset: 0; width: 100%; height: 100%; border: 0;
 }
+
+/* Big-Number-Stats-Block (PR-A7) — prominent count-up stats nach Heritage */
+.bignum-stats {
+  padding: clamp(2.5rem, 4vw, 4rem) 1.5rem;
+  background: var(--surface, #fff);
+  border-top: 1px solid var(--rule, rgba(0,0,0,0.08));
+  border-bottom: 1px solid var(--rule, rgba(0,0,0,0.08));
+}
+.bignum-stats .container { max-width: 1100px; margin: 0 auto; }
+.bignum-grid {
+  display: grid; gap: 2rem;
+  grid-template-columns: 1fr;
+  text-align: center;
+}
+@media (min-width: 640px) {
+  .bignum-grid {
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 3rem;
+  }
+}
+.bignum-item {
+  display: flex; flex-direction: column; gap: 0.5rem;
+  align-items: center;
+}
+.bignum-value {
+  font-family: var(--display, Georgia, serif);
+  font-size: clamp(3rem, 7vw, 5rem); font-weight: 500;
+  line-height: 0.95; letter-spacing: -0.02em;
+  color: var(--primary, #2d4a32);
+  font-variant-numeric: tabular-nums;
+}
+.bignum-label {
+  font-family: var(--display, Georgia, serif); font-size: 0.85rem;
+  letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--ink-2, #4a4030); font-weight: 600;
+}
+
+/* Sponsors-Strip (PR-A7) */
+.sponsors-section {
+  padding: clamp(2.5rem, 4vw, 4rem) 1.5rem;
+  background: var(--bg-2, #f0e8d3);
+  text-align: center;
+}
+.sponsors-section .container { max-width: 1200px; margin: 0 auto; }
+.sponsors-eyebrow {
+  display: block;
+  font-family: var(--display, Georgia, serif); font-size: 0.78rem;
+  letter-spacing: 0.22em; text-transform: uppercase;
+  color: var(--accent, #b8893d); font-weight: 600;
+  margin-bottom: 2rem;
+}
+.sponsors-strip {
+  display: flex; flex-wrap: wrap; gap: 2.5rem;
+  justify-content: center; align-items: center;
+}
+.sponsor-tile {
+  flex: 0 0 auto;
+  height: 60px; max-width: 160px;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0.75; transition: opacity .25s, transform .25s;
+}
+.sponsor-tile img { max-height: 60px; max-width: 100%; object-fit: contain; filter: grayscale(0.4); transition: filter .25s; }
+.sponsor-tile:hover { opacity: 1; transform: translateY(-2px); }
+.sponsor-tile:hover img { filter: grayscale(0); }
 
 /* Trust-Section (PR-A4) — Verband-Mitgliedschaft + Konzertwertungen
    als prominenter Qualitätsnachweis direkt nach Heritage-Statement. */
