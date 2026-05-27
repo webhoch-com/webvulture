@@ -47,7 +47,7 @@ new class extends Component {
      * "Call to a member function getName() on array" — er erwartet eine
      * BackedEnum, sieht aber ein array. View-Variablen umgehen das.
      */
-    public function render()
+    public function render(): mixed
     {
         return view('livewire.settings.index', [
             'sections' => SettingsSchema::sections(),
