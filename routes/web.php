@@ -35,6 +35,7 @@ Route::middleware('auth')->group(function () {
     Volt::route('/leads/{lead}', 'leads.show')->name('leads.show');
     Volt::route('/leads/{lead}/prototype', 'prototype.review')->name('prototype.review');
     Volt::route('/templates', 'templates.index')->name('templates.index');
+    Volt::route('/settings', 'settings.index')->name('settings.index');
 });
 
 // ─── Generator webhooks (HMAC signed, CSRF excluded in bootstrap/app.php) ────

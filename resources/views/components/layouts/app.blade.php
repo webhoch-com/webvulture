@@ -46,6 +46,10 @@
                 <x-icon name="o-square-3-stack-3d" class="w-4 h-4" />
                 <span>Vorlagen</span>
             </a>
+            <a href="{{ route('settings.index') }}" class="btn btn-ghost btn-sm gap-1">
+                <x-icon name="o-cog-6-tooth" class="w-4 h-4" />
+                <span>Einstellungen</span>
+            </a>
             @auth
                 <span class="text-xs text-base-content/60 hidden lg:inline ml-2">{{ auth()->user()->email }}</span>
                 <form method="POST" action="{{ route('logout') }}" class="inline">
@@ -89,6 +93,9 @@
             </a>
             <a href="{{ route('templates.index') }}" class="btn btn-ghost justify-start gap-2">
                 <x-icon name="o-square-3-stack-3d" class="w-5 h-5" /> Vorlagen
+            </a>
+            <a href="{{ route('settings.index') }}" class="btn btn-ghost justify-start gap-2">
+                <x-icon name="o-cog-6-tooth" class="w-5 h-5" /> Einstellungen
             </a>
             @auth
                 <div class="mt-auto pt-3 border-t border-base-300/60">
