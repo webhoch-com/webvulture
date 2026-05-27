@@ -212,7 +212,16 @@ export async function orchestrate(pkg: RebuildPackage): Promise<OrchestrationRes
 
   // Inject scraped media + brand color deterministically.
   baseSpec.media = pickMedia(pkg);
-  const scrapedColor = pickPrimaryColor(pkg.brand_colors);
+
+  // Brand-primary in Reihenfolge: pkg.brand.primary_color (CSS-extrahiert,
+  // präzise) → pkg.brand_colors[] (Häufigkeits-Scoring, generisch) →
+  // defaultPrimaryColor (Branchen-Vorgabe). Vorher war nur die Liste
+  // gewichtet — die direkte CSS-Variable wurde ignoriert obwohl sie
+  // qualitativ besser ist.
+  const cssPrimary = pkg.brand?.primary_color
+    ? normalizeHex(pkg.brand.primary_color)
+    : null;
+  const scrapedColor = cssPrimary || pickPrimaryColor(pkg.brand_colors);
   if (scrapedColor) {
     baseSpec.brand.primary_color = scrapedColor;
   }
@@ -657,10 +666,43 @@ function pickMedia(pkg: RebuildPackage): SiteSpec['media'] {
     return logo || favicon ? { logo, favicon } : undefined;
   }
 
-  const heroPick = scored[0];
+  // Hero-Pick mit Größen-Bias: wenn die downloaded gallery items width-Daten
+  // haben, bevorzuge große landscape-Fotos (≥ 1200×600) — die sehen als Hero
+  // viel besser aus als ein quadratisches 800px-Bild. Score zählt mehr, aber
+  // bei Gleichstand entscheidet Auflösung.
+  const galleryMeta = new Map<string, { w: number; h: number }>();
+  for (const g of (pkg.images?.gallery ?? [])) {
+    if (g.public_url && g.width && g.height) {
+      galleryMeta.set(g.public_url, { w: g.width, h: g.height });
+    }
+  }
+  for (const h of (pkg.images?.hero ?? [])) {
+    if (h.public_url && h.width && h.height) {
+      galleryMeta.set(h.public_url, { w: h.width, h: h.height });
+    }
+  }
+  const isHeroSized = (src: string): boolean => {
+    const m = galleryMeta.get(src);
+    if (!m) return false;
+    return m.w >= 1200 && m.h >= 600 && m.w >= m.h; // landscape, full-bleed-tauglich
+  };
+
+  // Hero: bevorzuge das erste hero-taugliche Foto (groß + landscape). Wenn
+  // keines da ist, normales scored[0].
+  let heroIdx = scored.findIndex((s) => isHeroSized(s.src));
+  if (heroIdx < 0) heroIdx = 0;
+  const heroPick = scored[heroIdx];
   seen.add(heroPick.src);
 
-  const gallery = scored.slice(1).filter((i) => !seen.has(i.src)).map((i) => i.src).slice(0, 8);
+  // Gallery: von 8 auf 24 hochgesetzt. Templates können selbst entscheiden
+  // wie viele sie tatsächlich rendern — aber wenn nur 8 ankommen, gibt es
+  // keine Wahl. 24 ist genug für Editorial-Mosaike mit Reserve fürs
+  // onerror-Hide-broken-Pattern.
+  const gallery = scored
+    .filter((_, i) => i !== heroIdx)
+    .filter((i) => !seen.has(i.src))
+    .map((i) => i.src)
+    .slice(0, 24);
 
   return { logo, favicon, hero_image: heroPick.src, gallery };
 }
