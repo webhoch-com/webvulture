@@ -1570,6 +1570,15 @@ ${renderLegalFooter(spec)}
 `;
 }
 
+/**
+ * PR-A6: Which layout_kinds emit an iCal feed for their events?
+ * Verein-templates with extractable concert dates are the primary use-case.
+ */
+function layoutKindRequiresIcal(layoutKind: string): boolean {
+  return layoutKind === 'verein-musik' || layoutKind === 'verein-sport'
+      || layoutKind === 'verein-tradition' || layoutKind === 'verein';
+}
+
 export async function scaffoldAstroProject(
   prototypeVersionId: number,
   spec: SiteSpec,
@@ -1601,6 +1610,27 @@ export async function scaffoldAstroProject(
   );
 
   await writeFile(join(projectDir, 'public', 'robots.txt'), `User-agent: *\nDisallow: /\n`);
+
+  // PR-A6: iCal-Feed unter /termine.ics ablegen wenn Events extrahiert
+  // wurden (Verein-Templates). Static file im public/ wird unverändert
+  // ausgeliefert — kein Server-Side-Code nötig.
+  if (layoutKindRequiresIcal(spec.layout_kind ?? 'standard')) {
+    try {
+      const { extractEvents, buildIcalFeed } = await import('./templates/_editorial.js');
+      const events = (spec.events && spec.events.length > 0)
+        ? spec.events.slice(0, 8).map(e => ({ date: (e as any).date || '', title: (e as any).title || (e as any).name || 'Veranstaltung' }))
+        : extractEvents(spec);
+      if (events.length > 0) {
+        const previewUrl = `${previewBaseDomain.startsWith('http') ? '' : 'https://'}${slug}.${previewBaseDomain}/`;
+        const ics = buildIcalFeed(events, { businessName: spec.business_name, previewUrl });
+        if (ics) {
+          await writeFile(join(projectDir, 'public', 'termine.ics'), ics);
+        }
+      }
+    } catch (err) {
+      console.warn('[scaffold] iCal-Build failed:', err instanceof Error ? err.message : err);
+    }
+  }
 
   // Dispatch to branch-specific template if available, fallback to generic.
   const layoutKind = spec.layout_kind ?? 'standard';

@@ -690,6 +690,112 @@ export function extractVerbandsmitgliedschaft(spec: SiteSpec): string | null {
 }
 
 /**
+ * PR-A6: Build an iCal (RFC 5545) feed from extracted events. Each event
+ * becomes one VEVENT block with DTSTART/SUMMARY/UID. Returns the full
+ * iCalendar text ready for download.
+ *
+ * Date format: events come in as DD.MM.YYYY or DD.MM. — we normalize to
+ * YYYYMMDD and emit all-day events (DTSTART;VALUE=DATE:...). UIDs are
+ * deterministic (slug+date+title-hash) so subscribers don't see duplicates.
+ */
+export function buildIcalFeed(
+  events: Array<{ date: string; title: string; description?: string }>,
+  meta: { businessName: string; previewUrl: string; }
+): string {
+  if (events.length === 0) return '';
+  const currentYear = new Date().getFullYear();
+  const lines: string[] = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//WebVulture//Vereins-Terminkalender//DE',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    `X-WR-CALNAME:${icalEscape(meta.businessName + ' — Termine')}`,
+    `X-WR-CALDESC:${icalEscape('Konzert- und Auftrittstermine des ' + meta.businessName)}`,
+  ];
+  const dtstamp = new Date().toISOString().replace(/[-:]|\.\d{3}/g, '');
+  for (const ev of events) {
+    const parsed = parseGermanDate(ev.date, currentYear);
+    if (!parsed) continue;
+    const yyyymmdd = parsed.replace(/-/g, '');
+    const uidSeed = `${yyyymmdd}-${ev.title}`;
+    const uid = simpleHash(uidSeed) + '@' + meta.previewUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    lines.push(
+      'BEGIN:VEVENT',
+      `UID:${uid}`,
+      `DTSTAMP:${dtstamp}`,
+      `DTSTART;VALUE=DATE:${yyyymmdd}`,
+      `SUMMARY:${icalEscape(ev.title)}`,
+      ev.description ? `DESCRIPTION:${icalEscape(ev.description)}` : '',
+      `URL:${meta.previewUrl}#termine`,
+      'END:VEVENT',
+    );
+  }
+  lines.push('END:VCALENDAR');
+  return lines.filter(Boolean).join('\r\n') + '\r\n';
+}
+
+function icalEscape(s: string): string {
+  return s.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
+}
+
+function parseGermanDate(date: string, fallbackYear: number): string | null {
+  // DD.MM.YYYY or DD.MM. (assume current year if shorter)
+  const m = date.match(/(\d{1,2})\.\s*(\d{1,2})\.?\s*(\d{4})?/);
+  if (!m) return null;
+  const d = String(parseInt(m[1], 10)).padStart(2, '0');
+  const mo = String(parseInt(m[2], 10)).padStart(2, '0');
+  const y = m[3] ? m[3] : String(fallbackYear);
+  return `${y}-${mo}-${d}`;
+}
+
+function simpleHash(s: string): string {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h).toString(36);
+}
+
+/**
+ * PR-A6: schema.org/MusicEvent JSON-LD blocks for each extracted event.
+ * Returns a single string with one <script application/ld+json> per event.
+ * Used by templates to inject into <head> after the main JSON-LD.
+ */
+export function renderEventsJsonLd(
+  events: Array<{ date: string; title: string; description?: string }>,
+  meta: { businessName: string; previewUrl: string; address?: string }
+): string {
+  if (events.length === 0) return '';
+  const currentYear = new Date().getFullYear();
+  const blocks: string[] = [];
+  for (const ev of events) {
+    const isoDate = parseGermanDate(ev.date, currentYear);
+    if (!isoDate) continue;
+    const data: Record<string, unknown> = {
+      '@context': 'https://schema.org',
+      '@type': 'MusicEvent',
+      name: ev.title,
+      startDate: isoDate,
+      eventStatus: 'https://schema.org/EventScheduled',
+      eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
+      organizer: { '@type': 'MusicGroup', name: meta.businessName, url: meta.previewUrl },
+      performer: { '@type': 'MusicGroup', name: meta.businessName },
+    };
+    if (meta.address) {
+      data.location = {
+        '@type': 'Place',
+        name: 'Probelokal',
+        address: { '@type': 'PostalAddress', streetAddress: meta.address },
+      };
+    }
+    if (ev.description) data.description = ev.description;
+    blocks.push(`<script type="application/ld+json">${JSON.stringify(data).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026')}</script>`);
+  }
+  return blocks.join('\n  ');
+}
+
+/**
  * PR-A5: Audio/Video-Embeds extractor. Scans for YouTube watch-URLs and
  * Soundcloud track URLs in scraped sources. Returns video-id + title.
  * Used by renderMediaEmbeds for the "Hör mal rein" section.
