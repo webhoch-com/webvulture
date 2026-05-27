@@ -897,12 +897,82 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
       padding: 0.75rem 0; border-bottom: 1px solid var(--rule);
     }
     .anfahrt-link:hover { color: var(--primary-deep); }
-    .anfahrt-map { position: relative; }
-    .anfahrt-map iframe { display: block; }
+    .anfahrt-map { position: relative; min-height: 420px; }
+    .anfahrt-map iframe { display: block; width: 100%; height: 420px; border: 0; border-radius: 8px; }
     .anfahrt-fallback {
       display: inline-block; margin-top: 0.75rem; font-size: 0.9rem;
       color: var(--primary); font-weight: 500;
     }
+    /* Map-Placeholder bis Cookie-Consent erteilt wird */
+    .anfahrt-map-placeholder {
+      width: 100%; height: 420px; border-radius: 8px;
+      background:
+        repeating-linear-gradient(45deg, color-mix(in oklch, var(--primary) 6%, white) 0 12px, color-mix(in oklch, var(--primary) 9%, white) 12px 24px),
+        color-mix(in oklch, var(--primary) 6%, white);
+      border: 1px solid var(--rule);
+      display: grid; place-items: center;
+      text-align: center; padding: 2rem;
+    }
+    .map-ph-content { max-width: 360px; }
+    .map-ph-content svg { color: var(--primary); margin-bottom: 0.75rem; opacity: 0.7; }
+    .map-ph-content h3 { font-family: var(--display); font-size: 1.35rem; color: var(--ink); margin-bottom: 0.6rem; }
+    .map-ph-content p { color: var(--ink-2); font-size: 0.95rem; line-height: 1.55; margin-bottom: 1.25rem; }
+    .map-load-btn {
+      background: var(--primary); color: #fff;
+      padding: 0.75rem 1.5rem; border-radius: 6px; border: 0;
+      font-family: var(--display); font-weight: 600; font-size: 0.95rem;
+      cursor: pointer; transition: background .2s, transform .2s;
+    }
+    .map-load-btn:hover { background: var(--primary-deep); transform: translateY(-1px); }
+    .map-ph-fallback {
+      display: block; margin-top: 1rem; font-size: 0.85rem;
+      color: var(--ink-3); text-decoration: underline;
+    }
+
+    /* ─── Cookie-Banner (CSS-only sliding up) ─── */
+    .wv-cookie {
+      position: fixed; bottom: 0; left: 0; right: 0; z-index: 200;
+      background: var(--ink); color: rgba(255,250,240,0.95);
+      padding: 1.25rem clamp(1rem, 4vw, 2.5rem);
+      box-shadow: 0 -20px 50px -10px rgba(0,0,0,0.35);
+      transform: translateY(100%);
+      transition: transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+      border-top: 3px solid var(--accent);
+    }
+    .wv-cookie.is-visible { transform: translateY(0); }
+    .wv-cookie-inner {
+      max-width: 1280px; margin: 0 auto;
+      display: grid; gap: 1.25rem; align-items: center;
+      grid-template-columns: 1fr;
+    }
+    @media (min-width: 880px) { .wv-cookie-inner { grid-template-columns: 1fr auto; } }
+    .wv-cookie h3 {
+      font-family: var(--display); font-size: 1.05rem; font-weight: 600;
+      margin-bottom: 0.35rem; color: #fff;
+    }
+    .wv-cookie p {
+      font-size: 0.88rem; line-height: 1.55; color: rgba(255,250,240,0.78);
+      font-family: var(--serif);
+    }
+    .wv-cookie p a {
+      color: var(--accent); text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    .wv-cookie-actions {
+      display: flex; gap: 0.75rem; flex-wrap: wrap;
+      justify-content: flex-start;
+    }
+    @media (min-width: 880px) { .wv-cookie-actions { justify-content: flex-end; } }
+    .wv-cookie-btn {
+      padding: 0.7rem 1.4rem; border: 0; border-radius: 6px;
+      font-family: var(--display); font-weight: 600; font-size: 0.9rem;
+      cursor: pointer; transition: transform .2s, background .2s;
+      white-space: nowrap;
+    }
+    .wv-cookie-btn-primary { background: var(--accent); color: var(--ink); }
+    .wv-cookie-btn-primary:hover { background: color-mix(in oklch, var(--accent) 80%, white); transform: translateY(-1px); }
+    .wv-cookie-btn-secondary { background: transparent; color: rgba(255,250,240,0.85); border: 1px solid rgba(255,250,240,0.3); }
+    .wv-cookie-btn-secondary:hover { background: rgba(255,250,240,0.08); border-color: rgba(255,250,240,0.5); }
 
     /* ─── Premium Footer (multi-col) ─── */
     .verein-footer {
@@ -1296,14 +1366,20 @@ ${address ? `
         <address class="anfahrt-address">${address}</address>
         ${phone ? `<a href="tel:${phone.replace(/\s/g, '')}" class="anfahrt-link">📞 ${phone}</a>` : ''}
       </div>
-      <div class="anfahrt-map reveal">
-        <iframe
-          src="https://maps.google.com/maps?q=${encodeURIComponent(address)}&amp;t=&amp;z=14&amp;ie=UTF8&amp;iwloc=&amp;output=embed"
-          width="100%" height="420" frameborder="0" scrolling="no"
-          marginheight="0" marginwidth="0" style="border:0; border-radius: 8px;"
-          loading="lazy" referrerpolicy="no-referrer-when-downgrade"
-          title="Karte zur Anfahrt"></iframe>
-        <a href="https://www.google.com/maps/search/${encodeURIComponent(address)}" target="_blank" rel="noopener" class="anfahrt-fallback">In Google Maps öffnen ↗</a>
+      <div class="anfahrt-map reveal" data-map-q="${encodeURIComponent(address)}">
+        <!-- Map-Placeholder: iframe wird erst nach Cookie-Consent geladen
+             (DSGVO/ePrivacy — Google Maps setzt Tracking-Cookies).
+             Bei "Alle akzeptieren" tauscht wv-cookie.js das Placeholder
+             gegen das echte iframe. -->
+        <div class="anfahrt-map-placeholder" role="img" aria-label="Karte zur Anfahrt (Klick zum Laden)">
+          <div class="map-ph-content">
+            <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            <h3>Karte laden</h3>
+            <p>Beim Laden der Karte werden Daten an Google übermittelt.</p>
+            <button type="button" class="map-load-btn" data-cookie-accept="maps">Karte anzeigen</button>
+            <a href="https://www.google.com/maps/search/${encodeURIComponent(address)}" target="_blank" rel="noopener" class="map-ph-fallback">In Google Maps öffnen ↗</a>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -1345,6 +1421,21 @@ ${address ? `
   <button class="wv-lightbox-next" type="button" aria-label="Nächstes Bild">›</button>
   <div class="wv-lightbox-counter"></div>
 </div>
+
+<!-- Cookie-Banner (DSGVO/ePrivacy): erscheint nur wenn 'wv-consent' Cookie
+     fehlt. Map-iframe wird erst nach Accept geladen. -->
+<aside class="wv-cookie" id="wv-cookie" role="dialog" aria-modal="false" aria-label="Cookie-Hinweis">
+  <div class="wv-cookie-inner">
+    <div>
+      <h3>Cookie-Hinweis</h3>
+      <p>Diese Demo-Seite kann externe Inhalte einbetten (z.B. <strong>Google Maps</strong> für die Anfahrtskarte). Beim Laden dieser Dienste werden Daten an den Anbieter übermittelt. Nähere Infos in der <a href="/datenschutz">Datenschutzerklärung</a>.</p>
+    </div>
+    <div class="wv-cookie-actions">
+      <button type="button" class="wv-cookie-btn wv-cookie-btn-secondary" data-cookie-action="reject">Nur notwendige</button>
+      <button type="button" class="wv-cookie-btn wv-cookie-btn-primary" data-cookie-action="accept">Alle akzeptieren</button>
+    </div>
+  </div>
+</aside>
 
 <footer class="verein-footer">
   <div class="vf-inner">
@@ -1525,6 +1616,74 @@ ${address ? `
       });
     }, { threshold: 0.4 });
     targets.forEach(el => io.observe(el));
+  })();
+
+  // ── Cookie-Banner + Map-Lazy-Load (DSGVO/ePrivacy) ─────────────────
+  // Banner shows only when 'wv-consent' cookie missing. Map iframe is
+  // only created (via safe DOM APIs, NOT innerHTML) after user accepts.
+  (() => {
+    const banner = document.getElementById('wv-cookie');
+    const consentName = 'wv-consent';
+    const readConsent = () => {
+      const m = document.cookie.match(/(?:^|;\s*)wv-consent=([^;]+)/);
+      return m ? decodeURIComponent(m[1]) : null;
+    };
+    const writeConsent = (value) => {
+      document.cookie = consentName + '=' + encodeURIComponent(value)
+        + '; path=/; max-age=' + (60 * 60 * 24 * 365) + '; samesite=lax';
+    };
+
+    const loadMaps = () => {
+      document.querySelectorAll('.anfahrt-map[data-map-q]').forEach(wrap => {
+        const q = wrap.dataset.mapQ;
+        if (!q) return;
+        // q was server-side URL-encoded; we treat it strictly as URL
+        // component and never as HTML. createElement + setAttribute is
+        // safe — no innerHTML, no string-concat to .outerHTML.
+        while (wrap.firstChild) wrap.removeChild(wrap.firstChild);
+        const iframe = document.createElement('iframe');
+        iframe.src = 'https://maps.google.com/maps?q=' + q
+          + '&t=&z=14&ie=UTF8&iwloc=&output=embed';
+        iframe.width = '100%';
+        iframe.height = '420';
+        iframe.style.border = '0';
+        iframe.style.borderRadius = '8px';
+        iframe.loading = 'lazy';
+        iframe.referrerPolicy = 'no-referrer-when-downgrade';
+        iframe.title = 'Karte zur Anfahrt';
+        wrap.appendChild(iframe);
+        const link = document.createElement('a');
+        link.href = 'https://www.google.com/maps/search/' + q;
+        link.target = '_blank';
+        link.rel = 'noopener';
+        link.className = 'anfahrt-fallback';
+        link.textContent = 'In Google Maps öffnen ↗';
+        wrap.appendChild(link);
+      });
+    };
+    const hideBanner = () => banner && banner.classList.remove('is-visible');
+    const accept = () => { writeConsent('accept-all'); loadMaps(); hideBanner(); };
+    const reject = () => { writeConsent('necessary-only'); hideBanner(); };
+
+    if (banner) {
+      banner.addEventListener('click', (e) => {
+        const action = (e.target.closest('[data-cookie-action]') || {}).dataset?.cookieAction;
+        if (action === 'accept') accept();
+        else if (action === 'reject') reject();
+      });
+    }
+    document.addEventListener('click', (e) => {
+      if (e.target.closest('[data-cookie-accept="maps"]')) {
+        e.preventDefault(); accept();
+      }
+    });
+
+    const consent = readConsent();
+    if (consent === 'accept-all') {
+      loadMaps();
+    } else if (!consent && banner) {
+      setTimeout(() => banner.classList.add('is-visible'), 1000);
+    }
   })();
 </script>
 </body>
