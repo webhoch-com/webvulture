@@ -690,6 +690,78 @@ export function extractVerbandsmitgliedschaft(spec: SiteSpec): string | null {
 }
 
 /**
+ * PR-A5: Audio/Video-Embeds extractor. Scans for YouTube watch-URLs and
+ * Soundcloud track URLs in scraped sources. Returns video-id + title.
+ * Used by renderMediaEmbeds for the "Hör mal rein" section.
+ */
+export function extractMediaEmbeds(spec: SiteSpec): Array<{ kind: 'youtube' | 'soundcloud'; id: string; url: string; title: string }> {
+  const sources: string[] = [];
+  if (spec.raw_text_excerpt) sources.push(spec.raw_text_excerpt);
+  if (spec.about?.body) sources.push(spec.about.body);
+  for (const s of (spec.redesigned_sections ?? [])) sources.push(`${s.title}\n${s.body}`);
+  const text = sources.join('\n');
+
+  const YT_RE = /https?:\/\/(?:www\.)?(?:youtube\.com\/(?:watch\?v=|embed\/|v\/)|youtu\.be\/)([\w-]{11})(?:[?&][^\s]*)?/g;
+  const SC_RE = /https?:\/\/(?:www\.|m\.)?soundcloud\.com\/([\w-]+)\/([\w-]+)/g;
+  const seen = new Set<string>();
+  const out: Array<{ kind: 'youtube' | 'soundcloud'; id: string; url: string; title: string }> = [];
+
+  for (const m of text.matchAll(YT_RE)) {
+    if (out.length >= 4) break;
+    const id = m[1];
+    if (seen.has('yt:' + id)) continue;
+    seen.add('yt:' + id);
+    out.push({ kind: 'youtube', id, url: `https://www.youtube.com/embed/${id}`, title: 'Video' });
+  }
+  for (const m of text.matchAll(SC_RE)) {
+    if (out.length >= 4) break;
+    const path = `${m[1]}/${m[2]}`;
+    if (seen.has('sc:' + path)) continue;
+    seen.add('sc:' + path);
+    out.push({ kind: 'soundcloud', id: path, url: m[0], title: 'Hörprobe' });
+  }
+  return out;
+}
+
+/**
+ * PR-A5: render Media-Embeds section. Click-to-load Pattern (DSGVO):
+ * Placeholder + Play-Button → JS swaps iframe in on click. Without
+ * click, no requests to YouTube/Soundcloud are made.
+ */
+export function renderMediaEmbeds(embeds: Array<{ kind: 'youtube' | 'soundcloud'; id: string; url: string; title: string }>): string {
+  if (embeds.length === 0) return '';
+  const cards = embeds.slice(0, 3).map(e => {
+    const thumb = e.kind === 'youtube'
+      ? `https://i.ytimg.com/vi/${e.id}/hqdefault.jpg`
+      : '';
+    const platformLabel = e.kind === 'youtube' ? 'YouTube' : 'SoundCloud';
+    return `
+      <article class="media-card" data-embed-url="${escapeHtml(e.url)}" data-embed-kind="${e.kind}">
+        ${thumb ? `<div class="media-thumb" style="background-image: url('${escapeHtml(thumb)}');" aria-hidden="true"></div>` : '<div class="media-thumb media-thumb-fallback" aria-hidden="true"></div>'}
+        <button type="button" class="media-play" aria-label="${escapeHtml(e.title)} abspielen (lädt Inhalte von ${escapeHtml(platformLabel)})">
+          <svg viewBox="0 0 24 24" width="36" height="36" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+        </button>
+        <div class="media-meta">
+          <span class="media-platform">${escapeHtml(platformLabel)}</span>
+          <h3>${escapeHtml(e.title)}</h3>
+        </div>
+      </article>
+    `;
+  }).join('');
+  return `
+<section class="media-section reveal">
+  <div class="container">
+    <div class="section-head center reveal">
+      <span class="section-eyebrow">Hörprobe</span>
+      <h2 class="section-title">Hör mal <em>rein</em>.</h2>
+      <p class="section-lead">Aufnahmen unserer letzten Konzerte und Auftritte. Klicken Sie auf ein Video — beim Abspielen werden Inhalte vom Anbieter geladen.</p>
+    </div>
+    <div class="media-grid">${cards}</div>
+  </div>
+</section>`;
+}
+
+/**
  * PR-A4: renders a Trust-Badge with Eichenlaub-Kranz SVG framing.
  * Combines Verbandsmitgliedschaft + Konzertwertungen into a single
  * compact section that sits below the Heritage-Statement / above About.
@@ -1376,6 +1448,83 @@ export const EDITORIAL_CSS = `
 .ht-label {
   font-family: var(--serif, Georgia, serif); font-size: 0.96rem;
   color: var(--ink-2, #4a4030); line-height: 1.6;
+}
+
+/* Media-Section (PR-A5) — Audio/YouTube Embeds mit DSGVO-Click-to-Load */
+.media-section {
+  padding: clamp(4rem, 7vw, 6rem) 1.5rem;
+  background: color-mix(in oklch, var(--primary, #2d4a32) 4%, var(--surface, #fff));
+}
+.media-section .container { max-width: 1280px; margin: 0 auto; }
+.media-grid {
+  display: grid; gap: 1.5rem; margin-top: 3rem;
+  grid-template-columns: 1fr;
+}
+@media (min-width: 720px) { .media-grid { grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr)); } }
+.media-card {
+  position: relative; aspect-ratio: 16/9;
+  border-radius: 10px; overflow: hidden;
+  background: var(--ink, #1f1a14);
+  cursor: pointer;
+  transition: transform .3s ease, box-shadow .3s ease;
+  box-shadow: 0 14px 32px -16px rgba(0,0,0,0.25);
+}
+.media-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 22px 48px -16px rgba(0,0,0,0.35);
+}
+.media-thumb {
+  position: absolute; inset: 0;
+  background-size: cover; background-position: center;
+  transition: transform .8s ease;
+}
+.media-thumb-fallback {
+  background: linear-gradient(135deg, var(--primary, #2d4a32), var(--primary-deep, #1c2f1f));
+}
+.media-card:hover .media-thumb { transform: scale(1.04); }
+.media-card::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(to bottom, transparent 0%, transparent 50%, rgba(0,0,0,0.65) 100%);
+  pointer-events: none;
+}
+.media-play {
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 72px; height: 72px; border-radius: 50%;
+  background: rgba(255,255,255,0.92); border: 0;
+  color: var(--primary, #2d4a32);
+  display: grid; place-items: center;
+  cursor: pointer; z-index: 2;
+  transition: transform .25s ease, background .25s ease;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+}
+.media-card:hover .media-play {
+  transform: translate(-50%, -50%) scale(1.1);
+  background: #fff;
+}
+.media-play svg { margin-left: 4px; }
+.media-meta {
+  position: absolute; bottom: 1.25rem; left: 1.25rem; right: 1.25rem;
+  color: #fff; z-index: 2;
+}
+.media-platform {
+  font-family: var(--display, Georgia, serif); font-size: 0.72rem;
+  letter-spacing: 0.2em; text-transform: uppercase;
+  color: var(--accent, #b8893d); font-weight: 600;
+  margin-bottom: 0.25rem; display: block;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+}
+.media-meta h3 {
+  font-family: var(--display, Georgia, serif); font-size: 1.05rem;
+  font-weight: 500; color: #fff;
+  text-shadow: 0 1px 6px rgba(0,0,0,0.55);
+}
+.media-card.is-playing .media-play,
+.media-card.is-playing .media-thumb,
+.media-card.is-playing::after,
+.media-card.is-playing .media-meta { display: none; }
+.media-card.is-playing iframe {
+  position: absolute; inset: 0; width: 100%; height: 100%; border: 0;
 }
 
 /* Trust-Section (PR-A4) — Verband-Mitgliedschaft + Konzertwertungen

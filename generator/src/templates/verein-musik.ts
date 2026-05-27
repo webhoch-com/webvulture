@@ -29,6 +29,8 @@ import {
   extractKonzertwertung,
   extractVerbandsmitgliedschaft,
   renderTrustBadgeSection,
+  extractMediaEmbeds,
+  renderMediaEmbeds,
   extractEnsembles,
   renderEnsembleGrid,
   renderKuenstlerischeLeitung,
@@ -77,6 +79,8 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
   // PR-A4: Trust signals — Verband-Mitgliedschaft + Konzertwertung-Ergebnisse
   const verband = extractVerbandsmitgliedschaft(spec);
   const wertungen = extractKonzertwertung(spec);
+  // PR-A5: YouTube/Soundcloud-Embeds für Hörproben
+  const mediaEmbeds = extractMediaEmbeds(spec);
   const foundedYear = extractFoundedYear(spec);
   const marqueeItems = buildMarqueeItems(spec, foundedYear);
   const pullQuote = pickPullQuote(spec);
@@ -1295,6 +1299,8 @@ ${spec.about?.body ? (() => {
 
 ${renderEnsembleGrid(ensembles)}
 
+${renderMediaEmbeds(mediaEmbeds)}
+
 ${pullQuote ? `
 <section class="pullquote-section">
   <div class="pullquote-inner">
@@ -1803,6 +1809,29 @@ ${email ? `
       });
     }, { threshold: 0.4 });
     targets.forEach(el => io.observe(el));
+  })();
+
+  // ── Media-Embeds Click-to-Load (PR-A5, DSGVO) ──────────────────────
+  // Click anywhere on .media-card → swap thumb+button for iframe. No data
+  // is sent to YouTube/Soundcloud until user clicks.
+  (() => {
+    document.addEventListener('click', (e) => {
+      const card = e.target.closest('.media-card');
+      if (!card || card.classList.contains('is-playing')) return;
+      const url = card.dataset.embedUrl;
+      const kind = card.dataset.embedKind;
+      if (!url) return;
+      const iframe = document.createElement('iframe');
+      iframe.src = url + (url.includes('?') ? '&' : '?') + 'autoplay=1';
+      iframe.allow = kind === 'youtube'
+        ? 'accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture'
+        : 'autoplay';
+      iframe.allowFullscreen = true;
+      iframe.referrerPolicy = 'no-referrer-when-downgrade';
+      iframe.title = 'Eingebettetes Video';
+      card.appendChild(iframe);
+      card.classList.add('is-playing');
+    });
   })();
 
   // ── Cookie-Banner + Map-Lazy-Load (DSGVO/ePrivacy) ─────────────────
