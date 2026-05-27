@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Models\Lead;
+use App\Observers\LeadObserver;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -17,6 +19,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureRateLimiters();
+        Lead::observe(LeadObserver::class);
     }
 
     protected function configureRateLimiters(): void

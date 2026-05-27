@@ -36,11 +36,27 @@ class Lead extends Model
         'last_outreach_at' => 'datetime',
         'awaiting_response_since' => 'datetime',
         'replied_at' => 'datetime',
+        'approved_at' => 'datetime',
     ];
 
     public function searchRun(): BelongsTo
     {
         return $this->belongsTo(SearchRun::class);
+    }
+
+    public function approvedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    public function activityLogs(): MorphMany
+    {
+        return $this->morphMany(ActivityLog::class, 'subject')->latest('id');
+    }
+
+    public function isApproved(): bool
+    {
+        return $this->approved_at !== null;
     }
 
     public function tags(): HasMany

@@ -128,6 +128,7 @@ new class extends Component {
     public function markIrrelevant(): void
     {
         $this->lead->update(['status' => LeadStatus::Irrelevant]);
+        app(\App\Domain\Activity\ActivityLogger::class)->log($this->lead, 'lead.marked_irrelevant', 'Als irrelevant markiert');
         $this->lead->refresh();
         $this->success('Markiert', 'Lead ist nun als irrelevant markiert.');
     }
@@ -136,8 +137,48 @@ new class extends Component {
     {
         $newStatus = $this->lead->latestEnrichment ? LeadStatus::Enriched : LeadStatus::New;
         $this->lead->update(['status' => $newStatus]);
+        app(\App\Domain\Activity\ActivityLogger::class)->log($this->lead, 'lead.reactivated', 'Wieder relevant');
         $this->lead->refresh();
         $this->success('Reaktiviert', 'Lead ist wieder relevant.');
+    }
+
+    public function approve(): void
+    {
+        // Nur prototyped Leads können freigegeben werden — vorher gibt's
+        // ja keine Demo-URL die der Kunde sehen würde.
+        if ($this->lead->status !== LeadStatus::Prototyped && $this->lead->status !== LeadStatus::Approved) {
+            $this->error('Nicht möglich', 'Lead muss zuerst gescraped, enriched und prototyped sein.');
+
+            return;
+        }
+        if ($this->lead->isApproved()) {
+            $this->info('Bereits freigegeben', 'Dieser Lead ist schon freigegeben.');
+
+            return;
+        }
+        $this->lead->update([
+            'status' => LeadStatus::Approved,
+            'approved_at' => now(),
+            'approved_by' => auth()->id(),
+        ]);
+        app(\App\Domain\Activity\ActivityLogger::class)->log($this->lead, 'lead.approved', 'Für Entwicklung freigegeben');
+        $this->lead->refresh();
+        $this->success('Freigegeben', 'Lead steht jetzt für Outreach bereit.');
+    }
+
+    public function revokeApproval(): void
+    {
+        if (! $this->lead->isApproved()) {
+            return;
+        }
+        $this->lead->update([
+            'status' => LeadStatus::Prototyped,
+            'approved_at' => null,
+            'approved_by' => null,
+        ]);
+        app(\App\Domain\Activity\ActivityLogger::class)->log($this->lead, 'lead.approval_revoked', 'Freigabe zurückgenommen');
+        $this->lead->refresh();
+        $this->info('Freigabe entfernt', 'Lead ist zurück im Review-Status.');
     }
 
     public function deleteLead(): void
@@ -353,6 +394,15 @@ new class extends Component {
                 @else
                     <x-button icon="o-cpu-chip" wire:click="generate" class="btn-accent btn-sm" label="Erzeugen" spinner />
                 @endif
+            @endif
+            @if($lead->status?->value === 'prototyped')
+                <x-button icon="o-check-badge" wire:click="approve" class="btn-success btn-sm" label="Für Entwicklung freigeben"
+                    tooltip="Markiert den Prototyp als freigegeben — Vorbedingung für Outreach an den Kunden" spinner />
+            @elseif($lead->isApproved())
+                <span class="lead-approved-badge" title="Freigegeben {{ $lead->approved_at?->diffForHumans() }} von {{ $lead->approvedBy?->name ?? 'unbekannt' }}">
+                    ✓ Freigegeben
+                </span>
+                <x-button icon="o-arrow-uturn-left" wire:click="revokeApproval" class="btn-ghost btn-sm btn-outline" label="Freigabe zurücknehmen" />
             @endif
             @if($lead->awaiting_response_since)
                 <x-button icon="o-envelope-open" wire:click="openOutreachModal('followup')" class="btn-warning btn-sm" label="Nachfrage senden" tooltip="Wartet seit {{ $lead->awaiting_response_since->diffForHumans() }} auf Antwort" />
@@ -881,6 +931,15 @@ new class extends Component {
     .lead-status-enriched   { background: rgba(168,85,247,0.18); color: #7c3aed; border: 1px solid rgba(168,85,247,0.35); }
     .lead-status-prototyped { background: rgba(236,101,186,0.18); color: #be185d; border: 1px solid rgba(236,101,186,0.35); }
     .lead-status-approved   { background: rgba(16,185,129,0.18); color: #047857; border: 1px solid rgba(16,185,129,0.35); }
+    .lead-approved-badge {
+        display: inline-flex; align-items: center; gap: 0.3rem;
+        padding: 0.35rem 0.85rem; border-radius: 999px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase;
+        font-weight: 700;
+        background: rgba(16,185,129,0.15); color: #047857;
+        border: 1px solid rgba(16,185,129,0.35);
+    }
     .lead-status-sent       { background: rgba(59,130,246,0.18); color: #1d4ed8; border: 1px solid rgba(59,130,246,0.35); }
     .lead-status-replied    { background: rgba(34,197,94,0.20);  color: #15803d; border: 1px solid rgba(34,197,94,0.4); }
     .lead-status-irrelevant { background: rgba(245,158,11,0.18); color: #b45309; border: 1px solid rgba(245,158,11,0.35); }
