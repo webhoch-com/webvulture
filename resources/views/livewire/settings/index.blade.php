@@ -82,16 +82,23 @@ new class extends Component {
         return app(SettingsRepository::class)->statusList()->toArray();
     }
 
-    public function with(): array
+    /**
+     * Sections + grouped slots als Computed Property exposed. Versuch via
+     * `with()` lieferte leere arrays — Livewire's Volt-Variant scheint
+     * `with()` von anonymous class extends Component nicht zuverlässig
+     * aufzurufen. Computed properties (#[Computed]) sind die offizielle
+     * Lösung dafür und werden zuverlässig zur Render-Zeit evaluiert.
+     */
+    #[Computed]
+    public function sections(): array
     {
-        // `->toArray()` statt `->all()` damit die innere Collection-Layer
-        // zu reinen arrays wird — Blade's `@foreach` über eine `Collection`
-        // von `Collection`s rendert in Volt-Volt-Komponenten leer (Livewire
-        // serialisiert nested Collections nicht durch hydrate->snapshot).
-        return [
-            'sections' => SettingsSchema::sections(),
-            'slots' => collect(SettingsSchema::all())->groupBy('section')->toArray(),
-        ];
+        return SettingsSchema::sections();
+    }
+
+    #[Computed]
+    public function slots(): array
+    {
+        return collect(SettingsSchema::all())->groupBy('section')->toArray();
     }
 }; ?>
 
@@ -110,7 +117,7 @@ new class extends Component {
     @endif
 
     <nav class="settings-tabs">
-        @foreach ($sections as $sectionKey => $sectionLabel)
+        @foreach ($this->sections as $sectionKey => $sectionLabel)
             <button type="button" wire:click="$set('tab', '{{ $sectionKey }}')"
                 class="settings-tab @if ($tab === $sectionKey) is-active @endif">
                 {{ $sectionLabel }}
@@ -121,9 +128,7 @@ new class extends Component {
     <form wire:submit="save" class="settings-card">
         <div class="settings-card-glow"></div>
 
-        <!-- DEBUG: slot keys = {{ implode(',', array_keys($slots ?? [])) }} | tab = {{ $tab }} | tab-slots = {{ is_array($slots[$tab] ?? null) ? count($slots[$tab]) : 'NULL' }} -->
-
-        @foreach ($slots[$tab] ?? [] as $slot)
+        @foreach ($this->slots[$tab] ?? [] as $slot)
             @php
                 $formKey = $slot['group'].'|'.$slot['key'];
                 $service = explode('.', $slot['group'])[1] ?? null;
