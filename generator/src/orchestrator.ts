@@ -848,6 +848,20 @@ function extractTeam(text: string): SiteSpec['team'] {
       if (!/^[A-ZÄÖÜ][a-zäöüß-]+\s+[A-ZÄÖÜ][a-zäöüß-]+/u.test(fullName)) continue;
       // Sanity: Namen mit "Verein", "Musik" etc. sind keine Personen
       if (/\b(Verein|Musik|Gemeinde|Stadt|Markt|Pfarre|Sponsor|Partner)\b/i.test(fullName)) continue;
+      // Name-Reihenfolge: österreichische Vereinslisten verwenden manchmal
+      // "Nachname Vorname" (Huber Christoph) statt "Vorname Nachname". Wenn
+      // der erste Bestandteil ein typischer Nachname ist (häufige Endungen
+      // -er/-mann/-bauer/-hofer/...) UND der zweite ein typischer Vorname,
+      // dreh die Reihenfolge um. Konservativ: nur bei genau 2 Wörtern, kein
+      // de/von/zu-Prefix.
+      const parts = fullName.split(/\s+/);
+      if (parts.length === 2 && !/^(de|von|zu|della|del|le|la|van)$/i.test(parts[0])) {
+        const SURNAME_RE = /(?:er|mann|bauer|hofer|mayr|maier|huber|gruber|wagner|leitner|berger|schmid|schmidt|moser|reiter|steiner|fischer|wolf|winkler|brunner|ertl|kohberger|stadlbauer|achleitner|krempl|kastner|preletzer|röhrer|reissig|stockinger|kienberger|buchegger|fressl|urich|pieringer)$/i;
+        const COMMON_FIRSTNAMES = /^(christoph|johann|johanna|manfred|alfred|viktoria|markus|stefan|stefanie|claudia|raphael|bernhard|nathalie|daniel|andreas|tina|franz|martin|lukas|dominik|richard|theresa|lena|gerhard|hans|peter|maria|sebastian|jonas|felix|patrick|michael|michaela|thomas|christian|wolfgang|alexandra|alexander|benedikt|bernhard|caroline|david|elias|elisabeth|emma|eva|florian|gabriel|georg|hannah|helene|jakob|julia|julian|katharina|laura|lea|leo|lina|lukas|magdalena|mathias|matthias|max|maximilian|mia|nico|noah|paul|philipp|sarah|simon|sophia|sophie|tobias|valentin)$/i;
+        if (SURNAME_RE.test(parts[0]) && COMMON_FIRSTNAMES.test(parts[1])) {
+          fullName = `${parts[1]} ${parts[0]}`;
+        }
+      }
       // Schon erfasst?
       const key = fullName.toLowerCase();
       if (seenNames.has(key)) continue;
