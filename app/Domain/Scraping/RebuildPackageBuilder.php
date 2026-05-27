@@ -149,6 +149,16 @@ class RebuildPackageBuilder
             '/boden/i', '/floor\./i', '/wall\./i',
             // wp-includes admin assets, jimdo theme icons
             '/wp-includes\/images/i', '/jimdo-static/i', '/favicon/i',
+            // Sponsor/Partner-Logos die in mancher Page-Gallery landen
+            // (z.B. "voigas-logo-oktober.png", "logo-xelchten.png" beim
+            // Musikverein Puchkirchen — sehen als Gallery-Tile aus wie
+            // missgestaltete Vereinsfotos).
+            '/-logo-/i', '/-logo\./i', '/\/logo-/i', '/\/logo\./i',
+            '/sponsor/i', '/partner-logo/i',
+            // Social-media-icons: fb.png, tw.png, ig.png, yt.png — kleine
+            // Filenames die das urlLooksLikeNonContentAsset zwar greift,
+            // hier aber nochmals als Defense-in-Depth.
+            '/\/fb\./i', '/\/tw\./i', '/\/ig\./i', '/\/yt\./i',
         ];
 
         $filtered = [];

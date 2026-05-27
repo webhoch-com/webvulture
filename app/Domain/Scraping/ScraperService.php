@@ -31,14 +31,21 @@ class ScraperService
             return $lead->websiteAnalysis;
         }
 
+        // ── URL-Normalisierung: Wenn der Lead auf eine Subpage zeigt
+        // (häufig /kontakt, /impressum o.ä., weil Google Places die Detail-URL
+        // statt der Startseite zurückgibt), holen wir uns die Domain-Root als
+        // tatsächliche Homepage. Sonst wird die Kontakt-Seite als Homepage
+        // gescraped und Templates rendern leere About/Gallery-Sections.
+        $homepageUrl = $this->normalizeToHomepage($lead->website);
+
         $job = ScrapeJob::create([
             'lead_id' => $lead->id,
-            'url' => $lead->website,
+            'url' => $homepageUrl,
             'status' => 'running',
         ]);
 
         try {
-            [$html, $finalUrl, $status] = $this->fetch($lead->website);
+            [$html, $finalUrl, $status] = $this->fetch($homepageUrl);
 
             // ── Persist raw HTML to filesystem ────────────────────────────────
             $htmlPath = $this->store->writeRaw($lead->id, 'homepage.html', $html);
@@ -48,6 +55,7 @@ class ScraperService
 
             // ── Crawl nav pages (same domain, up to 5) ────────────────────────
             $navPages = [];
+            $navHtmls = [];
             foreach (array_slice($extracted['nav_links'] ?? [], 0, 5) as $label => $navUrl) {
                 if ($navUrl === $finalUrl) {
                     continue;
@@ -57,10 +65,17 @@ class ScraperService
                     $filename = 'page-'.preg_replace('/[^a-z0-9]/', '-', strtolower($label)).'.html';
                     $this->store->writeRaw($lead->id, $filename, $navHtml);
                     $navPages[$label] = $navUrl;
+                    $navHtmls[$navUrl] = $navHtml;
                 } catch (\Throwable $e) {
                     Log::debug("Nav page [{$label}] failed: {$e->getMessage()}");
                 }
             }
+
+            // ── Konsolidierung: Sections + Gallery-Bilder aus Nav-Pages
+            // mergen. Viele Vereinsseiten haben Über-Uns, Chronik und
+            // Bildergalerie als Subpages — ohne Konsolidierung würden wir
+            // die nur ignorieren.
+            $extracted = $this->consolidateFromNavPages($extracted, $navHtmls);
 
             // ── Download assets (logo + content/hero/gallery images) ─────────
             $logoAsset = $this->assets->downloadLogo($lead->id, $extracted['logo_url'] ?? null, $finalUrl);
@@ -221,6 +236,141 @@ class ScraperService
                 }
             }
         }
+    }
+
+    /**
+     * Normalize a possibly-deep URL to the site's homepage. Google Places
+     * often returns a Kontakt/Impressum subpage as the lead's website. If we
+     * scrape that as "the homepage" we miss the actual About-text + Galerie
+     * + Vorstand-Listing, and templates render with empty sections.
+     *
+     * Heuristic: if the path contains a known "subpage" keyword (kontakt,
+     * impressum, datenschutz, about/über, agb, etc.) we drop the path and
+     * return scheme + host + '/'. Otherwise we keep the URL as-is — many
+     * small sites legitimately live under a path (e.g. firma.at/cafe).
+     */
+    public function normalizeToHomepage(string $url): string
+    {
+        $parsed = parse_url($url);
+        if (! $parsed || empty($parsed['host']) || empty($parsed['scheme'])) {
+            return $url;
+        }
+
+        $path = strtolower($parsed['path'] ?? '/');
+        if ($path === '' || $path === '/') {
+            return $url;
+        }
+
+        // Match against last path segment for cleaner intent detection
+        // (e.g. /de/info/kontakt should still trigger).
+        $segments = array_filter(explode('/', $path));
+        $tail = end($segments) ?: '';
+
+        $subpagePatterns = [
+            'kontakt', 'contact',
+            'impressum', 'imprint',
+            'datenschutz', 'privacy',
+            'agb', 'terms',
+            'about', 'ueber-uns', 'ueber_uns', 'about-us',
+            'team', 'vorstand',
+            'haftung', 'disclaimer',
+        ];
+
+        $isSubpage = false;
+        foreach ($subpagePatterns as $needle) {
+            if (str_contains($tail, $needle) || str_contains($path, '/'.$needle)) {
+                $isSubpage = true;
+                break;
+            }
+        }
+
+        if (! $isSubpage) {
+            return $url;
+        }
+
+        return $parsed['scheme'].'://'.$parsed['host'].'/';
+    }
+
+    /**
+     * Merge sections + gallery-images from the nav-page HTMLs into the
+     * homepage's extracted data. Verein-sites typically split content
+     * across /chronik (about), /bildergalerie (gallery), /termine (events)
+     * — without consolidation the templates only ever see the homepage
+     * which is often a thin landing screen.
+     *
+     * Dedupe sections by lower-cased title, dedupe gallery by src.
+     */
+    protected function consolidateFromNavPages(array $extracted, array $navHtmls): array
+    {
+        if (empty($navHtmls)) {
+            return $extracted;
+        }
+
+        $sections = $extracted['sections'] ?? [];
+        $gallery = $extracted['gallery_images'] ?? [];
+        $hero = $extracted['hero_images'] ?? [];
+        $images = $extracted['images'] ?? [];
+
+        $sectionSeen = [];
+        foreach ($sections as $s) {
+            $sectionSeen[mb_strtolower($s['title'] ?? '')] = true;
+        }
+        $gallerySeen = [];
+        foreach ($gallery as $g) {
+            $gallerySeen[$g['src'] ?? ''] = true;
+        }
+
+        foreach ($navHtmls as $navUrl => $navHtml) {
+            try {
+                $sub = $this->extractor->extract($navHtml, $navUrl);
+            } catch (\Throwable $e) {
+                Log::debug("Consolidation: extractor failed for {$navUrl}: {$e->getMessage()}");
+                continue;
+            }
+
+            foreach ($sub['sections'] ?? [] as $s) {
+                $key = mb_strtolower($s['title'] ?? '');
+                if ($key === '' || isset($sectionSeen[$key])) {
+                    continue;
+                }
+                $sectionSeen[$key] = true;
+                $sections[] = $s;
+                if (count($sections) >= 12) {
+                    break 2;
+                }
+            }
+
+            foreach ($sub['gallery_images'] ?? [] as $g) {
+                $src = $g['src'] ?? '';
+                if ($src === '' || isset($gallerySeen[$src])) {
+                    continue;
+                }
+                $gallerySeen[$src] = true;
+                $gallery[] = $g;
+            }
+
+            // Hero + generic images: merge but bounded; gallery is the
+            // important deliverable here.
+            foreach ($sub['hero_images'] ?? [] as $h) {
+                if (count($hero) >= 6) {
+                    break;
+                }
+                $hero[] = $h;
+            }
+            foreach ($sub['images'] ?? [] as $img) {
+                if (count($images) >= 30) {
+                    break;
+                }
+                $images[] = $img;
+            }
+        }
+
+        $extracted['sections'] = array_slice($sections, 0, 12);
+        $extracted['gallery_images'] = array_slice($gallery, 0, 30);
+        $extracted['hero_images'] = array_slice($hero, 0, 6);
+        $extracted['images'] = $images;
+
+        return $extracted;
     }
 
     /**

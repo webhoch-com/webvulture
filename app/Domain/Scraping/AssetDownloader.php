@@ -251,6 +251,16 @@ class AssetDownloader
             // Floor/wall pattern photos — appeared as "slide_boden.jpg"
             // (German for "ground/floor"). Not a Vereinsbild.
             'boden', 'wand.jpg', 'floor.', 'wall.',
+            // Sponsor/Partner-Logos die in mancher Page-Gallery landen
+            // (z.B. "voigas-logo-oktober.png", "logo-xelchten.png" beim
+            // Musikverein Puchkirchen — sieht im Crop wie ein
+            // missgestaltetes Vereinsfoto aus).
+            '-logo-', '-logo.', '/logo-', '/logo.',
+            'sponsor', 'partner-logo',
+            // Social-Media-Icons die auf vielen Vereinsseiten als kleine
+            // PNGs liegen (fb.png, twitter.png etc.) und wegen
+            // Filename-Länge ≤ 2 sonst nicht greifen.
+            '/fb.', '/tw.', '/ig.', '/yt.',
         ];
         // Jimdo CDN dimension=NNNxMMM small-image pattern — typically a
         // ~200px logo upload that gets rendered as Verbands-/Bezirks-Badge.
