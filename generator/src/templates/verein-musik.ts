@@ -17,7 +17,6 @@ import {
   extractBoardMembers,
   extractEvents,
   renderMarquee,
-  renderBigNumberAnchor,
   renderPullQuote,
   renderStoriesGrid,
   renderSocialStrip,
@@ -1329,8 +1328,25 @@ ${address ? `
       stage.src = images[currentIdx].src;
       counter.textContent = (currentIdx + 1) + ' / ' + images.length;
     };
-    const open = (idx) => { refreshImages(); show(idx); lb.classList.add('is-open'); document.body.style.overflow = 'hidden'; };
-    const close = () => { lb.classList.remove('is-open'); document.body.style.overflow = ''; };
+    // Focus trap: remember the trigger that opened the lightbox so we
+    // can restore focus after close; trap Tab inside the lightbox while
+    // open (WCAG 2.1 §2.1.2 keyboard trap rules).
+    let lastFocused = null;
+    const focusables = () => [...lb.querySelectorAll('button:not([disabled])')];
+    const open = (idx) => {
+      refreshImages();
+      show(idx);
+      lastFocused = document.activeElement;
+      lb.classList.add('is-open');
+      document.body.style.overflow = 'hidden';
+      lb.setAttribute('tabindex', '-1');
+      requestAnimationFrame(() => lb.querySelector('.wv-lightbox-close')?.focus());
+    };
+    const close = () => {
+      lb.classList.remove('is-open');
+      document.body.style.overflow = '';
+      if (lastFocused && lastFocused.focus) lastFocused.focus();
+    };
     document.addEventListener('click', (e) => {
       const item = e.target.closest('#bilder .gallery-item:not(.img-broken)');
       if (!item) return;
@@ -1345,9 +1361,20 @@ ${address ? `
     lb.addEventListener('click', (e) => { if (e.target === lb) close(); });
     document.addEventListener('keydown', (e) => {
       if (!lb.classList.contains('is-open')) return;
-      if (e.key === 'Escape') close();
-      if (e.key === 'ArrowLeft') show(currentIdx - 1);
-      if (e.key === 'ArrowRight') show(currentIdx + 1);
+      if (e.key === 'Escape') { close(); return; }
+      if (e.key === 'ArrowLeft') { show(currentIdx - 1); return; }
+      if (e.key === 'ArrowRight') { show(currentIdx + 1); return; }
+      // Focus trap: cycle Tab/Shift+Tab between prev/close/next buttons.
+      if (e.key === 'Tab') {
+        const items = focusables();
+        if (items.length === 0) return;
+        const i = items.indexOf(document.activeElement);
+        if (e.shiftKey) {
+          if (i <= 0) { e.preventDefault(); items[items.length - 1].focus(); }
+        } else {
+          if (i === items.length - 1) { e.preventDefault(); items[0].focus(); }
+        }
+      }
     });
   })();
 
