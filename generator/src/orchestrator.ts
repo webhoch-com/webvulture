@@ -768,6 +768,14 @@ function scoreImage(src: string, alt: string): number {
 function extractTeam(text: string): SiteSpec['team'] {
   if (!text || text.length < 50) return [];
 
+  // Preprocess: Drupal-/WP-Themes rendern Listenelemente oft ohne Separator,
+  // sodass "Lukas SchmidtObmann Stv.: Andreas …" ein einziger Textblob ist.
+  // Wir fügen Spaces an Klein-→Großschreibung-Wechseln und an `)`/`,` direkt
+  // vor einem Großbuchstaben ein, damit Rollen-Pattern wieder greifen.
+  text = text
+    .replace(/([a-zäöüß])([A-ZÄÖÜ])/g, '$1 $2')
+    .replace(/([)\],.;])([A-ZÄÖÜ])/g, '$1 $2');
+
   // Vereinsrollen (in absteigender Priorität — wenn jemand mehrere hat,
   // bekommt er die wichtigste).
   const roles = [
