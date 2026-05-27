@@ -29,23 +29,30 @@ new class extends Component {
      */
     public string $flash = '';
 
-    /** UI-Sections (key → label). */
-    public array $sections = [];
-
-    /** Slots gruppiert nach section, jeder Slot ist ein assoc-array. */
-    public array $slots = [];
-
     public function mount(SettingsRepository $repo): void
     {
-        $this->sections = SettingsSchema::sections();
-        $this->slots = collect(SettingsSchema::all())->groupBy('section')->toArray();
-
         foreach (SettingsSchema::all() as $slot) {
             $key = $slot['group'].'|'.$slot['key'];
             $this->values[$key] = $repo->getForUi($slot['group'], $slot['key']) ?? '';
         }
 
         $this->refreshStatusList($repo);
+    }
+
+    /**
+     * `render()` liefert sections/slots als View-Variablen — NICHT als
+     * public properties. Hintergrund: Livewire dehydrate alle public
+     * properties zum Snapshot, und bei nested-arrays mit gemischten Typen
+     * (boolean + string + null in einem Slot) wirft Livewire's Synth-Layer
+     * "Call to a member function getName() on array" — er erwartet eine
+     * BackedEnum, sieht aber ein array. View-Variablen umgehen das.
+     */
+    public function render()
+    {
+        return view('livewire.settings.index', [
+            'sections' => SettingsSchema::sections(),
+            'slots' => collect(SettingsSchema::all())->groupBy('section')->toArray(),
+        ]);
     }
 
     public function save(SettingsRepository $repo): void
