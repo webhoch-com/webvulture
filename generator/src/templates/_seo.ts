@@ -135,5 +135,44 @@ function renderJsonLd(spec: SiteSpec, kind: SchemaKind, url: string): string {
     };
   }
 
+  // PR-A9: MusicGroup-Erweiterung für Rich-Results.
+  // Google Knowledge Panel rendert member, foundingDate, genre, subOrganization
+  // wenn deklariert. Nur für MusicGroup-Templates (verein-musik).
+  if (kind === 'MusicGroup') {
+    // foundingDate aus spec.team-Daten kann erhärten — wir verlassen uns auf
+    // den year-extractor wenn vorhanden (spec.foundedYear gibt's nicht im
+    // Schema, also durch spec.about Heuristik). Optional via spec.team[].role
+    // === 'Kapellmeister' als Person.
+    const team = (spec as any).team as Array<{ name: string; role: string }> | undefined;
+    if (team && team.length > 0) {
+      // Kapellmeister / Direktor / Conductor → musicalDirector
+      const conductor = team.find(m => /^(Kapellmeister|Dirigent|Musikalische?\s+Leitung|Chorleiter|Stabführer)/i.test(m.role));
+      if (conductor && !/Stellvertreter|Stv\.?/.test(conductor.role)) {
+        data.musicalDirector = { '@type': 'Person', name: conductor.name };
+      }
+      // Vorstand → member-Liste (max 10, sonst spammt es das Schema)
+      data.member = team.slice(0, 10).map(m => ({
+        '@type': 'OrganizationRole',
+        roleName: m.role,
+        member: { '@type': 'Person', name: m.name },
+      }));
+    }
+    // Genre: Blasmusik default für Musikverein/Musikkapelle
+    if (/Musikverein|Musikkapelle|Stadtmusik|Bürgerkapelle|Marktmusik|Werkskapelle|TMK|MV\b/i.test(spec.business_name)) {
+      data.genre = ['Blasmusik', 'Volksmusik'];
+    }
+    // FoundingDate via direkter spec-Feld wenn vorhanden (orchestrator
+    // könnte es später ableiten)
+    const foundingDate = (spec as any).founding_year || (spec as any).founded_year;
+    if (foundingDate && Number.isFinite(Number(foundingDate))) {
+      data.foundingDate = String(foundingDate);
+    }
+    // Number of members
+    const memberCount = (spec as any).member_count;
+    if (memberCount && Number.isFinite(Number(memberCount))) {
+      data.numberOfEmployees = { '@type': 'QuantitativeValue', value: Number(memberCount) };
+    }
+  }
+
   return `<script type="application/ld+json">${safeJsonLd(data)}</script>`;
 }
