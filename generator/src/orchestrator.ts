@@ -318,7 +318,7 @@ export async function orchestrate(pkg: RebuildPackage): Promise<OrchestrationRes
   // oder „Kapellmeister Anna Schmidt" im Fließtext. Wir scannen den gesamten
   // raw text + nav-page-Inhalte und extrahieren bekannte Verein-Rollen.
   const team = extractTeam(textContent);
-  if (team.length > 0) {
+  if (team && team.length > 0) {
     baseSpec.team = team;
   }
 
