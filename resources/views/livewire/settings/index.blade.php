@@ -3,7 +3,6 @@
 use App\Domain\Settings\ConnectionTester;
 use App\Domain\Settings\SettingsRepository;
 use App\Domain\Settings\SettingsSchema;
-use Livewire\Attributes\Computed;
 use Livewire\Volt\Component;
 
 new class extends Component {
@@ -45,6 +44,8 @@ new class extends Component {
             $key = $slot['group'].'|'.$slot['key'];
             $this->values[$key] = $repo->getForUi($slot['group'], $slot['key']) ?? '';
         }
+
+        $this->refreshStatusList($repo);
     }
 
     public function save(SettingsRepository $repo): void
@@ -71,6 +72,8 @@ new class extends Component {
         $this->flash = $count > 0
             ? "{$count} Einstellung".($count === 1 ? '' : 'en').' aktualisiert.'
             : 'Nichts geändert.';
+
+        $this->refreshStatusList($repo);
     }
 
     public function testService(string $service, ConnectionTester $tester): void
@@ -83,12 +86,14 @@ new class extends Component {
         $repo->set($group, $key, null, auth()->user());
         $this->values[$group.'|'.$key] = '';
         $this->flash = 'Wert gelöscht.';
+        $this->refreshStatusList($repo);
     }
 
-    #[Computed]
-    public function statusList(): array
+    public array $statusList = [];
+
+    private function refreshStatusList(SettingsRepository $repo): void
     {
-        return app(SettingsRepository::class)->statusList()->toArray();
+        $this->statusList = $repo->statusList()->toArray();
     }
 
     // Sections + grouped slots werden in mount() als public-array initialisiert
@@ -207,7 +212,7 @@ new class extends Component {
         <table>
             <thead><tr><th>Slot</th><th>Quelle</th><th>Status</th></tr></thead>
             <tbody>
-                @foreach ($this->statusList as $row)
+                @foreach ($statusList as $row)
                     <tr>
                         <td><code>{{ $row['group'] }}.{{ $row['key'] }}</code></td>
                         <td>
