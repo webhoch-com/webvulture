@@ -71,6 +71,18 @@ export interface RebuildPackage {
     font_imports?: string[];
   };
   screenshots?: Array<{ name: string; path: string; slot: string }>;
+  /**
+   * Downloaded assets bucket. Befüllt vom PHP-RebuildPackageBuilder mit den
+   * vom AssetDownloader gemirrorten Bildern (hero, gallery, content).
+   * Andere Schema-Form als `extracted.images` — public_url statt src,
+   * src_original statt original_src — Generator-pickMedia merged beide.
+   */
+  images?: {
+    hero?: Array<{ public_url?: string; src_original?: string; alt?: string; width?: number; height?: number }>;
+    gallery?: Array<{ public_url?: string; src_original?: string; alt?: string; width?: number; height?: number }>;
+    all_local?: unknown[];
+    screenshots?: Array<{ name: string; path: string; slot: string }>;
+  };
   generation_params?: {
     niche?: string;
     tone?: string;

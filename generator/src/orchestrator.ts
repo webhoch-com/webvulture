@@ -561,11 +561,13 @@ function pickMedia(pkg: RebuildPackage): SiteSpec['media'] {
   // mit eigener /bildergalerie Subpage waren die echten Galerie-Bilder
   // dort, aber wurden komplett ignoriert. Lead 12 (Musikverein Puchkirchen)
   // hatte 19 gallery-Items die nie ins rendering kamen.
-  const galleryItems = (pkg.images?.gallery ?? []).map((g: any) => ({
-    src: g.public_url ?? g.src ?? '',
-    original_src: g.src_original ?? g.original_src ?? '',
-    alt: g.alt ?? '',
-  }));
+  const galleryItems = (pkg.images?.gallery ?? [])
+    .map((g) => ({
+      src: g.public_url ?? '',
+      original_src: g.src_original ?? '',
+      alt: g.alt ?? '',
+    }))
+    .filter((g) => g.src !== '');
   const raw = [...(pkg.extracted?.images ?? []), ...galleryItems];
   const logo = pkg.logo_url || undefined;
   const favicon = pkg.favicon_url || undefined;
