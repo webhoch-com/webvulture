@@ -1023,8 +1023,23 @@ ${spec.about?.body ? (() => {
         const FEED_MARKER = /\s*(?:Social Media|Frühschoppen|Save the date|Save-the-date|Gestern\b|Heute\b|Morgen\b|Kirchenkonzert\b|Maiblasen\b|🎶|🥁|☀️|⛪️|»\s*Bildergalerie|» Seiten|nächste Seite|🎵|🎺|Neuigkeiten und Termine|Der erste wichtige Termin|Der nächste\s+(?:wichtige\s+)?Termin|Frühlingskonzert|Frühlngskonzert|Herbstkonzert|Adventskonzert|in diesem Jahr,\s+das|Termin in diesem Jahr|Konzertwertung|haben\s+wir\s+(?:bereits|schon)|fand\s+statt|Folgen Sie uns|Termin\s*[:.]|Veranstaltung\s*[:.])/i;
         let body = spec.about!.body.trim();
         body = body.replace(/^[^A-Za-zÄÖÜäöü(]+/, '');  // strip leading non-letter
-        const cut = body.search(FEED_MARKER);
-        if (cut > 80) body = body.slice(0, cut).replace(/\s+\S{0,12}$/, '').trim();
+        // Walk ALL feed-marker positions; pick the EARLIEST that's ≥80 chars
+        // into the body so we don't chop a legit opening sentence containing
+        // a marker word ("Die Neuigkeiten und Termine sind wichtig...") but
+        // still catch a marker that follows after substantive content. If
+        // body is shorter than 80 and starts with a marker, cut anyway.
+        const re = new RegExp(FEED_MARKER.source, FEED_MARKER.flags + 'g');
+        let bestCut = -1;
+        for (const m of body.matchAll(re)) {
+          const pos = m.index ?? -1;
+          if (pos >= 80) { bestCut = pos; break; }  // first one past 80 wins
+        }
+        // Aggressive markers always cut regardless of position (these are
+        // never legit body content — emoji feed-rows, "Save the date").
+        const HARD_MARKER = /\s*(?:🎶|🥁|☀️|⛪️|🎵|🎺|Save the date|Save-the-date|»\s*Bildergalerie|» Seiten|nächste Seite)/i;
+        const hardCut = body.search(HARD_MARKER);
+        if (hardCut >= 20 && (bestCut < 0 || hardCut < bestCut)) bestCut = hardCut;
+        if (bestCut > 0) body = body.slice(0, bestCut).replace(/\s+\S{0,12}$/, '').trim();
         // Drop trailing dangling open-parens and incomplete clauses
         body = body.replace(/\s*\([^)]{0,3}\s*$/, '').trim();
         return escapeHtml(body);
