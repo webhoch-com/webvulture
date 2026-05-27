@@ -1047,7 +1047,9 @@ ${spec.about?.body ? (() => {
         }
         // Aggressive markers always cut regardless of position (these are
         // never legit body content — emoji feed-rows, "Save the date").
-        const HARD_MARKER = /\s*(?:🎶|🥁|☀️|⛪️|🎵|🎺|Save the date|Save-the-date|»\s*Bildergalerie|» Seiten|nächste Seite)/i;
+        // HARD_MARKER cuts at any position ≥20. These are never legit
+        // body content for a Verein about-section.
+        const HARD_MARKER = /\s*(?:🎶|🥁|☀️|⛪️|🎵|🎺|Save the date|Save-the-date|»\s*Bildergalerie|» Seiten|nächste Seite|Social Media\b|Frühschoppen\b|Frühlingskonzert\b|Frühlngskonzert\b|Herbstkonzert\b|Adventskonzert\b|Kirchenkonzert\b|Maiblasen\b|Gestern\b|Heute\b|Morgen\b|Save\s+the\s+date|Folgen\s+Sie\s+uns|Wir\s+freuen\s+uns\s+auf)/i;
         const hardCut = body.search(HARD_MARKER);
         if (hardCut >= 20 && (bestCut < 0 || hardCut < bestCut)) bestCut = hardCut;
         if (bestCut > 0) body = body.slice(0, bestCut).replace(/\s+\S{0,12}$/, '').trim();
