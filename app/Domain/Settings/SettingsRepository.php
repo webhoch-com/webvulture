@@ -31,12 +31,15 @@ class SettingsRepository
             return $val;
         }
 
-        // Fallback: env-Var aus dem Schema
-        $envKey = SettingsSchema::envKey($group, $key);
-        if ($envKey) {
-            $env = env($envKey);
-            if ($env !== null && $env !== '') {
-                return (string) $env;
+        // Fallback: config-Wert (kommt aus config/services.php, das wiederum
+        // env() liest). Den Umweg machen wir bewusst — env() direkt aufrufen
+        // funktioniert NACH `config:cache` nicht mehr, weil der Cache `env()`
+        // nicht mit-included. config('…') ist auch nach Cache zuverlässig.
+        $configKey = SettingsSchema::configKey($group, $key);
+        if ($configKey) {
+            $configValue = config($configKey);
+            if ($configValue !== null && $configValue !== '') {
+                return (string) $configValue;
             }
         }
 
