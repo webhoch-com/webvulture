@@ -56,22 +56,33 @@ export function renderVereinSportPage(spec: SiteSpec, slug: string): string {
   const pullQuote = pickPullQuote(spec);
   const board = extractBoardMembers(spec);
 
-  // SPORTUNION-CI: signature orange (#FF4D1C) + black + warm taupe body.
-  // Modern sporty look — bold, energetic, decisive. Scraped brand colors
-  // override when present, but the orange CTA accent always wins.
-  const primary = spec.brand?.primary_color || '#000000';        // black headlines
+  // SPORTUNION strict CI (per Corporate Design Handbuch v1.2.1, 2026-01-15):
+  // Detect SPORTUNION vereine via name match → apply the official CI exactly
+  // (Rot #E73331 / Orange #E5650F / Hellgrau #ECECED, Barlow + Zilla Slab,
+  //  Pill-Contentbox, Stäbchen-Hintergrund). Non-SPORTUNION sport-vereine
+  // get a generic sporty palette (black headlines + orange accent).
+  const SPORTUNION_RE = /\bSPORT[\s-]?UNION\b/i;
+  const isSportunion = SPORTUNION_RE.test(spec.business_name) || SPORTUNION_RE.test(spec.tagline ?? '');
+  // CI-strict colors override scraped brand colors when SPORTUNION detected
+  // (consistent CI is more important than per-Verein brand variations).
+  const primary = isSportunion ? '#E73331' : (spec.brand?.primary_color || '#000000');  // SPORTUNION Rot
+  const accent  = isSportunion ? '#E5650F' : (spec.brand?.accent_color  || '#FF4D1C');  // SPORTUNION Orange
   const secondary = spec.brand?.secondary_color || primary;
-  const accent = spec.brand?.accent_color || '#FF4D1C';          // SPORTUNION orange
-  const headingFont = spec.brand?.heading_font_family
-    ? `'${spec.brand.heading_font_family}', 'Barlow', Arial, system-ui, sans-serif`
-    : "'Barlow', Arial, system-ui, sans-serif";
-  const bodyFont = spec.brand?.body_font_family
-    ? `'${spec.brand.body_font_family}', 'Barlow', Arial, system-ui, sans-serif`
-    : "'Barlow', Arial, system-ui, sans-serif";
-  const fontImportTags = (spec.brand?.font_imports && spec.brand.font_imports.length > 0)
-    ? spec.brand.font_imports.map(u => `<link rel="stylesheet" href="${u}" crossorigin>`).join('\n  ')
-    : `<link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
-  <link href="https://fonts.bunny.net/css?family=barlow:400,500,600,700,800&display=swap" rel="stylesheet">`;
+  // SPORTUNION fonts: Barlow (Headlines) + Zilla Slab (body). Non-SPORTUNION
+  // sport keeps Barlow throughout.
+  const headingFont = isSportunion
+    ? "'Barlow', Arial, system-ui, sans-serif"
+    : (spec.brand?.heading_font_family ? `'${spec.brand.heading_font_family}', 'Barlow', Arial, system-ui, sans-serif` : "'Barlow', Arial, system-ui, sans-serif");
+  const bodyFont = isSportunion
+    ? "'Zilla Slab', Georgia, serif"
+    : (spec.brand?.body_font_family ? `'${spec.brand.body_font_family}', 'Barlow', Arial, system-ui, sans-serif` : "'Barlow', Arial, system-ui, sans-serif");
+  const fontImportTags = isSportunion
+    ? `<link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
+  <link href="https://fonts.bunny.net/css?family=barlow:400,500,600,700,800|zilla-slab:300,400,500,600,700&display=swap" rel="stylesheet">`
+    : ((spec.brand?.font_imports && spec.brand.font_imports.length > 0)
+        ? spec.brand.font_imports.map(u => `<link rel="stylesheet" href="${u}" crossorigin>`).join('\n  ')
+        : `<link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
+  <link href="https://fonts.bunny.net/css?family=barlow:400,500,600,700,800&display=swap" rel="stylesheet">`);
 
   return `---
 ---
@@ -86,8 +97,8 @@ export function renderVereinSportPage(spec: SiteSpec, slug: string): string {
       --primary-deep: color-mix(in oklch, ${escapeHtml(primary)} 70%, black);
       --secondary: ${escapeHtml(secondary)};
       --accent: ${escapeHtml(accent)};
-      --bg: #f8f7f4;            /* SPORTUNION cream-off-white */
-      --bg-2: #efece7;          /* deeper warm-cream */
+      --bg: ${isSportunion ? '#ECECED' : '#f8f7f4'};  /* SPORTUNION Hellgrau or generic cream */
+      --bg-2: ${isSportunion ? '#dcdcdd' : '#efece7'};
       --surface: #ffffff;
       --ink: #000000;           /* SPORTUNION pure black */
       --ink-2: #83716d;         /* warm taupe body */
@@ -102,7 +113,7 @@ export function renderVereinSportPage(spec: SiteSpec, slug: string): string {
     img { display: block; max-width: 100%; }
     a { color: inherit; text-decoration: none; }
     h1, h2, h3, h4 { font-family: var(--display); font-weight: 700; line-height: 1.05; letter-spacing: -0.018em; }
-    em { font-style: normal; color: var(--accent); }
+    em { font-style: normal; color: var(--primary); /* SPORTUNION-Rot or generic primary */ }
     .container { max-width: 1280px; margin: 0 auto; padding: 0 1.5rem; }
     .section { padding: clamp(3.5rem, 6vw, 5.5rem) 0; }
     .section-eyebrow { display: inline-block; font-family: var(--display); font-size: 0.78rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--accent); margin-bottom: 1.25rem; font-weight: 700; }
@@ -110,14 +121,33 @@ export function renderVereinSportPage(spec: SiteSpec, slug: string): string {
     /* SPORTUNION signature: orange→dark candy-bar strip used at section
        boundaries and footer. Distinctive brand element from sportunion.at. */
     .sportunion-strip {
-      display: flex; height: 6px; width: 100%;
-      background: linear-gradient(to right,
-        #FF4D1C 0%,           /* signature orange */
-        #FF7B3D 18%,
-        #E8B33A 35%,          /* warm gold */
-        #B33A1F 55%,          /* deep red */
-        #4A1414 78%,          /* burgundy */
-        #1A0606 100%);        /* near-black */
+      display: flex; height: 8px; width: 100%;
+      /* SPORTUNION Primärfarben-Verlauf: Orange #E5650F → Rot #E73331,
+         dunkel-zu-hell von Bug zu Seitenrand (handbuch Seite 22). */
+      background: linear-gradient(to right, #E5650F 0%, #E73331 100%);
+    }
+    /* Pill-Grundform — SPORTUNION's "abgerundete Stäbchen" element.
+       Used in Contentboxes, Datumsboxen, CTA-Buttons. */
+    .pill {
+      display: inline-flex; align-items: center; justify-content: center;
+      padding: 0.65rem 1.5rem; border-radius: 9999px;
+      font-family: var(--display); font-weight: 700;
+      letter-spacing: 0.02em; line-height: 1.2;
+      transition: transform .25s, box-shadow .25s;
+    }
+    .pill-fill {
+      background: linear-gradient(to right, #E5650F 0%, #E73331 100%);
+      color: #fff;
+      box-shadow: 0 10px 24px -12px rgba(231,51,49,0.5);
+    }
+    .pill-fill:hover { transform: translateY(-2px); box-shadow: 0 14px 32px -12px rgba(231,51,49,0.6); }
+    .pill-outline {
+      background: transparent; border: 2px solid var(--accent);
+      color: var(--accent);
+    }
+    .pill-white {
+      background: #fff; color: var(--primary);
+      box-shadow: 0 6px 20px -8px rgba(0,0,0,0.15);
     }
     .section-lead { font-size: 1.05rem; color: var(--ink-2); max-width: 720px; }
     .section-head.center { text-align: center; }
@@ -172,28 +202,83 @@ export function renderVereinSportPage(spec: SiteSpec, slug: string): string {
       .nav-toggle:checked ~ .main-nav { transform: translateY(0); opacity: 1; pointer-events: auto; }
     }
 
-    /* Hero */
+    /* Hero — SPORTUNION-CI: Stäbchen-Hintergrund (orange→rot gradient bars
+       creating the signature wave pattern), photo as foreground when
+       available. Per handbook page 30 the Stäbchenform is the wichtigste
+       Gestaltungselement. */
     .hero {
       position: relative; min-height: clamp(560px, 80vh, 760px);
       ${hasHeroImage(spec)
         ? `background:
-        linear-gradient(135deg, rgba(15,23,42,0.55) 0%, rgba(15,23,42,0.85) 100%),
+        linear-gradient(to bottom, transparent 0%, transparent 40%, rgba(20,10,5,0.55) 75%, rgba(20,10,5,0.92) 100%),
         url('${getHeroImage(spec, slug)}') center/cover;`
-        : `background:
+        : (isSportunion ? `background:
+        /* SPORTUNION Primärfarben-Verlauf (orange dunkel→rot hell) als Hintergrund */
+        radial-gradient(ellipse at 30% 30%, rgba(255,255,255,0.10) 0%, transparent 55%),
+        linear-gradient(135deg, #E5650F 0%, #E73331 100%);` : `background:
         radial-gradient(ellipse at 25% 25%, rgba(250,204,21,0.18) 0%, transparent 50%),
-        linear-gradient(135deg, #15803d 0%, #052e1a 100%);`
+        linear-gradient(135deg, #15803d 0%, #052e1a 100%);`)
       }
-      display: flex; align-items: center; padding: 4rem 1.5rem; color: #fff;
+      display: flex; align-items: flex-end; padding: 4rem 1.5rem 5rem; color: #fff;
+      overflow: hidden;
     }
-    .hero-inner { max-width: 1280px; margin: 0 auto; width: 100%; }
-    .hero-eyebrow { display: inline-block; font-family: var(--display); font-size: 0.78rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--accent); margin-bottom: 1.5rem; font-weight: 700; padding: 0.4rem 0.9rem; background: rgba(250,204,21,0.16); border-radius: 6px; }
-    .hero h1 { font-size: clamp(3rem, 7vw, 5rem); font-weight: 800; line-height: 1.04; max-width: 18ch; margin-bottom: 1.5rem; }
-    .hero-sub { font-size: 1.15rem; max-width: 60ch; color: rgba(255,255,255,0.92); margin-bottom: 2rem; }
+    /* Stäbchen-Overlay — SPORTUNION's signature wavy bars in the hero.
+       Per handbook: 19 Stäbchen Hochformat, 27 Querformat, "homogene Welle". */
+    ${isSportunion ? `.hero::before {
+      content: ''; position: absolute; inset: 0; pointer-events: none;
+      opacity: 0.55;
+      background-image: repeating-linear-gradient(
+        to right,
+        transparent 0,
+        transparent 30px,
+        rgba(231,51,49,0.32) 30px,
+        rgba(231,51,49,0.32) 32px,
+        transparent 32px,
+        transparent 50px,
+        rgba(229,101,15,0.32) 50px,
+        rgba(229,101,15,0.32) 52px
+      );
+      mask-image: linear-gradient(to bottom, transparent 0%, black 20%, black 60%, transparent 100%);
+    }
+    .hero::after {
+      content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 60px;
+      pointer-events: none;
+      /* echte runde Stäbchen-Wave als bottom-edge */
+      background-image: repeating-linear-gradient(
+        to right,
+        #E73331 0,
+        #E73331 32px,
+        #E5650F 32px,
+        #E5650F 64px
+      );
+      mask-image: radial-gradient(ellipse 1200% 80px at 50% 100%, transparent 0%, transparent 75%, black 78%);
+      opacity: 0.85;
+    }` : ''}
+    .hero-inner { max-width: 1280px; margin: 0 auto; width: 100%; position: relative; z-index: 2; }
+    .hero-eyebrow {
+      display: inline-block; font-family: var(--display); font-size: 0.78rem;
+      letter-spacing: 0.18em; text-transform: uppercase; color: #fff;
+      margin-bottom: 1.5rem; font-weight: 700;
+      padding: 0.5rem 1.2rem; border-radius: 9999px;
+      background: ${isSportunion ? 'rgba(0,0,0,0.35)' : 'rgba(250,204,21,0.16)'};
+      backdrop-filter: blur(6px);
+      text-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    }
+    .hero h1 { font-size: clamp(3rem, 7vw, 5rem); font-weight: 800; line-height: 1.04; max-width: 18ch; margin-bottom: 1.5rem; text-shadow: 0 2px 14px rgba(0,0,0,0.45); }
+    .hero-sub { font-size: 1.15rem; max-width: 60ch; color: rgba(255,250,245,0.94); margin-bottom: 2rem; text-shadow: 0 1px 8px rgba(0,0,0,0.5); }
     .hero-actions { display: flex; gap: 1rem; flex-wrap: wrap; }
-    .btn-primary, .btn-ghost { display: inline-flex; align-items: center; gap: 0.5rem; padding: 1rem 2rem; font-family: var(--display); font-weight: 700; font-size: 0.98rem; border-radius: 6px; transition: all .2s; }
-    .btn-primary { background: var(--accent); color: var(--ink); }
-    .btn-primary:hover { background: #fde047; transform: translateY(-2px); }
-    .btn-ghost { background: transparent; color: #fff; border: 1.5px solid rgba(255,255,255,0.5); }
+    /* SPORTUNION pill-style CTA. */
+    .btn-primary, .btn-ghost {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      padding: 1rem 2rem; font-family: var(--display); font-weight: 700;
+      font-size: 0.98rem; border-radius: 9999px; transition: all .2s;
+    }
+    .btn-primary {
+      ${isSportunion ? 'background: #fff; color: var(--primary);' : 'background: var(--accent); color: var(--ink);'}
+      box-shadow: 0 12px 28px -12px rgba(0,0,0,0.4);
+    }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 16px 36px -14px rgba(0,0,0,0.5); }
+    .btn-ghost { background: transparent; color: #fff; border: 1.5px solid rgba(255,255,255,0.6); }
     .btn-ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
 
     /* Stats band */
