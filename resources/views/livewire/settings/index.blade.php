@@ -39,26 +39,10 @@ new class extends Component {
         $this->refreshStatusList($repo);
     }
 
-    /**
-     * `render()` liefert sections/slots als View-Variablen — NICHT als
-     * public properties. Hintergrund: Livewire dehydrate alle public
-     * properties zum Snapshot, und bei nested-arrays mit gemischten Typen
-     * (boolean + string + null in einem Slot) wirft Livewire's Synth-Layer
-     * "Call to a member function getName() on array" — er erwartet eine
-     * BackedEnum, sieht aber ein array. View-Variablen umgehen das.
-     */
-    public function render(): mixed
-    {
-        \Log::info('Volt settings render() called', [
-            'sections_count' => count(SettingsSchema::sections()),
-            'slots_count' => count(SettingsSchema::all()),
-        ]);
-
-        return view('livewire.settings.index', [
-            'sections' => SettingsSchema::sections(),
-            'slots' => collect(SettingsSchema::all())->groupBy('section')->toArray(),
-        ]);
-    }
+    // Sections + Slots werden NICHT als public properties gehalten —
+    // das brach Livewire's Hydrate-Layer ("getName() on array"). render()
+    // override greift in Volt-Volt-Komponenten nicht durchsehbar.
+    // Pragmatisch: das Blade ruft SettingsSchema direkt auf via @php-Block.
 
     public function save(SettingsRepository $repo): void
     {
@@ -123,6 +107,14 @@ new class extends Component {
             Werte aus der <code>.env</code>-Datei. Leere Felder fallen automatisch auf <code>.env</code> zurück.
         </p>
     </header>
+
+    @php
+        // Direkt aus dem Schema laden — Volt-render() override greift nicht
+        // zuverlässig, und public-array-properties brechen den hydrate-Layer.
+        // Schema-Aufruf ist deterministisch + günstig.
+        $sections = \App\Domain\Settings\SettingsSchema::sections();
+        $slots = collect(\App\Domain\Settings\SettingsSchema::all())->groupBy('section')->toArray();
+    @endphp
 
     @if ($flash)
         <div class="settings-flash" wire:transition>{{ $flash }}</div>
