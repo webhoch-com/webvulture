@@ -56,35 +56,22 @@ export function renderVereinSportPage(spec: SiteSpec, slug: string): string {
   const pullQuote = pickPullQuote(spec);
   const board = extractBoardMembers(spec);
 
-  // Warm-festive forcer: Verein-template is a TRACHTEN aesthetic — warm
-  // wood + brass-gold + tannengrün + burgundy. Scraped brand colors are
-  // often corporate-cold; we force-fallback to warm Verein defaults
-  // unless the scraped color is already in the warm spectrum.
-  const isWarmColor = (hex: string): boolean => {
-    const m = hex.match(/^#?([0-9a-f]{6})$/i);
-    if (!m) return false;
-    const n = parseInt(m[1], 16);
-    const r = (n >> 16) & 0xff, g = (n >> 8) & 0xff, b = n & 0xff;
-    if (b > r + 30 && b > g + 20) return false;
-    if (r < 80 && g < 80 && b < 80) return false;
-    if (r > 230 && g > 230 && b > 230) return false;
-    return true;
-  };
-  const rawPrimary = spec.brand?.primary_color || '';
-  const primary = isWarmColor(rawPrimary) ? rawPrimary : '#2d4a32';
-  const secondary = isWarmColor(spec.brand?.secondary_color || '') ? spec.brand!.secondary_color! : primary;
-  const rawAccent = spec.brand?.accent_color || '';
-  const accent = (isWarmColor(rawAccent) && rawAccent !== rawPrimary) ? rawAccent : '#b8893d';
+  // SPORTUNION-CI: signature orange (#FF4D1C) + black + warm taupe body.
+  // Modern sporty look — bold, energetic, decisive. Scraped brand colors
+  // override when present, but the orange CTA accent always wins.
+  const primary = spec.brand?.primary_color || '#000000';        // black headlines
+  const secondary = spec.brand?.secondary_color || primary;
+  const accent = spec.brand?.accent_color || '#FF4D1C';          // SPORTUNION orange
   const headingFont = spec.brand?.heading_font_family
-    ? `'${spec.brand.heading_font_family}', 'Fraunces', Georgia, serif`
-    : "'Fraunces', Georgia, serif";
+    ? `'${spec.brand.heading_font_family}', 'Barlow', Arial, system-ui, sans-serif`
+    : "'Barlow', Arial, system-ui, sans-serif";
   const bodyFont = spec.brand?.body_font_family
-    ? `'${spec.brand.body_font_family}', 'Lora', Georgia, serif`
-    : "'Lora', Georgia, serif";
+    ? `'${spec.brand.body_font_family}', 'Barlow', Arial, system-ui, sans-serif`
+    : "'Barlow', Arial, system-ui, sans-serif";
   const fontImportTags = (spec.brand?.font_imports && spec.brand.font_imports.length > 0)
     ? spec.brand.font_imports.map(u => `<link rel="stylesheet" href="${u}" crossorigin>`).join('\n  ')
     : `<link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
-  <link href="https://fonts.bunny.net/css?family=fraunces:400,500,600,700|lora:400,500,600,700&display=swap" rel="stylesheet">`;
+  <link href="https://fonts.bunny.net/css?family=barlow:400,500,600,700,800&display=swap" rel="stylesheet">`;
 
   return `---
 ---
@@ -99,12 +86,12 @@ export function renderVereinSportPage(spec: SiteSpec, slug: string): string {
       --primary-deep: color-mix(in oklch, ${escapeHtml(primary)} 70%, black);
       --secondary: ${escapeHtml(secondary)};
       --accent: ${escapeHtml(accent)};
-      --bg: #fbf7ee;            /* warm cream */
-      --bg-2: #f0e8d3;          /* deeper cream */
+      --bg: #f8f7f4;            /* SPORTUNION cream-off-white */
+      --bg-2: #efece7;          /* deeper warm-cream */
       --surface: #ffffff;
-      --ink: #1f1a14;           /* warm dark brown */
-      --ink-2: #4a4030;
-      --ink-3: #877a64;
+      --ink: #000000;           /* SPORTUNION pure black */
+      --ink-2: #83716d;         /* warm taupe body */
+      --ink-3: #6b6b6b;
       --rule: rgba(31,26,20,0.10);
       --display: ${headingFont};
       --sans: ${bodyFont};
@@ -115,11 +102,23 @@ export function renderVereinSportPage(spec: SiteSpec, slug: string): string {
     img { display: block; max-width: 100%; }
     a { color: inherit; text-decoration: none; }
     h1, h2, h3, h4 { font-family: var(--display); font-weight: 700; line-height: 1.05; letter-spacing: -0.018em; }
-    em { font-style: normal; color: var(--primary); }
+    em { font-style: normal; color: var(--accent); }
     .container { max-width: 1280px; margin: 0 auto; padding: 0 1.5rem; }
-    .section { padding: clamp(4rem, 8vw, 7rem) 0; }
-    .section-eyebrow { display: inline-block; font-family: var(--display); font-size: 0.78rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--primary); margin-bottom: 1.25rem; font-weight: 700; }
-    .section-title { font-size: clamp(2.2rem, 5vw, 3.6rem); color: var(--ink); margin-bottom: 1.25rem; }
+    .section { padding: clamp(3.5rem, 6vw, 5.5rem) 0; }
+    .section-eyebrow { display: inline-block; font-family: var(--display); font-size: 0.78rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--accent); margin-bottom: 1.25rem; font-weight: 700; }
+    .section-title { font-size: clamp(2.2rem, 5vw, 3.6rem); color: var(--ink); margin-bottom: 1.25rem; font-weight: 600; }
+    /* SPORTUNION signature: orange→dark candy-bar strip used at section
+       boundaries and footer. Distinctive brand element from sportunion.at. */
+    .sportunion-strip {
+      display: flex; height: 6px; width: 100%;
+      background: linear-gradient(to right,
+        #FF4D1C 0%,           /* signature orange */
+        #FF7B3D 18%,
+        #E8B33A 35%,          /* warm gold */
+        #B33A1F 55%,          /* deep red */
+        #4A1414 78%,          /* burgundy */
+        #1A0606 100%);        /* near-black */
+    }
     .section-lead { font-size: 1.05rem; color: var(--ink-2); max-width: 720px; }
     .section-head.center { text-align: center; }
     .section-head.center .section-lead { margin: 0 auto; }
@@ -484,6 +483,8 @@ export function renderVereinSportPage(spec: SiteSpec, slug: string): string {
       </div>
     </div>
   </footer>
+  <!-- SPORTUNION-signature candy-bar strip (orange→dark) at page end. -->
+  <div class="sportunion-strip" aria-hidden="true"></div>
 
   <script>
     if ('IntersectionObserver' in window) {
