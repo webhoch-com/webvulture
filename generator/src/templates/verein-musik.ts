@@ -650,11 +650,54 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
     footer .legal { display: flex; gap: 1.5rem; justify-content: center; margin-top: 1rem; flex-wrap: wrap; }
     footer .legal a:hover { color: var(--accent); }
 
-    /* Reveal: previously hid content with opacity:0 + IntersectionObserver,
-       which left whole sections invisible if JS failed or scroll didn't reach.
-       Now: content is always visible; .reveal is a no-op kept for backwards
-       compat with the JS query selector. */
-    .reveal { opacity: 1; transform: none; }
+    /* Reveal-on-scroll: subtle fade-up of major content blocks. The
+       @media(prefers-reduced-motion) override + the JS fallback (auto
+       .is-visible after 800ms) guarantee content is always visible even
+       if IntersectionObserver fires late or JS throws. */
+    .reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.7s cubic-bezier(0.25,0.46,0.45,0.94), transform 0.7s cubic-bezier(0.25,0.46,0.45,0.94); }
+    .reveal.is-visible { opacity: 1; transform: translateY(0); }
+    .reveal[data-stagger]:not(:first-child) { transition-delay: var(--stagger-delay, 0s); }
+    @media (prefers-reduced-motion: reduce) {
+      .reveal { opacity: 1; transform: none; transition: none; }
+    }
+    /* Count-up: applied to .count-up numeric elements via JS. The number
+       starts at 0 and animates to its data-target over ~1.4s with easing.
+       Fallback: when JS doesn't run, the inner text is the final value. */
+    .count-up { font-variant-numeric: tabular-nums; }
+    /* Parallax hero photo: subtle 1.08x scale on the hero img + slow
+       translateY via scroll-linked transform (CSS-only with scroll-driven
+       animations where supported). Reduces to no-op on older browsers. */
+    @supports (animation-timeline: scroll()) {
+      .hero.hero-with-image .hero-bg { animation: heroParallax linear; animation-timeline: scroll(); animation-range: 0 100vh; }
+    }
+    @keyframes heroParallax {
+      from { transform: scale(1.05) translateY(0); }
+      to   { transform: scale(1.12) translateY(40px); }
+    }
+    /* Decorative SVG notes-pattern background for empty/sparse sections.
+       Subtle, low-opacity, brand-color-tinted. */
+    .pattern-notes::before {
+      content: ''; position: absolute; inset: 0; pointer-events: none;
+      background-image:
+        radial-gradient(circle 2px at 20% 30%, var(--accent) 99%, transparent 100%),
+        radial-gradient(circle 1.5px at 80% 60%, var(--accent) 99%, transparent 100%),
+        radial-gradient(circle 1px at 50% 80%, var(--accent) 99%, transparent 100%),
+        radial-gradient(circle 1.5px at 35% 70%, var(--accent) 99%, transparent 100%),
+        radial-gradient(circle 1px at 65% 20%, var(--accent) 99%, transparent 100%);
+      background-size: 200px 200px;
+      opacity: 0.08;
+      mask-image: linear-gradient(to bottom, transparent, black 30%, black 70%, transparent);
+    }
+    /* SVG ornamental dividers between sections — treble-clef-inspired. */
+    .ornament-divider {
+      display: flex; align-items: center; justify-content: center;
+      gap: 1.25rem; margin: 0 auto; max-width: 200px;
+      color: var(--accent); opacity: 0.5;
+    }
+    .ornament-divider::before, .ornament-divider::after {
+      content: ''; flex: 1; height: 1px; background: currentColor;
+    }
+    .ornament-divider svg { width: 22px; height: 22px; fill: currentColor; }
 
     /* Ensembles/Klangkörper, Instrumente and Meilensteine CSS blocks were
        removed in 2026-05 — their markup was deleted earlier because we cannot
@@ -1104,10 +1147,79 @@ ${address ? `
 </footer>
 
 <script>
-  const io = new IntersectionObserver((entries) => {
-    entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('is-visible'); });
-  }, { threshold: 0.1, rootMargin: '0px 0px -50px' });
-  document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+  // ── Reveal-on-scroll with auto-fallback ──────────────────────────────
+  // Sets .is-visible on each .reveal element when it enters the viewport.
+  // After 1200ms, force any unrevealed .reveal to is-visible so content
+  // never stays hidden behind a broken observer or above-fold initial state.
+  (() => {
+    const ALL_REVEAL = document.querySelectorAll('.reveal');
+    const forceShow = () => ALL_REVEAL.forEach(el => el.classList.add('is-visible'));
+
+    if (!('IntersectionObserver' in window) || matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      forceShow();
+      return;
+    }
+
+    // Stagger: walk siblings in a .stagger-group container and assign
+    // incremental --stagger-delay so items appear one after another.
+    document.querySelectorAll('.stagger-group').forEach(group => {
+      [...group.children].forEach((child, idx) => {
+        if (child.classList.contains('reveal') || child.querySelector('.reveal')) {
+          (child.classList.contains('reveal') ? child : child.querySelector('.reveal')).style.setProperty('--stagger-delay', (idx * 90) + 'ms');
+          (child.classList.contains('reveal') ? child : child.querySelector('.reveal')).setAttribute('data-stagger', '1');
+        }
+      });
+    });
+
+    const io = new IntersectionObserver(entries => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          e.target.classList.add('is-visible');
+          io.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.08, rootMargin: '0px 0px -40px' });
+    ALL_REVEAL.forEach(el => io.observe(el));
+
+    // Safety net: anything not visible after 1.2s gets force-shown so
+    // page never has a permanently-hidden block.
+    setTimeout(forceShow, 1200);
+  })();
+
+  // ── Count-up animation on year/number elements ──────────────────────
+  // Any element with .count-up data-target="N" counts from 0 to N over
+  // ~1.4s with easeOutQuart. Fires once when element first enters viewport.
+  (() => {
+    const targets = document.querySelectorAll('.count-up');
+    if (targets.length === 0) return;
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      targets.forEach(el => { el.textContent = el.dataset.target || el.textContent; });
+      return;
+    }
+    const easeOut = (t) => 1 - Math.pow(1 - t, 4);
+    const animate = el => {
+      const target = parseInt(el.dataset.target || '0', 10);
+      if (!target) return;
+      const duration = 1400;
+      const start = performance.now();
+      const step = (now) => {
+        const t = Math.min(1, (now - start) / duration);
+        el.textContent = Math.round(target * easeOut(t)).toString();
+        if (t < 1) requestAnimationFrame(step);
+        else el.textContent = target.toString();
+      };
+      requestAnimationFrame(step);
+    };
+    const io = new IntersectionObserver(entries => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          animate(e.target);
+          io.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.4 });
+    targets.forEach(el => io.observe(el));
+  })();
 </script>
 </body>
 </html>

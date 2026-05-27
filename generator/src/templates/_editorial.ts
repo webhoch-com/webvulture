@@ -410,9 +410,9 @@ export function renderHeritageStatement(spec: SiteSpec, foundedYear: number | nu
     ? `Seit <em>${foundedYear}</em> in ${escapeHtml(city)}.`
     : `Seit <em>${foundedYear}</em> in der Region.`;
   return `
-<section class="heritage-statement">
+<section class="heritage-statement reveal">
   <div class="heritage-inner">
-    <span class="heritage-kicker">${years} Jahre Tradition</span>
+    <span class="heritage-kicker"><span class="count-up" data-target="${years}">${years}</span> Jahre Tradition</span>
     <h2 class="heritage-headline">${statement}</h2>
   </div>
 </section>`;
@@ -489,19 +489,19 @@ export function extractHeritageMilestones(spec: SiteSpec): Array<{ year: number;
 export function renderHeritageTimeline(milestones: Array<{ year: number; label: string }>): string {
   if (milestones.length < 2) return '';
   const nodes = milestones.map(m => `
-    <li class="ht-node">
+    <li class="ht-node reveal">
       <div class="ht-year">${m.year}</div>
       <div class="ht-label">${escapeHtml(m.label)}</div>
     </li>
   `).join('');
   return `
-<section class="heritage-timeline">
+<section class="heritage-timeline pattern-notes" style="position:relative">
   <div class="container">
-    <div class="section-head center">
+    <div class="section-head center reveal">
       <span class="section-eyebrow">Chronik</span>
       <h2 class="section-title">Unser <em>Werdegang</em>.</h2>
     </div>
-    <ol class="ht-track">${nodes}</ol>
+    <ol class="ht-track stagger-group">${nodes}</ol>
   </div>
 </section>`;
 }
@@ -536,8 +536,23 @@ export function extractEnsembles(spec: SiteSpec): Array<{ name: string; context:
 
 export function renderEnsembleGrid(ensembles: Array<{ name: string; context: string }>): string {
   if (ensembles.length === 0) return '';
+  // SVG instrument silhouettes — rotate one per tile so each ensemble has
+  // a distinct visual mark. All inline so no extra HTTP requests.
+  const ICONS = [
+    // Trumpet
+    '<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 32h36"/><circle cx="44" cy="32" r="6"/><path d="M50 32h10v-6m0 12V32"/><circle cx="14" cy="36" r="2" fill="currentColor" stroke="none"/><circle cx="22" cy="36" r="2" fill="currentColor" stroke="none"/><circle cx="30" cy="36" r="2" fill="currentColor" stroke="none"/></svg>',
+    // Music notes
+    '<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 14v32"/><path d="M42 8v32"/><circle cx="18" cy="46" r="4" fill="currentColor"/><circle cx="38" cy="40" r="4" fill="currentColor"/><path d="M22 14h20v6h-20z" fill="currentColor"/></svg>',
+    // Drum
+    '<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="32" cy="22" rx="22" ry="8"/><path d="M10 22v20a22 8 0 0 0 44 0V22"/><path d="M10 32a22 8 0 0 0 44 0"/></svg>',
+    // Conductor baton
+    '<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="14" cy="14" r="4" fill="currentColor"/><path d="M16 16 L52 52"/><path d="M48 48 L56 52 L52 56 Z" fill="currentColor"/></svg>',
+    // Tuba
+    '<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="34" cy="36" r="18"/><circle cx="34" cy="36" r="10"/><path d="M50 24v-6h8v18"/></svg>',
+  ];
   const tiles = ensembles.map((e, i) => `
-    <article class="ensemble-card">
+    <article class="ensemble-card reveal">
+      <div class="ensemble-icon" aria-hidden="true">${ICONS[i % ICONS.length]}</div>
       <div class="ensemble-num">${String(i + 1).padStart(2, '0')} / ${String(ensembles.length).padStart(2, '0')}</div>
       <h3>${escapeHtml(e.name)}</h3>
       ${e.context ? `<p>${escapeHtml(e.context)}</p>` : ''}
@@ -546,11 +561,11 @@ export function renderEnsembleGrid(ensembles: Array<{ name: string; context: str
   return `
 <section class="ensemble-grid-section">
   <div class="container">
-    <div class="section-head">
+    <div class="section-head reveal">
       <span class="section-eyebrow">Unsere Klangkörper</span>
       <h2 class="section-title">Vielfalt unter <em>einem Dach</em>.</h2>
     </div>
-    <div class="ensemble-grid">${tiles}</div>
+    <div class="ensemble-grid stagger-group">${tiles}</div>
   </div>
 </section>`;
 }
@@ -1183,13 +1198,27 @@ export const EDITORIAL_CSS = `
 @media (min-width: 720px) { .ensemble-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (min-width: 1000px) { .ensemble-grid { grid-template-columns: repeat(3, 1fr); } }
 .ensemble-card {
+  position: relative;
   background: var(--surface, #fff);
   border: 1px solid var(--rule, rgba(0,0,0,0.08));
   border-top: 3px solid var(--accent, #b8893d);
   padding: 2.5rem 2rem;
   transition: transform .25s ease, box-shadow .25s ease;
+  overflow: hidden;
 }
 .ensemble-card:hover { transform: translateY(-4px); box-shadow: 0 18px 36px -16px rgba(0,0,0,0.12); }
+.ensemble-card .ensemble-icon {
+  position: absolute; top: 1.5rem; right: 1.5rem;
+  width: 56px; height: 56px;
+  color: color-mix(in oklch, var(--accent, #b8893d) 35%, transparent);
+  opacity: 0.85;
+  transition: transform .4s cubic-bezier(0.34, 1.56, 0.64, 1), color .25s;
+}
+.ensemble-card:hover .ensemble-icon {
+  transform: rotate(-8deg) scale(1.1);
+  color: color-mix(in oklch, var(--accent, #b8893d) 65%, transparent);
+}
+.ensemble-card .ensemble-icon svg { width: 100%; height: 100%; }
 .ensemble-card .ensemble-num {
   font-family: var(--display, Georgia, serif); font-size: 0.78rem;
   letter-spacing: 0.22em; text-transform: uppercase;
