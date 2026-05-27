@@ -327,6 +327,18 @@ export async function orchestrate(pkg: RebuildPackage): Promise<OrchestrationRes
     baseSpec.redesigned_sections = redesigned;
   }
 
+  // ─── Apply user revision notes (keyword-based for now) ─────────────────
+  const revisionNotes = (pkg.generation_params as any)?.user_revision_notes;
+  if (revisionNotes && typeof revisionNotes === 'string') {
+    applyRevisionNotes(baseSpec, revisionNotes);
+    // Persist im SiteSpec für Audit + damit Templates die Notes als Banner
+    // anzeigen können falls gewünscht.
+    (baseSpec as any).meta = {
+      ...((baseSpec as any).meta || {}),
+      user_revision_notes: revisionNotes,
+    };
+  }
+
   return {
     siteSpec: baseSpec,
     model: 'deterministic',
@@ -334,6 +346,52 @@ export async function orchestrate(pkg: RebuildPackage): Promise<OrchestrationRes
     outputTokens: 0,
     costCents: 0,
   };
+}
+
+/**
+ * Lese das User-Feedback und wende einfache Schlüsselwort-Regeln auf das
+ * SiteSpec an. Funktioniert für die häufigsten "weglassen"-Wünsche:
+ *
+ *   "ohne gallery" / "keine bilder"   → media.gallery = []
+ *   "kein hero(bild)"                → media.hero_image = undefined
+ *   "kein vorstand" / "ohne team"     → vorstand-Block wird disabled
+ *   "ohne karte" / "keine karte"      → contact.show_map = false
+ *
+ * Komplexe Änderungen (Farben, Tonalität, neue Sections) sind hiermit
+ * NICHT abgedeckt — die brauchen einen LLM-Schritt davor (Phase 4).
+ * Diese Layer ist absichtlich klein und deterministisch — der User
+ * kriegt sofort sichtbare Effekte für die häufigsten Wünsche, ohne
+ * dass wir einen weiteren LLM-Roundtrip pro Revision brauchen.
+ */
+function applyRevisionNotes(spec: SiteSpec, notes: string): void {
+  const n = notes.toLowerCase();
+
+  const wants = (...phrases: string[]) => phrases.some((p) => n.includes(p));
+
+  if (wants('ohne gallery', 'keine gallery', 'ohne galerie', 'keine galerie', 'ohne bilder', 'keine bilder')) {
+    if (spec.media) {
+      spec.media.gallery = [];
+    }
+  }
+  if (wants('ohne hero', 'kein hero', 'kein heroimage', 'kein hero-bild', 'kein herobild')) {
+    if (spec.media) {
+      spec.media.hero_image = undefined;
+    }
+  }
+  if (wants('ohne vorstand', 'kein vorstand', 'kein team', 'ohne team')) {
+    (spec as any).hide_vorstand = true;
+  }
+  if (wants('ohne karte', 'keine karte', 'kein map')) {
+    if (spec.contact) {
+      (spec.contact as any).show_map = false;
+    }
+  }
+  if (wants('ohne anfahrt', 'keine anfahrt')) {
+    (spec as any).hide_anfahrt = true;
+  }
+  if (wants('ohne kontakt')) {
+    (spec as any).hide_contact_section = true;
+  }
 }
 
 function truncate(s: string, max: number): string {

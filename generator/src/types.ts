@@ -89,6 +89,12 @@ export interface RebuildPackage {
     weaknesses?: string[];
     headline?: string;
     value_prop?: string;
+    /**
+     * User-Feedback aus einer Revision-Anfrage. orchestrator.ts wendet
+     * Schlüsselwort-Regeln auf das resultierende SiteSpec an
+     * ("ohne gallery" → media.gallery=[], "kein vorstand" → hide_vorstand=true).
+     */
+    user_revision_notes?: string;
   };
   layout_kind?: LayoutKind;
 }

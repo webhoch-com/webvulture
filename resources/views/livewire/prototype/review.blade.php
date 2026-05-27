@@ -3,6 +3,7 @@
 use App\Jobs\RequestPrototypeGenerationJob;
 use App\Models\Lead;
 use App\Models\Prototype;
+use App\Models\PrototypeRevision;
 use Livewire\Volt\Component;
 use Mary\Traits\Toast;
 
@@ -12,6 +13,9 @@ new class extends Component {
     public Lead $lead;
 
     public ?Prototype $prototype = null;
+
+    /** Aktueller Form-Input für eine neue Revision. */
+    public string $revisionFeedback = '';
 
     public function mount(Lead $lead): void
     {
@@ -24,8 +28,71 @@ new class extends Component {
     public function regenerate(): void
     {
         RequestPrototypeGenerationJob::dispatch($this->lead->id)->onQueue('generation');
+        app(\App\Domain\Activity\ActivityLogger::class)->log($this->lead, 'prototype.regenerate', 'Neu-Erzeugung gestartet');
         $this->success('In Warteschlange', 'Neu-Erzeugung gestartet.');
         $this->prototype = $this->prototype?->fresh(['currentVersion', 'versions']);
+    }
+
+    /**
+     * User trägt Änderungswunsch ein → wir legen eine PrototypeRevision-Row
+     * an (status=pending) und dispatchen einen neuen Generation-Job mit
+     * `revisionNotes` als Constraint. Wenn der Job durchgelaufen ist, setzt
+     * er status=applied und verlinkt die neue PrototypeVersion über
+     * result_version_id (siehe RequestPrototypeGenerationJob).
+     */
+    public function submitRevision(): void
+    {
+        $feedback = trim($this->revisionFeedback);
+        if (mb_strlen($feedback) < 10) {
+            $this->error('Zu kurz', 'Bitte mindestens 10 Zeichen Änderungswunsch eingeben.');
+
+            return;
+        }
+        if (mb_strlen($feedback) > 2000) {
+            $this->error('Zu lang', 'Bitte unter 2000 Zeichen halten.');
+
+            return;
+        }
+        if (! $this->prototype?->currentVersion) {
+            $this->error('Keine Version', 'Es gibt noch keinen Prototyp zum Überarbeiten.');
+
+            return;
+        }
+
+        $revision = PrototypeRevision::create([
+            'prototype_version_id' => $this->prototype->currentVersion->id,
+            'user_id' => auth()->id(),
+            'feedback' => $feedback,
+            'status' => 'pending',
+        ]);
+
+        RequestPrototypeGenerationJob::dispatch(
+            leadId: $this->lead->id,
+            templateFamily: $this->prototype->template_family ?? 'studio',
+            layoutKind: $this->prototype->layout_kind,
+            revisionNotes: $feedback,
+            revisionId: $revision->id,
+        )->onQueue('generation');
+
+        app(\App\Domain\Activity\ActivityLogger::class)->log(
+            $this->lead,
+            'prototype.revision_requested',
+            'Änderungswunsch eingereicht',
+            ['revision_id' => $revision->id, 'preview' => mb_substr($feedback, 0, 80)],
+        );
+
+        $this->revisionFeedback = '';
+        $this->success('Änderungswunsch erstellt', 'Neuer Prototyp wird mit Ihren Anweisungen erzeugt.');
+        $this->prototype = $this->prototype?->fresh(['currentVersion', 'versions']);
+    }
+
+    public function dismissRevision(int $id): void
+    {
+        $rev = PrototypeRevision::find($id);
+        if ($rev && $rev->status === 'pending') {
+            $rev->update(['status' => 'dismissed']);
+            $this->info('Verworfen', 'Änderungswunsch wurde verworfen.');
+        }
     }
 
     public function approve(): void
@@ -34,9 +101,28 @@ new class extends Component {
             $this->error('Keine Version', 'Keine veröffentlichte Version zum Freigeben.');
             return;
         }
-        $this->lead->update(['status' => \App\Support\Enums\LeadStatus::Approved]);
+        $this->lead->update([
+            'status' => \App\Support\Enums\LeadStatus::Approved,
+            'approved_at' => now(),
+            'approved_by' => auth()->id(),
+        ]);
+        app(\App\Domain\Activity\ActivityLogger::class)->log($this->lead, 'lead.approved', 'Über Prototyp-Review freigegeben');
         $this->success('Freigegeben', 'Lead als freigegeben markiert.');
         $this->lead->refresh();
+    }
+
+    public function with(): array
+    {
+        // Alle Revisions zur aktuellen current_version chronologisch.
+        $revisions = [];
+        if ($this->prototype?->currentVersion) {
+            $revisions = PrototypeRevision::with('user', 'resultVersion')
+                ->where('prototype_version_id', $this->prototype->currentVersion->id)
+                ->latest('id')
+                ->get();
+        }
+
+        return ['revisions' => $revisions];
     }
 }; ?>
 
@@ -170,6 +256,64 @@ new class extends Component {
                     @endif
                 </aside>
             </section>
+
+            {{-- ─── Revisions / Änderungswünsche ──────────────────────────── --}}
+            <section class="rev-revisions">
+                <header class="rev-revisions-head">
+                    <h2>Änderungswünsche</h2>
+                    <p>Was soll an dieser Vorschau anders sein? Konkrete Anweisungen helfen Claude
+                       eine bessere zweite Version zu bauen.</p>
+                </header>
+
+                <form wire:submit="submitRevision" class="rev-revision-form">
+                    <textarea
+                        wire:model="revisionFeedback"
+                        rows="4"
+                        maxlength="2000"
+                        placeholder="z.B. Hero-Bild ist zu groß, bitte die Gallery komplett weglassen und stattdessen die Anfahrt prominenter zeigen."
+                        class="rev-revision-input"
+                    ></textarea>
+                    <div class="rev-revision-actions">
+                        <span class="rev-revision-hint">{{ mb_strlen($revisionFeedback) }}/2000 Zeichen</span>
+                        <button type="submit" class="rev-btn rev-btn-primary"
+                                wire:loading.attr="disabled" wire:target="submitRevision">
+                            <span wire:loading.remove wire:target="submitRevision">Neue Version anfragen</span>
+                            <span wire:loading wire:target="submitRevision">Wird angelegt …</span>
+                        </button>
+                    </div>
+                </form>
+
+                @if(count($revisions) > 0)
+                    <ul class="rev-revision-list">
+                        @foreach($revisions as $rev)
+                            <li class="rev-revision-item rev-revision-{{ $rev->status }}">
+                                <header>
+                                    <span class="rev-revision-status">
+                                        @switch($rev->status)
+                                            @case('applied') ✓ Umgesetzt @break
+                                            @case('failed') ✗ Fehler @break
+                                            @case('dismissed') – Verworfen @break
+                                            @default Wartet
+                                        @endswitch
+                                    </span>
+                                    <time>{{ $rev->created_at->diffForHumans() }}</time>
+                                    @if($rev->user) <span class="rev-revision-user">{{ $rev->user->name }}</span> @endif
+                                </header>
+                                <p>{{ $rev->feedback }}</p>
+                                @if($rev->status === 'pending')
+                                    <button wire:click="dismissRevision({{ $rev->id }})" class="rev-btn rev-btn-ghost rev-btn-xs">
+                                        Verwerfen
+                                    </button>
+                                @endif
+                                @if($rev->resultVersion)
+                                    <small>→ v{{ $rev->resultVersion->version }}</small>
+                                @endif
+                            </li>
+                        @endforeach
+                    </ul>
+                @endif
+            </section>
+
         @elseif(in_array($prototype->status, ['generating', 'building', 'queued']))
             <section class="rev-building">
                 <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" class="rev-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
@@ -446,4 +590,72 @@ new class extends Component {
         margin-inline: auto;
     }
     .rev-empty .rev-btn, .rev-building .rev-btn { margin: 0 auto; }
+
+    /* ─── Revisions ────────────────────────────────────────────────────── */
+    .rev-revisions {
+        background: linear-gradient(180deg, #fff, #fafafa);
+        border: 1px solid rgba(0,0,0,0.08);
+        border-radius: 20px;
+        padding: clamp(1.5rem, 2.5vw, 2rem);
+        display: flex; flex-direction: column; gap: 1.25rem;
+    }
+    .rev-revisions-head h2 {
+        font-family: 'Fraunces', Georgia, serif;
+        font-size: 1.5rem; font-weight: 500; letter-spacing: -.02em;
+        margin: 0 0 .35rem;
+    }
+    .rev-revisions-head p { color: rgba(10,10,10,.6); font-size: .92rem; margin: 0; }
+
+    .rev-revision-form { display: flex; flex-direction: column; gap: .75rem; }
+    .rev-revision-input {
+        width: 100%;
+        padding: .85rem 1.1rem;
+        background: rgba(0,0,0,.025);
+        border: 1px solid rgba(0,0,0,.1);
+        border-radius: 10px;
+        font-family: inherit; font-size: .95rem; line-height: 1.5;
+        resize: vertical;
+        outline: none;
+        transition: all .2s;
+    }
+    .rev-revision-input:focus {
+        border-color: #ec65ba;
+        background: rgba(236,101,186,.05);
+        box-shadow: 0 0 0 4px rgba(236,101,186,.1);
+    }
+    .rev-revision-actions {
+        display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+    }
+    .rev-revision-hint { color: rgba(10,10,10,.5); font-size: .82rem; }
+
+    .rev-revision-list {
+        list-style: none; padding: 0; margin: 0;
+        display: flex; flex-direction: column; gap: .75rem;
+    }
+    .rev-revision-item {
+        padding: 1rem 1.15rem;
+        background: rgba(0,0,0,.02);
+        border: 1px solid rgba(0,0,0,.08);
+        border-radius: 12px;
+        display: flex; flex-direction: column; gap: .5rem;
+    }
+    .rev-revision-item header {
+        display: flex; align-items: center; gap: .85rem; font-size: .82rem;
+        color: rgba(10,10,10,.55);
+        flex-wrap: wrap;
+    }
+    .rev-revision-status {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: .7rem; letter-spacing: .1em; text-transform: uppercase;
+        font-weight: 700;
+        padding: .15rem .55rem; border-radius: 999px;
+    }
+    .rev-revision-applied .rev-revision-status { background: rgba(34,197,94,.15); color: #15803d; }
+    .rev-revision-failed .rev-revision-status { background: rgba(248,113,113,.15); color: #dc2626; }
+    .rev-revision-dismissed .rev-revision-status { background: rgba(0,0,0,.06); color: rgba(10,10,10,.5); }
+    .rev-revision-pending .rev-revision-status { background: rgba(245,158,11,.18); color: #b45309; }
+
+    .rev-revision-item p { margin: 0; line-height: 1.55; color: #1f2937; white-space: pre-wrap; }
+    .rev-revision-item small { color: rgba(10,10,10,.5); }
+    .rev-btn-xs { padding: .35rem .75rem; font-size: .8rem; align-self: flex-start; }
 </style>

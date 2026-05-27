@@ -30,6 +30,19 @@ class RequestPrototypeGenerationJob implements ShouldQueue
         public int $leadId,
         public string $templateFamily = 'studio',
         public ?string $layoutKind = null,
+        /**
+         * Optional: User-Feedback aus einer Revision-Anfrage. Wird im
+         * `generation_params.user_revision_notes` an den Generator-Service
+         * weitergegeben, der das in den Claude-Prompt als Constraint einbaut
+         * ("Bitte berücksichtige zusätzlich: …").
+         */
+        public ?string $revisionNotes = null,
+        /**
+         * Wenn vom Revision-UI getriggert: ID der PrototypeRevision-Row die
+         * mit dem result_version_id verknüpft werden soll, sobald wir den
+         * neuen Version-Datensatz haben.
+         */
+        public ?int $revisionId = null,
     ) {}
 
     public function handle(
@@ -71,6 +84,13 @@ class RequestPrototypeGenerationJob implements ShouldQueue
             'rebuild_package_path' => $lead->websiteAnalysis?->rebuild_package_path,
         ]);
 
+        // Revision-Backlink: setzen sobald die neue Version existiert,
+        // so dass das UI die Revision-Card als "applied" markieren kann.
+        if ($this->revisionId) {
+            \App\Models\PrototypeRevision::where('id', $this->revisionId)
+                ->update(['result_version_id' => $version->id, 'status' => 'applied']);
+        }
+
         GenerationRun::create([
             'prototype_version_id' => $version->id,
             'status' => 'pending',
@@ -79,6 +99,16 @@ class RequestPrototypeGenerationJob implements ShouldQueue
 
         $package = $packageBuilder->build($lead);
         $package['layout_kind'] = $prototype->layout_kind ?? 'standard';
+
+        // Revision-Notes in generation_params — der Node-Generator pickt
+        // sie in `orchestrator.ts` aus und fügt sie dem Claude-Prompt
+        // als zusätzliche Constraint hinzu.
+        if ($this->revisionNotes) {
+            $package['generation_params'] = array_merge(
+                $package['generation_params'] ?? [],
+                ['user_revision_notes' => $this->revisionNotes],
+            );
+        }
 
         $version->update(['status' => 'generating']);
         $client->generate($version->id, $prototype->slug, $package);
