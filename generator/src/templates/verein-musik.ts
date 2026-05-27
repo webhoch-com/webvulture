@@ -1012,7 +1012,23 @@ ${spec.about?.body ? (() => {
       <h2 class="section-title">${ueberTitle}</h2>
     </div>
     <div class="about-text" style="max-width: 760px; margin: 0 auto;">
-      <p class="dropcap">${escapeHtml(spec.about.body)}</p>
+      <p class="dropcap">${(() => {
+        // Sanitize about-body before rendering. Scraped Vereinsseiten often
+        // concatenate the about-paragraph with an event-feed sidebar (Social
+        // Media · Frühschoppen · Gestern (17. Mai)... · 🎶🥁) — the LLM that
+        // produces about.body sometimes preserves the join, producing a
+        // dropcap that reads as broken mid-sentence. Strip everything after
+        // a clear feed-pollution marker. Also strip leading non-letter chars
+        // so :first-letter never renders a digit.
+        const FEED_MARKER = /\s*(?:Social Media|Frühschoppen|Save the date|Save-the-date|Gestern\b|Heute\b|Morgen\b|Kirchenkonzert\b|Maiblasen\b|🎶|🥁|☀️|⛪️|»\s*Bildergalerie|» Seiten|nächste Seite|🎵|🎺)/i;
+        let body = spec.about!.body.trim();
+        body = body.replace(/^[^A-Za-zÄÖÜäöü(]+/, '');  // strip leading non-letter
+        const cut = body.search(FEED_MARKER);
+        if (cut > 80) body = body.slice(0, cut).replace(/\s+\S{0,12}$/, '').trim();
+        // Drop trailing dangling open-parens and incomplete clauses
+        body = body.replace(/\s*\([^)]{0,3}\s*$/, '').trim();
+        return escapeHtml(body);
+      })()}</p>
     </div>
   </div>
 </section>`;
