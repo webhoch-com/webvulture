@@ -31,6 +31,7 @@ import {
   renderTrustBadgeSection,
   extractMediaEmbeds,
   renderMediaEmbeds,
+  renderEventsJsonLd,
   extractEnsembles,
   renderEnsembleGrid,
   renderKuenstlerischeLeitung,
@@ -166,6 +167,10 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
 <html lang="de">
 <head>
   ${renderSeoHead(spec, { slug, schemaKind: 'MusicGroup' })}
+  ${renderEventsJsonLd(events.map(ev => ({
+    date: (ev as any).date || '',
+    title: (ev as any).title || (ev as any).name || 'Veranstaltung',
+  })), { businessName: spec.business_name, previewUrl: `https://${slug}.webseiten-werkstatt.at/`, address: spec.contact?.address })}
   ${fontImportTags}
   <style is:global>
     :root {
@@ -780,6 +785,31 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
     /* ─── Contact ────────────────────────────────────────── */
     .contact-section { background: var(--bg); }
 
+    /* ─── iCal-Abonnieren Button (PR-A6) ────────────────── */
+    .ical-subscribe-wrap {
+      max-width: 1100px; margin: 1.5rem auto 0; padding: 0 1.5rem;
+      text-align: center;
+    }
+    .ical-subscribe {
+      display: inline-flex; align-items: center; gap: 0.6rem;
+      padding: 0.85rem 1.5rem; border-radius: 9999px;
+      background: var(--accent); color: var(--ink);
+      font-family: var(--display); font-weight: 600; font-size: 0.92rem;
+      letter-spacing: 0.04em;
+      transition: transform .2s, box-shadow .2s, background .2s;
+      box-shadow: 0 12px 28px -12px rgba(184,137,61,0.5);
+    }
+    .ical-subscribe:hover {
+      background: color-mix(in oklch, var(--accent) 82%, white);
+      transform: translateY(-2px);
+      box-shadow: 0 16px 36px -12px rgba(184,137,61,0.6);
+    }
+    .ical-hint {
+      display: block; margin-top: 0.75rem;
+      font-family: var(--serif); font-size: 0.85rem; color: var(--ink-3);
+      line-height: 1.5;
+    }
+
     /* ─── Booking-Anfrage Form (PR-A3) ───────────────────── */
     .booking-section { background: var(--bg-2); }
     .booking-form {
@@ -1228,6 +1258,13 @@ ${renderEventsSection(events.map(ev => ({
   date: (ev as any).date || '',
   title: (ev as any).title || (ev as any).name || 'Veranstaltung',
 })))}
+<div class="ical-subscribe-wrap">
+  <a href="/termine.ics" class="ical-subscribe" download="termine.ics" rel="alternate" type="text/calendar">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+    Termine abonnieren (.ics)
+  </a>
+  <span class="ical-hint">Importieren Sie unsere Konzerttermine in Ihren Kalender (Apple, Google, Outlook).</span>
+</div>
 ` : ''}
 
 ${spec.about?.body ? (() => {
