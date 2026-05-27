@@ -10,8 +10,15 @@ class HomepageExtractor
     public function extract(string $html, string $baseUrl): array
     {
         $crawler = new Crawler($html, $baseUrl);
-        $colors = $this->extractColorsAdvanced($html);
-        $fonts = $this->extractFonts($html);
+
+        // Hänge die Inhalte der linked CSS-Files an den HTML-Buffer für die
+        // Color-/Font-Extraction — viele Sites (Drupal, WP-Themes) halten ihre
+        // Brand-Farben in externen CSS-Files, nicht inline. Ohne diesen Step
+        // fanden wir bei mv-puchkirchen.at primary=NULL obwohl die Hauptfarbe
+        // klar #971313 ist (in /sites/all/themes/mv_puki/css/global.css).
+        $combinedCss = $html.$this->fetchLinkedStylesheets($crawler, $baseUrl);
+        $colors = $this->extractColorsAdvanced($combinedCss);
+        $fonts = $this->extractFonts($combinedCss);
 
         return [
             'title' => $this->title($crawler),
@@ -463,28 +470,96 @@ class HomepageExtractor
 
     protected function brandColors(string $html): array
     {
-        $colors = [];
-        // Extract hex colors from inline styles / CSS vars
+        // Sammle ALLE hex-Codes mit ihrer Häufigkeit. Die meistgenutzten
+        // gesättigten Farben sind sehr wahrscheinlich die Brand-Farben — diese
+        // Heuristik schlägt die naive "erstes Match" Logik bei CMS-Themes
+        // (Drupal, WordPress) wo am Anfang der CSS-Files System-Resets stehen.
         preg_match_all('/#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b/', $html, $matches);
-        $found = array_unique($matches[0] ?? []);
+        $occurrences = [];
+        foreach (($matches[0] ?? []) as $hex) {
+            $hex = strtolower($hex);
+            // Normalisiere 3-stellig → 6-stellig damit #fff und #ffffff identisch zählen.
+            if (strlen($hex) === 4) {
+                $hex = '#'.$hex[1].$hex[1].$hex[2].$hex[2].$hex[3].$hex[3];
+            }
+            $occurrences[$hex] = ($occurrences[$hex] ?? 0) + 1;
+        }
 
-        // Filter out obvious grays/blacks/whites
-        foreach ($found as $hex) {
-            [$r, $g, $b] = sscanf(strlen($hex) === 4
-                ? '#'.str_repeat($hex[1], 2).str_repeat($hex[2], 2).str_repeat($hex[3], 2)
-                : $hex, '#%02x%02x%02x');
+        // Score = (saturation × log(occurrences)) × non-extreme-lightness
+        // Filtert pure black/white/grays raus und priorisiert gut sättigte
+        // Farben die häufig verwendet werden.
+        $scored = [];
+        foreach ($occurrences as $hex => $count) {
+            [$r, $g, $b] = sscanf($hex, '#%02x%02x%02x');
             $max = max($r, $g, $b);
             $min = min($r, $g, $b);
             $saturation = $max > 0 ? ($max - $min) / $max : 0;
-            if ($saturation > 0.2 && $max > 30 && $min < 220) {
-                $colors[] = $hex;
+            $lightness = ($max + $min) / 2 / 255;
+
+            // Hard skip pure greys/blacks/whites — meistens System-CSS.
+            if ($saturation < 0.15) {
+                continue;
             }
-            if (count($colors) >= 5) {
-                break;
+            if ($lightness < 0.06 || $lightness > 0.95) {
+                continue;
+            }
+            $score = $saturation * log($count + 1) * (1 - abs($lightness - 0.5) * 0.6);
+            $scored[$hex] = $score;
+        }
+
+        arsort($scored);
+
+        return array_slice(array_keys($scored), 0, 5);
+    }
+
+    /**
+     * Lädt bis zu 5 same-domain Stylesheets und gibt deren Inhalt als String zurück
+     * (für Color- und Font-Extraction). Schützt vor SSRF: nur HTTP/HTTPS,
+     * same-host, 5-Limit. Fehler werden geschluckt — defensive Extraktion.
+     */
+    protected function fetchLinkedStylesheets(Crawler $c, string $baseUrl): string
+    {
+        $baseHost = parse_url($baseUrl, PHP_URL_HOST);
+        if (! $baseHost) {
+            return '';
+        }
+        $urls = [];
+        try {
+            $c->filter('link[rel="stylesheet"], link[rel="STYLESHEET"]')->each(function (Crawler $node) use (&$urls, $baseHost, $baseUrl) {
+                if (count($urls) >= 5) {
+                    return;
+                }
+                $href = $node->attr('href');
+                if (! $href) {
+                    return;
+                }
+                $resolved = $this->resolveUrl($href, $baseUrl);
+                $host = parse_url($resolved, PHP_URL_HOST);
+                if ($host !== $baseHost) {
+                    return; // Same-host only — keine Google-Fonts-CSS hier laden.
+                }
+                $urls[] = $resolved;
+            });
+        } catch (\Throwable) {}
+
+        $combined = '';
+        foreach ($urls as $url) {
+            try {
+                $response = \Illuminate\Support\Facades\Http::withHeaders([
+                    'User-Agent' => 'Mozilla/5.0 (compatible; WebVultureBot/1.0)',
+                ])->timeout(8)->get($url);
+                if ($response->successful()) {
+                    $body = $response->body();
+                    if (strlen($body) < 500_000) { // 500KB sanity cap pro File
+                        $combined .= "\n/* css: {$url} */\n".$body;
+                    }
+                }
+            } catch (\Throwable $e) {
+                \Log::debug("HomepageExtractor: linked-CSS fetch failed", ['url' => $url, 'err' => $e->getMessage()]);
             }
         }
 
-        return $colors;
+        return $combined;
     }
 
     protected function title(Crawler $c): ?string
