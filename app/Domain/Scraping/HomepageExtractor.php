@@ -635,19 +635,48 @@ class HomepageExtractor
     protected function resolveUrl(string $src, string $baseUrl): string
     {
         if (str_starts_with($src, 'http')) {
-            return $src;
+            return $this->unwrapImageProxy($src);
         }
         if (str_starts_with($src, '//')) {
-            return 'https:'.$src;
+            return $this->unwrapImageProxy('https:'.$src);
         }
         $base = parse_url($baseUrl);
         $scheme = $base['scheme'] ?? 'https';
         $host = $base['host'] ?? '';
         if (str_starts_with($src, '/')) {
-            return "$scheme://$host$src";
+            return $this->unwrapImageProxy("$scheme://$host$src");
         }
         $path = dirname($base['path'] ?? '/');
 
-        return "$scheme://$host$path/$src";
+        return $this->unwrapImageProxy("$scheme://$host$path/$src");
+    }
+
+    /**
+     * Unwrap CMS-thumbnail proxies so we end up with the original full-resolution
+     * file, not a 180×120 list-view thumbnail.
+     *
+     * Drupal-Pattern: `/sites/default/files/styles/<style>/public/<path>` is an
+     * image-style variant. The original lives at `/sites/default/files/<path>`.
+     * Beim Musikverein Puchkirchen waren z.B. `/styles/galerie-overview/` Bilder
+     * nur 180x120 — wurden vom AssetDownloader-Dimension-Check (min 400×300)
+     * komplett verworfen, obwohl die Originals 2048x1365 hatten.
+     */
+    protected function unwrapImageProxy(string $url): string
+    {
+        // Strip Drupal-Style + the immediately-following ?itok=… cache token
+        $unwrapped = preg_replace(
+            '#(/sites/[^/]+/files)/styles/[^/]+/public/#i',
+            '$1/',
+            $url
+        );
+        if ($unwrapped !== null && $unwrapped !== $url) {
+            // Drop ?itok=… cache token since the original doesn't need it
+            $unwrapped = preg_replace('/[?&]itok=[^&]*/', '', $unwrapped);
+            $unwrapped = preg_replace('/[?&]$/', '', $unwrapped) ?? $unwrapped;
+
+            return $unwrapped;
+        }
+
+        return $url;
     }
 }
