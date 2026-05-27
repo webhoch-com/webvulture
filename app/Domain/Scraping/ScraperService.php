@@ -338,6 +338,16 @@ class ScraperService
                 continue;
             }
 
+            // Konkateniere text_content ZUERST — unabhängig vom Section-Cap.
+            // Vorher: nach dem `break 2` beim 12. Section blieb der text_content
+            // genau der Page, die meist die Vorstand-Liste hatte, im Drop. Jetzt
+            // wird der Text immer mitgenommen, solange das 8000-Char-Cap noch
+            // nicht erreicht ist.
+            if (! empty($sub['text_content']) && mb_strlen($textContent) < 8000) {
+                $textContent .= "\n".$sub['text_content'];
+            }
+
+            $sectionCapHit = false;
             foreach ($sub['sections'] ?? [] as $s) {
                 $key = mb_strtolower($s['title'] ?? '');
                 if ($key === '' || isset($sectionSeen[$key])) {
@@ -346,7 +356,8 @@ class ScraperService
                 $sectionSeen[$key] = true;
                 $sections[] = $s;
                 if (count($sections) >= 12) {
-                    break 2;
+                    $sectionCapHit = true;
+                    break;
                 }
             }
 
@@ -374,13 +385,10 @@ class ScraperService
                 $images[] = $img;
             }
 
-            // Konkateniere text_content aus allen nav-pages bis 8000 Zeichen.
-            // Wichtig für den Vorstand-Parser: bei Drupal-Vereinen steht die
-            // Kontakt-Liste (Obmann/Kapellmeister/…) auf der /kontakt-Subpage,
-            // die Homepage hat nur Nav-Links. Ohne Konkatenation findet
-            // extractTeam() nie eine Person.
-            if (! empty($sub['text_content']) && mb_strlen($textContent) < 8000) {
-                $textContent .= "\n".$sub['text_content'];
+            // Wenn Sections + Gallery + Text bereits voll sind, lohnen weitere
+            // Nav-Pages nicht — beenden.
+            if ($sectionCapHit && count($gallery) >= 30 && mb_strlen($textContent) >= 8000) {
+                break;
             }
         }
 
