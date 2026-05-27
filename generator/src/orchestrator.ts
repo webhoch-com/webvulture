@@ -795,7 +795,8 @@ function extractTeam(text: string): SiteSpec['team'] {
   for (const role of roles) {
     // Rolle gefolgt von optionalem Doppelpunkt + 1-3 Leerzeichen + Name.
     // Wichtig: `[:\s]+` matched auch nur Whitespace ohne Doppelpunkt.
-    const re = new RegExp(`\\b${role.replace(/\s/g, '\\s')}[:\\s]+${namePattern}\\b`, 'g');
+    // Unicode-flag, weil \b mit umlauts/ß-Buchstaben sonst falsch zählt.
+    const re = new RegExp(`(?:^|[\\s.,;:!?])${role.replace(/\s/g, '\\s')}[:\\s]+${namePattern}`, 'gu');
     let match;
     while ((match = re.exec(text)) !== null) {
       const fullName = match[1].trim();
