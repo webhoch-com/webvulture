@@ -523,7 +523,7 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
       border: 1px solid var(--rule);
     }
     @media (min-width: 720px) { .event { grid-template-columns: 220px 1fr auto; align-items: center; } }
-    .event:hover { transform: translateY(-3px); box-shadow: 0 16px 32px -16px rgba(45,74,50,0.18); }
+    .event:hover { transform: translateY(-3px); box-shadow: 0 16px 32px -16px rgba(${primaryRgb.r},${primaryRgb.g},${primaryRgb.b},0.18); }
     .event-date {
       background: var(--primary); color: #fff;
       padding: 1rem 1.25rem; border-radius: 10px;
@@ -543,7 +543,7 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
       grid-template-columns: 1fr;
     }
     @media (min-width: 880px) { .about-grid { grid-template-columns: 1fr 1.1fr; gap: 5rem; } }
-    .about-image { position: relative; border-radius: 12px; overflow: hidden; box-shadow: 0 24px 60px -28px rgba(45,74,50,0.4); background: var(--primary-deep); display: grid; place-items: center; min-height: 400px; max-height: 640px; }
+    .about-image { position: relative; border-radius: 12px; overflow: hidden; box-shadow: 0 24px 60px -28px rgba(${primaryRgb.r},${primaryRgb.g},${primaryRgb.b},0.4); background: var(--primary-deep); display: grid; place-items: center; min-height: 400px; max-height: 640px; }
     .about-image img { width: 100%; height: auto; max-height: 640px; object-fit: contain; }
     .about-image .badge {
       position: absolute; bottom: 1.5rem; left: -1.25rem;
@@ -551,7 +551,7 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
       padding: 1rem 1.4rem; border-radius: 8px;
       font-family: var(--display); font-size: 0.85rem;
       letter-spacing: 0.12em; text-transform: uppercase;
-      box-shadow: 0 14px 30px -14px rgba(45,74,50,0.5);
+      box-shadow: 0 14px 30px -14px rgba(${primaryRgb.r},${primaryRgb.g},${primaryRgb.b},0.5);
       border-left: 3px solid var(--accent);
     }
     .about-image .badge strong { display: block; font-size: 1.6rem; color: #fff; letter-spacing: 0; text-transform: none; line-height: 1; margin-bottom: 0.3rem; }
@@ -567,9 +567,9 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
       padding: 1.1rem 2.4rem; border-radius: 6px;
       font-family: var(--display); font-weight: 600; font-size: 1.05rem;
       letter-spacing: 0.04em; transition: transform .2s, box-shadow .2s;
-      box-shadow: 0 18px 40px -18px rgba(45,74,50,0.4);
+      box-shadow: 0 18px 40px -18px rgba(${primaryRgb.r},${primaryRgb.g},${primaryRgb.b},0.4);
     }
-    .member-cta:hover { transform: translateY(-2px); box-shadow: 0 24px 50px -18px rgba(45,74,50,0.5); }
+    .member-cta:hover { transform: translateY(-2px); box-shadow: 0 24px 50px -18px rgba(${primaryRgb.r},${primaryRgb.g},${primaryRgb.b},0.5); }
 
     /* Members-Section is the simple CTA wrapper (.member-cta-wrap above).
        The 3-tier-pricing block was removed: we never have verified per-tier
@@ -587,7 +587,7 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
     .board-photo {
       aspect-ratio: 1/1; border-radius: 50%; overflow: hidden;
       max-width: 220px; margin: 0 auto 1.25rem;
-      border: 4px solid var(--surface); box-shadow: 0 14px 32px -16px rgba(45,74,50,0.3);
+      border: 4px solid var(--surface); box-shadow: 0 14px 32px -16px rgba(${primaryRgb.r},${primaryRgb.g},${primaryRgb.b},0.3);
     }
     .board-photo img { width: 100%; height: 100%; object-fit: cover; transition: transform .8s; }
     .board-member:hover .board-photo img { transform: scale(1.05); }
