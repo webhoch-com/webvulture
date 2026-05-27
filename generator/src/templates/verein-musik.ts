@@ -17,7 +17,6 @@ import {
   extractBoardMembers,
   extractEvents,
   renderMarquee,
-  renderBigNumberAnchor,
   renderPullQuote,
   renderStoriesGrid,
   renderSocialStrip,
@@ -97,12 +96,10 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
   // prospect's actual offering.
   const membership = spec.membership;
 
-  // Number anchors track section order so they read 01/02/03 vertically.
-  let anchorIdx = 0;
-  const nextAnchor = () => {
-    anchorIdx += 1;
-    return String(anchorIdx).padStart(2, '0');
-  };
+  // Section-anchor numbering is driven by a CSS counter (see EDITORIAL_CSS
+  // .section-anchor-wrap counter-increment + .section-anchor::before
+  // counter() rules). No server-side counter needed — JS-removed wrappers
+  // skip in the count automatically.
 
   // Brand-token resolution: real scraped values override the template's
   // hardcoded defaults. The CSS `color-mix()` calls derive `-soft` and `-deep`
@@ -340,6 +337,30 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
       color: rgba(255,255,255,0.6); margin-top: 1rem;
     }
     .hero-decor-since strong { color: var(--accent); font-size: 1.1rem; letter-spacing: 0; font-weight: 600; }
+    /* "Tradition-Anchor" — when foundedYear ≥ 50 years ago, show the
+       count as a large editorial number in the hero corner. Subtle but
+       it communicates pedigree at a glance. Position is absolute so it
+       doesn't fight the bigtype wordmark for layout space. */
+    .hero-tradition-anchor {
+      position: absolute; top: clamp(5rem, 10vh, 8rem); right: clamp(1.5rem, 4vw, 4rem);
+      text-align: right; pointer-events: none;
+    }
+    .hero-tradition-anchor .num {
+      font-family: var(--display); font-weight: 500;
+      font-size: clamp(4rem, 10vw, 8rem); line-height: 0.9;
+      letter-spacing: -0.04em;
+      color: var(--accent);
+      display: block;
+      text-shadow: 0 6px 24px rgba(0,0,0,0.3);
+    }
+    .hero-tradition-anchor .lbl {
+      font-family: var(--display); font-size: 0.8rem;
+      letter-spacing: 0.2em; text-transform: uppercase;
+      color: rgba(255,255,255,0.7); margin-top: 0.5rem; display: block;
+    }
+    @media (max-width: 720px) {
+      .hero-tradition-anchor { display: none; }  /* preserve hierarchy on mobile */
+    }
     .btn-primary { background: var(--accent); color: var(--ink); padding: 1.05rem 2.2rem; border-radius: 6px; font-weight: 700; font-size: 0.96rem; font-family: var(--display); letter-spacing: 0.02em; transition: background .2s, transform .2s; box-shadow: 0 10px 28px -12px rgba(184,137,61,0.6); }
     .btn-primary:hover { background: var(--accent-deep); color: #fff; transform: translateY(-2px); }
     .btn-outline { background: transparent; color: #fff; border: 1.5px solid rgba(255,255,255,0.4); padding: 1rem 2rem; border-radius: 6px; font-weight: 600; font-size: 0.95rem; font-family: var(--display); transition: border-color .2s, background .2s; }
@@ -372,21 +393,27 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
     .section.tone-carbon .section-title em { color: var(--accent); }
     .section.tone-carbon .section-lead { color: rgba(255,255,255,0.78); }
 
-    /* Big-number anchor — outline-stroke numerals between sections,
-       2026 magazine pacing element. */
+    /* Big-number anchor — outline-stroke numerals between sections.
+       Numbering driven by CSS counter so JS-removed wraps (e.g. empty
+       gallery) auto-skip in the visible sequence. */
+    body { counter-reset: section-anchor; }
     .section-anchor-wrap {
       max-width: 1400px; margin: 0 auto;
       padding: clamp(2rem, 4vw, 3.5rem) clamp(1.5rem, 5vw, 5rem) 0;
       pointer-events: none; overflow: hidden;
+      counter-increment: section-anchor;
     }
     .section-anchor {
       display: block;
       font-family: var(--display); font-weight: 700;
-      font-size: clamp(6rem, 18vw, 16rem);
       line-height: 0.85; letter-spacing: -0.04em;
       -webkit-text-stroke: 1px var(--accent);
       color: transparent;
       opacity: 0.45;
+    }
+    .section-anchor::before {
+      content: counter(section-anchor, decimal-leading-zero);
+      font-size: clamp(6rem, 18vw, 16rem);
     }
     .section.tone-carbon + .section-anchor-wrap .section-anchor,
     .section-anchor-wrap.on-dark .section-anchor {
@@ -574,7 +601,37 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
     /* Members-Section is the simple CTA wrapper (.member-cta-wrap above).
        The 3-tier-pricing block was removed: we never have verified per-tier
        data and the placeholder rendered as obvious filler. */
-    .members-section { background: var(--bg); }
+    .members-section { background: var(--bg-2); position: relative; }
+    .member-perks {
+      display: grid; gap: 1.25rem; max-width: 1100px; margin: 3rem auto 1rem;
+      grid-template-columns: 1fr;
+    }
+    @media (min-width: 760px) { .member-perks { grid-template-columns: repeat(3, 1fr); gap: 2rem; } }
+    .member-perk {
+      display: flex; gap: 1.25rem; align-items: flex-start;
+      background: var(--surface);
+      padding: 1.75rem 1.5rem;
+      border-radius: 10px;
+      border-left: 3px solid var(--accent);
+      transition: transform .25s ease, box-shadow .25s ease;
+    }
+    .member-perk:hover { transform: translateY(-3px); box-shadow: 0 14px 28px -12px rgba(45,74,50,0.18); }
+    .member-perk svg {
+      width: 42px; height: 42px; flex-shrink: 0;
+      color: var(--primary);
+      padding: 8px; background: color-mix(in oklch, var(--primary) 8%, white);
+      border-radius: 50%;
+    }
+    .member-perk strong {
+      display: block;
+      font-family: var(--display); font-size: 1.05rem; font-weight: 600;
+      color: var(--ink); margin-bottom: 0.25rem;
+    }
+    .member-perk span {
+      display: block;
+      font-family: var(--serif); font-size: 0.92rem; line-height: 1.55;
+      color: var(--ink-2);
+    }
 
     /* ─── Board ──────────────────────────────────────────── */
     .board-section { background: var(--bg-2); }
@@ -610,7 +667,56 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
         object-fit: contain; max-width: 100%; max-height: 100%;
       }
     }
+    .gallery-item { cursor: pointer; }
+    .gallery-item::after {
+      content: '⤢'; position: absolute; top: 0.75rem; right: 0.75rem;
+      width: 36px; height: 36px; border-radius: 50%;
+      background: rgba(0,0,0,0.55); color: #fff;
+      display: grid; place-items: center; font-size: 1.1rem;
+      opacity: 0; transition: opacity .25s, transform .25s;
+      transform: scale(0.85);
+      pointer-events: none;
+    }
+    .gallery-item:hover::after { opacity: 1; transform: scale(1); }
     .gallery-item:hover img { transform: scale(1.06); }
+
+    /* ─── Lightbox modal ─────────────────────────────────── */
+    .wv-lightbox {
+      position: fixed; inset: 0; z-index: 9999;
+      background: rgba(20, 16, 8, 0);
+      display: none;
+      align-items: center; justify-content: center;
+      padding: clamp(1rem, 4vw, 3rem);
+      backdrop-filter: blur(0px);
+      transition: background 0.35s ease, backdrop-filter 0.35s ease;
+    }
+    .wv-lightbox.is-open { display: flex; background: rgba(20, 16, 8, 0.92); backdrop-filter: blur(8px); }
+    .wv-lightbox-stage {
+      position: relative;
+      max-width: 95vw; max-height: 90vh;
+      transform: scale(0.92); opacity: 0;
+      transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.35s ease;
+    }
+    .wv-lightbox.is-open .wv-lightbox-stage { transform: scale(1); opacity: 1; }
+    .wv-lightbox-stage img { max-width: 95vw; max-height: 90vh; display: block; border-radius: 6px; box-shadow: 0 25px 80px rgba(0,0,0,0.5); }
+    .wv-lightbox-close, .wv-lightbox-prev, .wv-lightbox-next {
+      position: absolute; background: rgba(255,255,255,0.12); color: #fff;
+      border: 0; border-radius: 50%; width: 48px; height: 48px;
+      cursor: pointer; font-size: 1.4rem; line-height: 1;
+      transition: background .2s, transform .2s;
+      display: grid; place-items: center;
+    }
+    .wv-lightbox-close:hover, .wv-lightbox-prev:hover, .wv-lightbox-next:hover { background: rgba(255,255,255,0.25); transform: scale(1.08); }
+    .wv-lightbox-close { top: clamp(1rem, 3vw, 2rem); right: clamp(1rem, 3vw, 2rem); }
+    .wv-lightbox-prev  { top: 50%; left: clamp(0.5rem, 2vw, 2rem); transform: translateY(-50%); }
+    .wv-lightbox-next  { top: 50%; right: clamp(0.5rem, 2vw, 2rem); transform: translateY(-50%); }
+    .wv-lightbox-prev:hover, .wv-lightbox-next:hover { transform: translateY(-50%) scale(1.08); }
+    .wv-lightbox-counter {
+      position: absolute; bottom: clamp(1rem, 3vw, 2rem); left: 50%;
+      transform: translateX(-50%); color: rgba(255,255,255,0.7);
+      font-family: var(--display); font-size: 0.85rem;
+      letter-spacing: 0.15em; text-transform: uppercase;
+    }
 
     /* ─── Contact ────────────────────────────────────────── */
     .contact-section { background: var(--bg); }
@@ -626,11 +732,54 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
     footer .legal { display: flex; gap: 1.5rem; justify-content: center; margin-top: 1rem; flex-wrap: wrap; }
     footer .legal a:hover { color: var(--accent); }
 
-    /* Reveal: previously hid content with opacity:0 + IntersectionObserver,
-       which left whole sections invisible if JS failed or scroll didn't reach.
-       Now: content is always visible; .reveal is a no-op kept for backwards
-       compat with the JS query selector. */
-    .reveal { opacity: 1; transform: none; }
+    /* Reveal-on-scroll: subtle fade-up of major content blocks. The
+       @media(prefers-reduced-motion) override + the JS fallback (auto
+       .is-visible after 800ms) guarantee content is always visible even
+       if IntersectionObserver fires late or JS throws. */
+    .reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.7s cubic-bezier(0.25,0.46,0.45,0.94), transform 0.7s cubic-bezier(0.25,0.46,0.45,0.94); }
+    .reveal.is-visible { opacity: 1; transform: translateY(0); }
+    .reveal[data-stagger]:not(:first-child) { transition-delay: var(--stagger-delay, 0s); }
+    @media (prefers-reduced-motion: reduce) {
+      .reveal { opacity: 1; transform: none; transition: none; }
+    }
+    /* Count-up: applied to .count-up numeric elements via JS. The number
+       starts at 0 and animates to its data-target over ~1.4s with easing.
+       Fallback: when JS doesn't run, the inner text is the final value. */
+    .count-up { font-variant-numeric: tabular-nums; }
+    /* Parallax hero photo: subtle 1.08x scale on the hero img + slow
+       translateY via scroll-linked transform (CSS-only with scroll-driven
+       animations where supported). Reduces to no-op on older browsers. */
+    @supports (animation-timeline: scroll()) {
+      .hero.hero-with-image .hero-bg { animation: heroParallax linear; animation-timeline: scroll(); animation-range: 0 100vh; }
+    }
+    @keyframes heroParallax {
+      from { transform: scale(1.05) translateY(0); }
+      to   { transform: scale(1.12) translateY(40px); }
+    }
+    /* Decorative SVG notes-pattern background for empty/sparse sections.
+       Subtle, low-opacity, brand-color-tinted. */
+    .pattern-notes::before {
+      content: ''; position: absolute; inset: 0; pointer-events: none;
+      background-image:
+        radial-gradient(circle 2px at 20% 30%, var(--accent) 99%, transparent 100%),
+        radial-gradient(circle 1.5px at 80% 60%, var(--accent) 99%, transparent 100%),
+        radial-gradient(circle 1px at 50% 80%, var(--accent) 99%, transparent 100%),
+        radial-gradient(circle 1.5px at 35% 70%, var(--accent) 99%, transparent 100%),
+        radial-gradient(circle 1px at 65% 20%, var(--accent) 99%, transparent 100%);
+      background-size: 200px 200px;
+      opacity: 0.08;
+      mask-image: linear-gradient(to bottom, transparent, black 30%, black 70%, transparent);
+    }
+    /* SVG ornamental dividers between sections — treble-clef-inspired. */
+    .ornament-divider {
+      display: flex; align-items: center; justify-content: center;
+      gap: 1.25rem; margin: 0 auto; max-width: 200px;
+      color: var(--accent); opacity: 0.5;
+    }
+    .ornament-divider::before, .ornament-divider::after {
+      content: ''; flex: 1; height: 1px; background: currentColor;
+    }
+    .ornament-divider svg { width: 22px; height: 22px; fill: currentColor; }
 
     /* Ensembles/Klangkörper, Instrumente and Meilensteine CSS blocks were
        removed in 2026-05 — their markup was deleted earlier because we cannot
@@ -808,9 +957,14 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
     </div>
   </div>
   ${hasHeroImage(spec) ? '' : (() => {
-    const foundedYear = extractFoundedYear(spec);
     const currentYear = new Date().getFullYear();
+    const yearsSince = foundedYear ? currentYear - foundedYear : 0;
     return `
+  ${(foundedYear && yearsSince >= 50) ? `
+  <div class="hero-tradition-anchor" aria-hidden="true">
+    <span class="num">${yearsSince}</span>
+    <span class="lbl">Jahre Tradition</span>
+  </div>` : ''}
   <div class="hero-decor-bigtype" aria-hidden="true">${escapeHtml(businessName)}</div>
   <div>
     <div class="hero-decor-stripes" aria-hidden="true">
@@ -818,7 +972,7 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
       <span class="s-secondary"></span>
       <span class="s-accent"></span>
     </div>
-    ${foundedYear ? `<div class="hero-decor-since">Seit <strong>${foundedYear}</strong> · ${currentYear - foundedYear} Jahre in der Region</div>` : ''}
+    ${foundedYear ? `<div class="hero-decor-since">Seit <strong>${foundedYear}</strong> · ${yearsSince} Jahre in der Region</div>` : ''}
   </div>`;
   })()}
 </section>
@@ -834,7 +988,7 @@ ${renderHeritageStatement(spec, foundedYear)}
 ${renderHeritageTimeline(heritageMilestones)}
 
 ${events.length > 0 ? `
-<div class="section-anchor-wrap on-dark"><span class="section-anchor">${nextAnchor()}</span></div>
+<div class="section-anchor-wrap on-dark"><span class="section-anchor" aria-hidden="true"></span></div>
 ${renderEventsSection(events.map(ev => ({
   date: (ev as any).date || '',
   title: (ev as any).title || (ev as any).name || 'Veranstaltung',
@@ -850,7 +1004,7 @@ ${spec.about?.body ? (() => {
   const place = match ? spec.business_name.slice(match[0].length).replace(/^\W+/, '').trim() : '';
   const ueberTitle = place ? `Der Musikverein <em>${escapeHtml(place)}</em>.` : 'Über <em>uns</em>.';
   return `
-<div class="section-anchor-wrap"><span class="section-anchor">${nextAnchor()}</span></div>
+<div class="section-anchor-wrap"><span class="section-anchor" aria-hidden="true"></span></div>
 <section id="ueber-uns" class="section tone-tint">
   <div class="container">
     <div class="section-head">
@@ -884,7 +1038,7 @@ ${/* Klangkörper, Instrumente und Meilensteine wurden entfernt — diese
 
 
 ${spec.testimonials && spec.testimonials.length > 0 ? `
-<div class="section-anchor-wrap"><span class="section-anchor">${nextAnchor()}</span></div>
+<div class="section-anchor-wrap"><span class="section-anchor" aria-hidden="true"></span></div>
 <section class="section press-section tone-tint">
   <div class="container">
     <div class="section-head center reveal">
@@ -905,7 +1059,7 @@ ${spec.testimonials && spec.testimonials.length > 0 ? `
 ` : ''}
 
 ${(spec.redesigned_sections && spec.redesigned_sections.length > 0) ? `
-<div class="section-anchor-wrap"><span class="section-anchor">${nextAnchor()}</span></div>
+<div class="section-anchor-wrap"><span class="section-anchor" aria-hidden="true"></span></div>
 <section class="stories-section">
   <div class="container">
     <div class="section-head">
@@ -925,28 +1079,61 @@ ${(spec.redesigned_sections && spec.redesigned_sections.length > 0) ? `
 </section>
 ` : ''}
 
-${membership && membership.description ? `
-<section id="mitglied" class="section members-section">
+${(() => {
+  // Mitgliedschafts-Section: always rendered for Verein templates since
+  // every Amateur-Verein actively recruits. Falls back to a Verein-
+  // appropriate generic copy if spec.membership.description is empty.
+  // The instrument-quartet icon row adds visual texture without needing
+  // photos of actual members.
+  const descr = membership?.description?.trim();
+  const cta = membership?.cta?.trim() || 'Probespiel vereinbaren';
+  const fallback = `Wir freuen uns über jeden, der mit uns musizieren möchte. Egal ob Anfänger, Wiedereinsteiger oder erfahrener Musiker — nehmen Sie unverbindlich Kontakt mit uns auf.`;
+  return `
+<div class="section-anchor-wrap"><span class="section-anchor" aria-hidden="true"></span></div>
+<section id="mitglied" class="section members-section pattern-notes" style="position:relative">
   <div class="container">
     <div class="section-head center reveal">
       <span class="section-eyebrow">Mitgliedschaft</span>
       <h2 class="section-title">Werden Sie <em>Teil von uns</em>.</h2>
-      <p class="section-lead">${escapeHtml(membership.description)}</p>
+      <p class="section-lead">${escapeHtml(descr || fallback)}</p>
+    </div>
+    <div class="member-perks stagger-group" aria-hidden="true">
+      <div class="member-perk reveal">
+        <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="16" cy="11" r="5"/><path d="M5 28c0-5 5-9 11-9s11 4 11 9"/></svg>
+        <div>
+          <strong>Gemeinschaft</strong>
+          <span>Gemeinsam musizieren, gemeinsam erleben.</span>
+        </div>
+      </div>
+      <div class="member-perk reveal">
+        <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M16 4v24"/><circle cx="11" cy="24" r="3" fill="currentColor"/><path d="M16 4l8 4"/></svg>
+        <div>
+          <strong>Ausbildung</strong>
+          <span>Vom ersten Ton bis zum Solo — wir begleiten Sie.</span>
+        </div>
+      </div>
+      <div class="member-perk reveal">
+        <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="6" y="10" width="20" height="14" rx="2"/><path d="M6 14h20M10 18h8"/></svg>
+        <div>
+          <strong>Auftritte</strong>
+          <span>Konzerte, Feste, Reisen — werden Sie Teil unseres Programms.</span>
+        </div>
+      </div>
     </div>
     <div class="member-cta-wrap reveal">
-      <a href="#kontakt" class="member-cta">${escapeHtml(membership.cta || 'Mitglied werden')}</a>
+      <a href="#kontakt" class="member-cta">${escapeHtml(cta)} →</a>
     </div>
   </div>
-</section>
-` : ''}
+</section>`;
+})()}
 
 ${board.length > 0 ? `
-<div class="section-anchor-wrap"><span class="section-anchor">${nextAnchor()}</span></div>
+<div class="section-anchor-wrap"><span class="section-anchor" aria-hidden="true"></span></div>
 ${renderBoardSection(board)}
 ` : ''}
 
 ${galleryCount(spec) >= 1 ? `
-<div class="section-anchor-wrap on-dark"><span class="section-anchor">${nextAnchor()}</span></div>
+<div class="section-anchor-wrap on-dark"><span class="section-anchor" aria-hidden="true"></span></div>
 <section id="bilder" class="section tone-carbon">
   <div class="container">
     <div class="section-head center reveal">
@@ -997,19 +1184,19 @@ ${address ? `
       </div>
       <div class="anfahrt-map reveal">
         <iframe
-          src="https://www.openstreetmap.org/export/embed.html?bbox=${osmBbox(address)}&amp;layer=mapnik&amp;marker=${encodeURIComponent(address)}"
-          width="100%" height="400" frameborder="0" scrolling="no"
+          src="https://maps.google.com/maps?q=${encodeURIComponent(address)}&amp;t=&amp;z=14&amp;ie=UTF8&amp;iwloc=&amp;output=embed"
+          width="100%" height="420" frameborder="0" scrolling="no"
           marginheight="0" marginwidth="0" style="border:0; border-radius: 8px;"
-          loading="lazy" referrerpolicy="no-referrer"
+          loading="lazy" referrerpolicy="no-referrer-when-downgrade"
           title="Karte zur Anfahrt"></iframe>
-        <a href="https://www.openstreetmap.org/search?query=${encodeURIComponent(address)}" target="_blank" rel="noopener" class="anfahrt-fallback">Auf Karte öffnen ↗</a>
+        <a href="https://www.google.com/maps/search/${encodeURIComponent(address)}" target="_blank" rel="noopener" class="anfahrt-fallback">In Google Maps öffnen ↗</a>
       </div>
     </div>
   </div>
 </section>
 ` : ''}
 
-<div class="section-anchor-wrap"><span class="section-anchor">${nextAnchor()}</span></div>
+<div class="section-anchor-wrap"><span class="section-anchor" aria-hidden="true"></span></div>
 <section id="kontakt" class="section contact-section tone-cream">
   <div class="container">
     <div class="section-head center reveal">
@@ -1036,6 +1223,14 @@ ${address ? `
     </div>
   </div>
 </section>
+
+<div class="wv-lightbox" id="wv-lightbox" role="dialog" aria-modal="true" aria-label="Bildergalerie">
+  <button class="wv-lightbox-close" type="button" aria-label="Schließen">✕</button>
+  <button class="wv-lightbox-prev" type="button" aria-label="Vorheriges Bild">‹</button>
+  <div class="wv-lightbox-stage"><img alt=""></div>
+  <button class="wv-lightbox-next" type="button" aria-label="Nächstes Bild">›</button>
+  <div class="wv-lightbox-counter"></div>
+</div>
 
 <footer class="verein-footer">
   <div class="vf-inner">
@@ -1075,10 +1270,148 @@ ${address ? `
 </footer>
 
 <script>
-  const io = new IntersectionObserver((entries) => {
-    entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('is-visible'); });
-  }, { threshold: 0.1, rootMargin: '0px 0px -50px' });
-  document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+  // ── Reveal-on-scroll with auto-fallback ──────────────────────────────
+  // Sets .is-visible on each .reveal element when it enters the viewport.
+  // After 1200ms, force any unrevealed .reveal to is-visible so content
+  // never stays hidden behind a broken observer or above-fold initial state.
+  (() => {
+    const ALL_REVEAL = document.querySelectorAll('.reveal');
+    const forceShow = () => ALL_REVEAL.forEach(el => el.classList.add('is-visible'));
+
+    if (!('IntersectionObserver' in window) || matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      forceShow();
+      return;
+    }
+
+    // Stagger: walk siblings in a .stagger-group container and assign
+    // incremental --stagger-delay so items appear one after another.
+    document.querySelectorAll('.stagger-group').forEach(group => {
+      [...group.children].forEach((child, idx) => {
+        if (child.classList.contains('reveal') || child.querySelector('.reveal')) {
+          (child.classList.contains('reveal') ? child : child.querySelector('.reveal')).style.setProperty('--stagger-delay', (idx * 90) + 'ms');
+          (child.classList.contains('reveal') ? child : child.querySelector('.reveal')).setAttribute('data-stagger', '1');
+        }
+      });
+    });
+
+    const io = new IntersectionObserver(entries => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          e.target.classList.add('is-visible');
+          io.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.08, rootMargin: '0px 0px -40px' });
+    ALL_REVEAL.forEach(el => io.observe(el));
+
+    // Safety net: anything not visible after 1.2s gets force-shown so
+    // page never has a permanently-hidden block.
+    setTimeout(forceShow, 1200);
+  })();
+
+  // ── Gallery lightbox ─────────────────────────────────────────────────
+  // Click any non-broken .gallery-item img to open in full-screen lightbox.
+  // Arrow keys + click on prev/next buttons cycle through. ESC closes.
+  (() => {
+    const lb = document.getElementById('wv-lightbox');
+    if (!lb) return;
+    const stage = lb.querySelector('.wv-lightbox-stage img');
+    const counter = lb.querySelector('.wv-lightbox-counter');
+    let images = [];
+    let currentIdx = 0;
+    const refreshImages = () => {
+      images = [...document.querySelectorAll('#bilder .gallery-item:not(.img-broken) img')];
+    };
+    const show = (idx) => {
+      if (!images.length) return;
+      currentIdx = (idx + images.length) % images.length;
+      stage.src = images[currentIdx].src;
+      counter.textContent = (currentIdx + 1) + ' / ' + images.length;
+    };
+    // Focus trap: remember the trigger that opened the lightbox so we
+    // can restore focus after close; trap Tab inside the lightbox while
+    // open (WCAG 2.1 §2.1.2 keyboard trap rules).
+    let lastFocused = null;
+    const focusables = () => [...lb.querySelectorAll('button:not([disabled])')];
+    const open = (idx) => {
+      refreshImages();
+      show(idx);
+      lastFocused = document.activeElement;
+      lb.classList.add('is-open');
+      document.body.style.overflow = 'hidden';
+      lb.setAttribute('tabindex', '-1');
+      requestAnimationFrame(() => lb.querySelector('.wv-lightbox-close')?.focus());
+    };
+    const close = () => {
+      lb.classList.remove('is-open');
+      document.body.style.overflow = '';
+      if (lastFocused && lastFocused.focus) lastFocused.focus();
+    };
+    document.addEventListener('click', (e) => {
+      const item = e.target.closest('#bilder .gallery-item:not(.img-broken)');
+      if (!item) return;
+      e.preventDefault();
+      refreshImages();
+      const idx = images.findIndex(img => img.parentNode === item);
+      if (idx >= 0) open(idx);
+    });
+    lb.querySelector('.wv-lightbox-close').addEventListener('click', close);
+    lb.querySelector('.wv-lightbox-prev').addEventListener('click', () => show(currentIdx - 1));
+    lb.querySelector('.wv-lightbox-next').addEventListener('click', () => show(currentIdx + 1));
+    lb.addEventListener('click', (e) => { if (e.target === lb) close(); });
+    document.addEventListener('keydown', (e) => {
+      if (!lb.classList.contains('is-open')) return;
+      if (e.key === 'Escape') { close(); return; }
+      if (e.key === 'ArrowLeft') { show(currentIdx - 1); return; }
+      if (e.key === 'ArrowRight') { show(currentIdx + 1); return; }
+      // Focus trap: cycle Tab/Shift+Tab between prev/close/next buttons.
+      if (e.key === 'Tab') {
+        const items = focusables();
+        if (items.length === 0) return;
+        const i = items.indexOf(document.activeElement);
+        if (e.shiftKey) {
+          if (i <= 0) { e.preventDefault(); items[items.length - 1].focus(); }
+        } else {
+          if (i === items.length - 1) { e.preventDefault(); items[0].focus(); }
+        }
+      }
+    });
+  })();
+
+  // ── Count-up animation on year/number elements ──────────────────────
+  // Any element with .count-up data-target="N" counts from 0 to N over
+  // ~1.4s with easeOutQuart. Fires once when element first enters viewport.
+  (() => {
+    const targets = document.querySelectorAll('.count-up');
+    if (targets.length === 0) return;
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      targets.forEach(el => { el.textContent = el.dataset.target || el.textContent; });
+      return;
+    }
+    const easeOut = (t) => 1 - Math.pow(1 - t, 4);
+    const animate = el => {
+      const target = parseInt(el.dataset.target || '0', 10);
+      if (!target) return;
+      const duration = 1400;
+      const start = performance.now();
+      const step = (now) => {
+        const t = Math.min(1, (now - start) / duration);
+        el.textContent = Math.round(target * easeOut(t)).toString();
+        if (t < 1) requestAnimationFrame(step);
+        else el.textContent = target.toString();
+      };
+      requestAnimationFrame(step);
+    };
+    const io = new IntersectionObserver(entries => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          animate(e.target);
+          io.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.4 });
+    targets.forEach(el => io.observe(el));
+  })();
 </script>
 </body>
 </html>

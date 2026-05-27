@@ -16,6 +16,36 @@ declare module 'fastify' {
 
 const app = Fastify({ logger: true });
 
+/**
+ * Concurrency limiter for /build — npm install + astro build per project
+ * uses ~400 MB peak. The 2 GB production VM gets OOM-killed when more than
+ * ~3 builds run in parallel. We queue excess /build requests in memory and
+ * release the next as soon as one finishes. /build still returns 202
+ * immediately; the queue just holds the actual work.
+ */
+const MAX_PARALLEL_BUILDS = Number(process.env.MAX_PARALLEL_BUILDS ?? 2);
+let activeBuilds = 0;
+const buildQueue: Array<() => Promise<void>> = [];
+
+function drainBuildQueue(): void {
+  // Pump the queue as long as slots are free AND items are waiting.
+  // CRITICAL: the previous version only dequeued ONE item per finish event,
+  // leaving the queue stuck whenever ≥3 builds piled up (v316 case).
+  while (activeBuilds < MAX_PARALLEL_BUILDS && buildQueue.length > 0) {
+    const next = buildQueue.shift()!;
+    activeBuilds++;
+    next().finally(() => {
+      activeBuilds--;
+      drainBuildQueue();
+    });
+  }
+}
+
+function withBuildSlot(work: () => Promise<void>): void {
+  buildQueue.push(work);
+  drainBuildQueue();
+}
+
 // Capture raw body BEFORE JSON parsing so HMAC verification matches exactly
 // what Laravel signed (byte-for-byte). Otherwise Fastify re-stringifies
 // the parsed object and the hash differs.
@@ -118,38 +148,38 @@ app.post<{ Body: BuildRequest }>('/build', async (req, reply) => {
 
   reply.status(202).send({ job_id: `build-${prototype_version_id}-${Date.now()}` });
 
-  setImmediate(async () => {
-    try {
-      app.log.info(`[build] starting v${prototype_version_id} (slug=${slug})`);
+  setImmediate(() => withBuildSlot(async () => {
+      try {
+        app.log.info(`[build] starting v${prototype_version_id} (slug=${slug}, active=${activeBuilds}/${MAX_PARALLEL_BUILDS}, queued=${buildQueue.length})`);
 
-      const { artifactPath, artifactHash, previewUrl } = await buildAstroProject(
-        prototype_version_id,
-        astro_project_path,
-        slug,
-      );
+        const { artifactPath, artifactHash, previewUrl } = await buildAstroProject(
+          prototype_version_id,
+          astro_project_path,
+          slug,
+        );
 
-      await callWebhook(webhook_url, {
-        prototype_version_id,
-        status: 'success',
-        meta: {
-          artifact_path: artifactPath,
-          artifact_hash: artifactHash,
-          preview_url: previewUrl,
-        },
-      });
+        await callWebhook(webhook_url, {
+          prototype_version_id,
+          status: 'success',
+          meta: {
+            artifact_path: artifactPath,
+            artifact_hash: artifactHash,
+            preview_url: previewUrl,
+          },
+        });
 
-      app.log.info(`[build] done v${prototype_version_id} → ${previewUrl}`);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      app.log.error(`[build] failed v${prototype_version_id}: ${msg}`);
+        app.log.info(`[build] done v${prototype_version_id} → ${previewUrl}`);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        app.log.error(`[build] failed v${prototype_version_id}: ${msg}`);
 
-      await callWebhook(webhook_url, {
-        prototype_version_id,
-        status: 'failed',
-        meta: { error: msg },
-      }).catch((e) => app.log.error(`[build] webhook also failed: ${e.message}`));
-    }
-  });
+        await callWebhook(webhook_url, {
+          prototype_version_id,
+          status: 'failed',
+          meta: { error: msg },
+        }).catch((e) => app.log.error(`[build] webhook also failed: ${e.message}`));
+      }
+  }));
 });
 
 const port = Number(process.env.PORT ?? 4000);
