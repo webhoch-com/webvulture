@@ -167,9 +167,21 @@ export async function orchestrate(pkg: RebuildPackage): Promise<OrchestrationRes
   let aboutBody = parts.join(' ').trim();
   // Last-resort: if all paths above came up dry (very thin scrape), emit a
   // neutral placeholder rather than an empty section. Better than a 1-line block.
-  if (!aboutBody && (city || category)) {
-    aboutBody = [businessName, city ? `aus ${city}` : '', category ? `· ${category}` : '']
+  // ABER: NIE die Google-Places-Schema-Types als category zeigen — die haben
+  // Underscore (point_of_interest, association_or_organization) und sehen
+  // im output aus wie API-Output, nicht wie Marketing-Content.
+  const categoryClean = category && !/_/.test(category) ? category : '';
+  if (!aboutBody && (city || categoryClean)) {
+    aboutBody = [businessName, city ? `aus ${city}` : '', categoryClean ? `· ${categoryClean}` : '']
       .filter(Boolean).join(' ').trim() + '.';
+  }
+  // Wenn aboutBody nur aus dem letzten-Resort kommt UND noch immer thin ist,
+  // bauen wir aus dem Niche-Enrichment + city einen kurzen plausiblen Satz.
+  if (aboutBody.length < 60 && niche) {
+    const nicheClean = niche.replace(/[_·]/g, ' ').replace(/\s+/g, ' ').trim();
+    aboutBody = city
+      ? `Wir sind ${businessName} — ${nicheClean} aus ${city}. Tradition, Gemeinschaft und Musik prägen unseren Verein.`
+      : `${businessName} — ${nicheClean}. Tradition, Gemeinschaft und Musik prägen unseren Verein.`;
   }
 
   const services = mapServicesFromScrape(pkg.extracted?.services ?? []);
