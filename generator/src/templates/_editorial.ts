@@ -133,7 +133,7 @@ export function pickPullQuote(spec: SiteSpec): string | null {
     // Event-news / time-bound recap snippets read as broken outside their
     // calendar context — Bruckmühl audit caught "2026 durften wi Was tut
     // sich eigentlich bei den Fourtissimos?" picked as a pullquote.
-    if (/\b(der\s+(?:erste|nächste|letzte|kommende)\s+(?:wichtige\s+)?termin|in diesem jahr|nächstes konzert|save\s+the\s+date|frühlingskonzert|frühlngskonzert|herbstkonzert|wochenende\s+vom|am\s+\d|sonntag\s+\d|samstag\s+\d|veranstaltungs(?:hinweis|kalender)|haben\s+wir\s+(?:bereits|schon)|absolviert|fand\s+statt|geht\s+(?:weiter|los|es\s+aber|es\s+auch\s+schon)|schlag\s+auf\s+schlag|aber\s+auch\s+schon\s+wieder|durften\s+wi(?:r)?\b|tut\s+sich\s+(?:eigentlich|bei|was))/i.test(s)) continue;
+    if (/\b(der\s+(?:erste|nächste|letzte|kommende)\s+(?:wichtige\s+)?termin|in diesem jahr|nächstes konzert|save\s+the\s+date|frühlingskonzert|frühlngskonzert|herbstkonzert|wochenende\s+vom|am\s+\d|sonntag\s+\d|samstag\s+\d|veranstaltungs(?:hinweis|kalender)|haben\s+wir\s+(?:bereits|schon)|absolviert|fand\s+statt|geht\s+(?:weiter|los|es\s+aber|es\s+auch\s+schon)|schlag\s+auf\s+schlag|aber\s+auch\s+schon\s+wieder|durften\s+wi(?:r)?\b|tut\s+sich\s+(?:eigentlich|bei|was)|neuigkeiten\s+und\s+termine|news\s+und\s+termine|folgen\s+sie\s+uns|abonnieren\s+sie)/i.test(s)) continue;
     // Reject sentences starting with a year (event-snippets often start with
     // "2026 durften wir...") or any other digit.
     if (/^\d/.test(s)) continue;
@@ -227,15 +227,29 @@ export function extractBoardMembers(spec: SiteSpec): Array<{ name: string; role:
 
   const seen = new Set<string>();
   const out: Array<{ name: string; role: string }> = [];
+  // Trailing role-keywords that can leak into a name when the source text
+  // has e.g. "Daniel Fressl Noten Stellvertreter" (Lenzing Archivar-Noten
+  // pattern). Strip these from the END of the captured name.
+  const TRAILING_ROLE_SUFFIX = /\s+(?:Noten|Medien|Uniformen|Instrumenten?|Bekleidung|Archivar|Webmaster|Presse(?:referent(?:in)?)?|Pressereferentinnen|Stv\.?|Stellvertreter(?:in)?|Obmann|Obfrau|Kassier(?:in)?|Schriftf[üu]hrer(?:in)?|Jugendreferent(?:in)?|Stabf[üu]hrer(?:in)?|Kapellmeister)$/i;
   for (const m of text.matchAll(ROLE_RE)) {
     const role = m[1].trim();
-    const name = m[2].trim();
+    let name = m[2].trim();
+    // Strip trailing role-suffix concat. Loop up to 3 times to handle
+    // chains like "Daniel Fressl Noten Stellvertreter".
+    for (let i = 0; i < 3; i++) {
+      const cleaned = name.replace(TRAILING_ROLE_SUFFIX, '').trim();
+      if (cleaned === name) break;
+      name = cleaned;
+    }
     if (name.length < 4 || name.length > 60) continue;
+    // Final reject: if after stripping suffixes the name is just a single
+    // word, it's likely a role-only entry not a real person.
+    if (!/\s/.test(name)) continue;
     const key = name.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
     out.push({ name, role });
-    if (out.length >= 6) break;
+    if (out.length >= 8) break;
   }
   // A single match is usually a false positive ("Kontakt: Webagentur") — only
   // surface when at least two distinct people line up. Log when we found
