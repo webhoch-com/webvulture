@@ -553,7 +553,20 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } {
 }
 
 function pickMedia(pkg: RebuildPackage): SiteSpec['media'] {
-  const raw = pkg.extracted?.images ?? [];
+  // Merge the two source lists from the rebuild package:
+  //   extracted.images: generic <img> tags vom homepage-Crawl (Schema { src, original_src, alt })
+  //   images.gallery:   downloaded gallery-assets vom Scraper (Schema { public_url, src_original, alt, … })
+  //
+  // Vorher wurde nur `extracted.images` benutzt — bei Drupal-Vereins-Sites
+  // mit eigener /bildergalerie Subpage waren die echten Galerie-Bilder
+  // dort, aber wurden komplett ignoriert. Lead 12 (Musikverein Puchkirchen)
+  // hatte 19 gallery-Items die nie ins rendering kamen.
+  const galleryItems = (pkg.images?.gallery ?? []).map((g: any) => ({
+    src: g.public_url ?? g.src ?? '',
+    original_src: g.src_original ?? g.original_src ?? '',
+    alt: g.alt ?? '',
+  }));
+  const raw = [...(pkg.extracted?.images ?? []), ...galleryItems];
   const logo = pkg.logo_url || undefined;
   const favicon = pkg.favicon_url || undefined;
 
