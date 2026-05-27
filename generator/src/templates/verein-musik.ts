@@ -769,6 +769,110 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
 
     /* ─── Contact ────────────────────────────────────────── */
     .contact-section { background: var(--bg); }
+
+    /* ─── Booking-Anfrage Form (PR-A3) ───────────────────── */
+    .booking-section { background: var(--bg-2); }
+    .booking-form {
+      max-width: 760px; margin: 0 auto;
+      background: var(--surface);
+      padding: clamp(2rem, 4vw, 3rem);
+      border-radius: 12px;
+      border: 1px solid var(--rule);
+      box-shadow: 0 24px 60px -32px rgba(31,26,20,0.15);
+    }
+    .booking-row {
+      display: grid; gap: 1.25rem; margin-bottom: 1.25rem;
+      grid-template-columns: 1fr;
+    }
+    @media (min-width: 640px) { .booking-row { grid-template-columns: 1fr 1fr; } }
+    .booking-field { display: flex; flex-direction: column; gap: 0.4rem; }
+    .booking-field-full { margin-bottom: 1.25rem; }
+    .booking-label {
+      font-family: var(--display); font-size: 0.82rem; font-weight: 600;
+      letter-spacing: 0.06em; color: var(--ink-2); text-transform: uppercase;
+    }
+    .booking-field input,
+    .booking-field select,
+    .booking-field textarea {
+      width: 100%; padding: 0.85rem 1rem;
+      font-family: var(--serif); font-size: 1rem;
+      color: var(--ink); background: var(--bg);
+      border: 1px solid var(--rule); border-radius: 6px;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .booking-field input:focus,
+    .booking-field select:focus,
+    .booking-field textarea:focus {
+      outline: none; border-color: var(--accent);
+      box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent) 22%, transparent);
+    }
+    .booking-field textarea { resize: vertical; min-height: 100px; font-family: var(--serif); }
+    .booking-note {
+      font-size: 0.84rem; color: var(--ink-3); line-height: 1.55;
+      margin-bottom: 1.5rem; font-family: var(--serif);
+    }
+    .booking-submit {
+      background: var(--primary); color: #fff; border: 0;
+      padding: 1rem 2.2rem; border-radius: 6px;
+      font-family: var(--display); font-weight: 600; font-size: 1rem;
+      letter-spacing: 0.03em; cursor: pointer;
+      transition: background .2s, transform .2s, box-shadow .2s;
+      box-shadow: 0 14px 30px -14px rgba(45,74,50,0.4);
+    }
+    .booking-submit:hover {
+      background: var(--primary-deep); transform: translateY(-2px);
+      box-shadow: 0 18px 40px -14px rgba(45,74,50,0.5);
+    }
+
+    /* ─── Newsletter-Strip (in Contact-Section) ──────────── */
+    .newsletter-strip {
+      max-width: 880px; margin: 4rem auto 0;
+      background: color-mix(in oklch, var(--primary) 5%, var(--surface));
+      border: 1px solid color-mix(in oklch, var(--accent) 25%, var(--rule));
+      border-left: 4px solid var(--accent);
+      padding: clamp(1.5rem, 3vw, 2.5rem);
+      border-radius: 8px;
+    }
+    .newsletter-inner {
+      display: grid; gap: 1.5rem; align-items: center;
+      grid-template-columns: 1fr;
+    }
+    @media (min-width: 720px) { .newsletter-inner { grid-template-columns: 1fr auto; } }
+    .newsletter-strip h3 {
+      font-family: var(--display); font-size: 1.2rem; color: var(--ink);
+      margin-bottom: 0.35rem; font-weight: 600;
+    }
+    .newsletter-strip p {
+      font-size: 0.95rem; color: var(--ink-2); font-family: var(--serif);
+    }
+    .newsletter-form {
+      display: flex; gap: 0.5rem; flex-wrap: wrap;
+    }
+    .newsletter-form input {
+      flex: 1; min-width: 220px;
+      padding: 0.85rem 1rem; font-family: var(--serif); font-size: 0.95rem;
+      color: var(--ink); background: var(--surface);
+      border: 1px solid var(--rule); border-radius: 6px;
+    }
+    .newsletter-form input:focus {
+      outline: none; border-color: var(--accent);
+      box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent) 22%, transparent);
+    }
+    .newsletter-form button {
+      background: var(--accent); color: var(--ink); border: 0;
+      padding: 0.85rem 1.5rem; border-radius: 6px;
+      font-family: var(--display); font-weight: 600; font-size: 0.92rem;
+      cursor: pointer; transition: background .2s, transform .2s;
+      white-space: nowrap;
+    }
+    .newsletter-form button:hover {
+      background: color-mix(in oklch, var(--accent) 80%, white);
+      transform: translateY(-1px);
+    }
+    .newsletter-legal {
+      font-size: 0.78rem; color: var(--ink-3); font-family: var(--serif);
+      margin-top: 1.25rem; line-height: 1.5;
+    }
     .contact-grid { max-width: 1100px; margin: 4rem auto 0; display: grid; gap: 1.25rem; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); }
     .contact-card { background: var(--surface); border-radius: 12px; padding: 2rem 1.5rem; text-align: center; border: 1px solid var(--rule); border-top: 3px solid var(--accent); }
     .contact-card .ic { width: 48px; height: 48px; margin: 0 auto 1rem; background: var(--primary-soft); color: var(--primary); border-radius: 50%; display: grid; place-items: center; }
@@ -1386,6 +1490,66 @@ ${address ? `
 </section>
 ` : ''}
 
+${email ? `
+<div class="section-anchor-wrap"><span class="section-anchor" aria-hidden="true"></span></div>
+<section id="anfrage" class="section booking-section tone-tint">
+  <div class="container">
+    <div class="section-head center reveal">
+      <span class="section-eyebrow">Auftritt anfragen</span>
+      <h2 class="section-title">Sie planen ein <em>Fest</em>?</h2>
+      <p class="section-lead">Hochzeit, Geburtstag, Firmenfeier, Gemeinde-Veranstaltung — wir spielen für Sie. Schreiben Sie uns Anlass, Datum und ungefähre Personenzahl. Wir melden uns mit einem Angebot zurück.</p>
+    </div>
+    <form class="booking-form reveal" method="post" action="mailto:${email}?subject=${encodeURIComponent('Auftritts-Anfrage')}" enctype="text/plain">
+      <div class="booking-row">
+        <label class="booking-field">
+          <span class="booking-label">Name *</span>
+          <input type="text" name="Name" required autocomplete="name" placeholder="Vor- und Nachname" />
+        </label>
+        <label class="booking-field">
+          <span class="booking-label">E-Mail *</span>
+          <input type="email" name="E-Mail" required autocomplete="email" placeholder="ihre@email.at" />
+        </label>
+      </div>
+      <div class="booking-row">
+        <label class="booking-field">
+          <span class="booking-label">Anlass *</span>
+          <select name="Anlass" required>
+            <option value="">Bitte wählen…</option>
+            <option>Hochzeit</option>
+            <option>Geburtstag / Jubiläum</option>
+            <option>Firmen-Veranstaltung</option>
+            <option>Gemeinde-Fest</option>
+            <option>Kirchliche Feier</option>
+            <option>Begräbnis-Begleitung</option>
+            <option>Sonstiges</option>
+          </select>
+        </label>
+        <label class="booking-field">
+          <span class="booking-label">Datum (gewünscht)</span>
+          <input type="date" name="Datum" />
+        </label>
+      </div>
+      <div class="booking-row">
+        <label class="booking-field">
+          <span class="booking-label">Personenzahl</span>
+          <input type="text" name="Personen" placeholder="ca. 50" inputmode="numeric" />
+        </label>
+        <label class="booking-field">
+          <span class="booking-label">Ort / Lokal</span>
+          <input type="text" name="Ort" placeholder="z.B. Pfarrkirche Puchkirchen" />
+        </label>
+      </div>
+      <label class="booking-field booking-field-full">
+        <span class="booking-label">Nachricht</span>
+        <textarea name="Nachricht" rows="4" placeholder="Repertoire-Wünsche, besondere Anlässe, Tracht-Erwartung…"></textarea>
+      </label>
+      <p class="booking-note">* Pflichtfeld. Bei Klick auf "Anfrage senden" öffnet sich Ihr E-Mail-Programm mit den eingegebenen Daten — Sie versenden die Anfrage selbst.</p>
+      <button type="submit" class="booking-submit">Anfrage senden →</button>
+    </form>
+  </div>
+</section>
+` : ''}
+
 <div class="section-anchor-wrap"><span class="section-anchor" aria-hidden="true"></span></div>
 <section id="kontakt" class="section contact-section tone-cream">
   <div class="container">
@@ -1411,6 +1575,21 @@ ${address ? `
         <div class="val"><a href="mailto:${email}?subject=${encodeURIComponent('Vereins-Anfrage')}">${email}</a></div>
       </div>` : ''}
     </div>
+    ${email ? `
+    <div class="newsletter-strip reveal">
+      <div class="newsletter-inner">
+        <div>
+          <h3>Newsletter</h3>
+          <p>Nichts mehr verpassen — neue Konzerttermine direkt ins Postfach.</p>
+        </div>
+        <form class="newsletter-form" method="post" action="mailto:${email}?subject=${encodeURIComponent('Newsletter-Anmeldung')}" enctype="text/plain">
+          <input type="email" name="E-Mail" required placeholder="ihre@email.at" autocomplete="email" />
+          <button type="submit">Anmelden</button>
+        </form>
+      </div>
+      <p class="newsletter-legal">Jederzeit per Klick im Newsletter abbestellbar. Wir verwenden Ihre E-Mail-Adresse ausschließlich für den Versand und geben sie nicht weiter.</p>
+    </div>
+    ` : ''}
   </div>
 </section>
 
