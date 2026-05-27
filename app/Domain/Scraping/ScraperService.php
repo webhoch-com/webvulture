@@ -319,6 +319,7 @@ class ScraperService
         $gallery = $extracted['gallery_images'] ?? [];
         $hero = $extracted['hero_images'] ?? [];
         $images = $extracted['images'] ?? [];
+        $textContent = (string) ($extracted['text_content'] ?? '');
 
         $sectionSeen = [];
         foreach ($sections as $s) {
@@ -372,12 +373,22 @@ class ScraperService
                 }
                 $images[] = $img;
             }
+
+            // Konkateniere text_content aus allen nav-pages bis 8000 Zeichen.
+            // Wichtig für den Vorstand-Parser: bei Drupal-Vereinen steht die
+            // Kontakt-Liste (Obmann/Kapellmeister/…) auf der /kontakt-Subpage,
+            // die Homepage hat nur Nav-Links. Ohne Konkatenation findet
+            // extractTeam() nie eine Person.
+            if (! empty($sub['text_content']) && mb_strlen($textContent) < 8000) {
+                $textContent .= "\n".$sub['text_content'];
+            }
         }
 
         $extracted['sections'] = array_slice($sections, 0, 12);
         $extracted['gallery_images'] = array_slice($gallery, 0, 30);
         $extracted['hero_images'] = array_slice($hero, 0, 6);
         $extracted['images'] = $images;
+        $extracted['text_content'] = mb_substr($textContent, 0, 8000);
 
         return $extracted;
     }
