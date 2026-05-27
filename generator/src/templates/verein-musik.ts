@@ -997,12 +997,12 @@ ${address ? `
       </div>
       <div class="anfahrt-map reveal">
         <iframe
-          src="https://www.openstreetmap.org/export/embed.html?bbox=${osmBbox(address)}&amp;layer=mapnik&amp;marker=${encodeURIComponent(address)}"
-          width="100%" height="400" frameborder="0" scrolling="no"
+          src="https://maps.google.com/maps?q=${encodeURIComponent(address)}&amp;t=&amp;z=14&amp;ie=UTF8&amp;iwloc=&amp;output=embed"
+          width="100%" height="420" frameborder="0" scrolling="no"
           marginheight="0" marginwidth="0" style="border:0; border-radius: 8px;"
-          loading="lazy" referrerpolicy="no-referrer"
+          loading="lazy" referrerpolicy="no-referrer-when-downgrade"
           title="Karte zur Anfahrt"></iframe>
-        <a href="https://www.openstreetmap.org/search?query=${encodeURIComponent(address)}" target="_blank" rel="noopener" class="anfahrt-fallback">Auf Karte öffnen ↗</a>
+        <a href="https://www.google.com/maps/search/${encodeURIComponent(address)}" target="_blank" rel="noopener" class="anfahrt-fallback">In Google Maps öffnen ↗</a>
       </div>
     </div>
   </div>
