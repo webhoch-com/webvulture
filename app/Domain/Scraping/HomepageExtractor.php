@@ -336,9 +336,10 @@ class HomepageExtractor
             // Impressum/Datenschutz-Subsections — wenn der Subpage-Crawl
             // die Impressum-Seite mit-konsolidiert, kommen hier z.B.
             // "1. Haftungsbeschränkung", "3. Urheber- und Leistungsschutzrechte",
-            // "Erklärung zur Informationspflicht" rein. Reine Legal-Texte
-            // gehören nicht in die generierte Vorschau.
-            '/^\s*\d+\.\s*(haftung|urheber|leistungsschutz|datenschutz|informationspflicht|geltungsbereich|nutzungsbedingung|gewährleistung|streit|verbraucher|widerruf|kündigung|salvatorisch)/i',
+            // "5. Besondere Nutzungsbedingungen", "Erklärung zur Informationspflicht"
+            // rein. Reine Legal-Texte gehören nicht in die Verkaufs-Vorschau.
+            // Heuristik: nummerierter Titel + Legal-Keyword IRGENDWO drin.
+            '/^\s*\d+\.\s.*\b(haftung|urheber|leistungsschutz|datenschutz|informationspflicht|geltungsbereich|nutzungsbedingung|gew[äa]hrleistung|streit|verbraucher|widerruf|k[üu]ndigung|salvatorisch)/i',
             '/^(geltungsbereich|haftungsbeschr[äa]nkung|urheberrecht|leistungsschutz|informationspflicht|widerrufsrecht|streitbeilegung|salvatorische klausel)/i',
             // Footer-/Sidebar-Navigation-Labels die kein Inhalt sind
             '/^(seiten|sitemap|footer|sidebar|aside|kategorien|archive|tags|labels)$/i',
