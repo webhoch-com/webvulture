@@ -84,9 +84,13 @@ new class extends Component {
 
     public function with(): array
     {
+        // `->toArray()` statt `->all()` damit die innere Collection-Layer
+        // zu reinen arrays wird — Blade's `@foreach` über eine `Collection`
+        // von `Collection`s rendert in Volt-Volt-Komponenten leer (Livewire
+        // serialisiert nested Collections nicht durch hydrate->snapshot).
         return [
             'sections' => SettingsSchema::sections(),
-            'slots' => collect(SettingsSchema::all())->groupBy('section')->all(),
+            'slots' => collect(SettingsSchema::all())->groupBy('section')->toArray(),
         ];
     }
 }; ?>
