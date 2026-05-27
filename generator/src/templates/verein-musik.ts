@@ -1022,7 +1022,18 @@ ${spec.about?.body ? (() => {
         // so :first-letter never renders a digit.
         const FEED_MARKER = /\s*(?:Social Media|Frühschoppen|Save the date|Save-the-date|Gestern\b|Heute\b|Morgen\b|Kirchenkonzert\b|Maiblasen\b|🎶|🥁|☀️|⛪️|»\s*Bildergalerie|» Seiten|nächste Seite|🎵|🎺|Neuigkeiten und Termine|Der erste wichtige Termin|Der nächste\s+(?:wichtige\s+)?Termin|Frühlingskonzert|Frühlngskonzert|Herbstkonzert|Adventskonzert|in diesem Jahr,\s+das|Termin in diesem Jahr|Konzertwertung|haben\s+wir\s+(?:bereits|schon)|fand\s+statt|Folgen Sie uns|Termin\s*[:.]|Veranstaltung\s*[:.])/i;
         let body = spec.about!.body.trim();
-        body = body.replace(/^[^A-Za-zÄÖÜäöü(]+/, '');  // strip leading non-letter
+        // Strip leading non-letter chars (digits, punctuation) so the dropcap
+        // never renders a non-letter as the giant first-letter.
+        body = body.replace(/^[^A-Za-zÄÖÜäöü(]+/, '');
+        // If body now starts with a lowercase letter (the prefix sentence was
+        // chopped server-side, e.g. Bruckmühl "...als Feuerwehr-Musikkapelle"),
+        // skip to the next sentence so the dropcap is a real uppercase start.
+        if (/^[a-zäöüß]/.test(body)) {
+          const nextSentence = body.search(/[.!?]\s+[A-ZÄÖÜ]/);
+          if (nextSentence > 0 && nextSentence < body.length - 10) {
+            body = body.slice(nextSentence + 1).trim();
+          }
+        }
         // Walk ALL feed-marker positions; pick the EARLIEST that's ≥80 chars
         // into the body so we don't chop a legit opening sentence containing
         // a marker word ("Die Neuigkeiten und Termine sind wichtig...") but
