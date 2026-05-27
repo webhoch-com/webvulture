@@ -634,7 +634,56 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
         object-fit: contain; max-width: 100%; max-height: 100%;
       }
     }
+    .gallery-item { cursor: pointer; }
+    .gallery-item::after {
+      content: '⤢'; position: absolute; top: 0.75rem; right: 0.75rem;
+      width: 36px; height: 36px; border-radius: 50%;
+      background: rgba(0,0,0,0.55); color: #fff;
+      display: grid; place-items: center; font-size: 1.1rem;
+      opacity: 0; transition: opacity .25s, transform .25s;
+      transform: scale(0.85);
+      pointer-events: none;
+    }
+    .gallery-item:hover::after { opacity: 1; transform: scale(1); }
     .gallery-item:hover img { transform: scale(1.06); }
+
+    /* ─── Lightbox modal ─────────────────────────────────── */
+    .wv-lightbox {
+      position: fixed; inset: 0; z-index: 9999;
+      background: rgba(20, 16, 8, 0);
+      display: none;
+      align-items: center; justify-content: center;
+      padding: clamp(1rem, 4vw, 3rem);
+      backdrop-filter: blur(0px);
+      transition: background 0.35s ease, backdrop-filter 0.35s ease;
+    }
+    .wv-lightbox.is-open { display: flex; background: rgba(20, 16, 8, 0.92); backdrop-filter: blur(8px); }
+    .wv-lightbox-stage {
+      position: relative;
+      max-width: 95vw; max-height: 90vh;
+      transform: scale(0.92); opacity: 0;
+      transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.35s ease;
+    }
+    .wv-lightbox.is-open .wv-lightbox-stage { transform: scale(1); opacity: 1; }
+    .wv-lightbox-stage img { max-width: 95vw; max-height: 90vh; display: block; border-radius: 6px; box-shadow: 0 25px 80px rgba(0,0,0,0.5); }
+    .wv-lightbox-close, .wv-lightbox-prev, .wv-lightbox-next {
+      position: absolute; background: rgba(255,255,255,0.12); color: #fff;
+      border: 0; border-radius: 50%; width: 48px; height: 48px;
+      cursor: pointer; font-size: 1.4rem; line-height: 1;
+      transition: background .2s, transform .2s;
+      display: grid; place-items: center;
+    }
+    .wv-lightbox-close:hover, .wv-lightbox-prev:hover, .wv-lightbox-next:hover { background: rgba(255,255,255,0.25); transform: scale(1.08); }
+    .wv-lightbox-close { top: clamp(1rem, 3vw, 2rem); right: clamp(1rem, 3vw, 2rem); }
+    .wv-lightbox-prev  { top: 50%; left: clamp(0.5rem, 2vw, 2rem); transform: translateY(-50%); }
+    .wv-lightbox-next  { top: 50%; right: clamp(0.5rem, 2vw, 2rem); transform: translateY(-50%); }
+    .wv-lightbox-prev:hover, .wv-lightbox-next:hover { transform: translateY(-50%) scale(1.08); }
+    .wv-lightbox-counter {
+      position: absolute; bottom: clamp(1rem, 3vw, 2rem); left: 50%;
+      transform: translateX(-50%); color: rgba(255,255,255,0.7);
+      font-family: var(--display); font-size: 0.85rem;
+      letter-spacing: 0.15em; text-transform: uppercase;
+    }
 
     /* ─── Contact ────────────────────────────────────────── */
     .contact-section { background: var(--bg); }
@@ -1109,6 +1158,14 @@ ${address ? `
   </div>
 </section>
 
+<div class="wv-lightbox" id="wv-lightbox" role="dialog" aria-modal="true" aria-label="Bildergalerie">
+  <button class="wv-lightbox-close" type="button" aria-label="Schließen">✕</button>
+  <button class="wv-lightbox-prev" type="button" aria-label="Vorheriges Bild">‹</button>
+  <div class="wv-lightbox-stage"><img alt=""></div>
+  <button class="wv-lightbox-next" type="button" aria-label="Nächstes Bild">›</button>
+  <div class="wv-lightbox-counter"></div>
+</div>
+
 <footer class="verein-footer">
   <div class="vf-inner">
     <div class="vf-wordmark" aria-hidden="true">${escapeHtml(businessName)}<span class="accent">.</span></div>
@@ -1184,6 +1241,47 @@ ${address ? `
     // Safety net: anything not visible after 1.2s gets force-shown so
     // page never has a permanently-hidden block.
     setTimeout(forceShow, 1200);
+  })();
+
+  // ── Gallery lightbox ─────────────────────────────────────────────────
+  // Click any non-broken .gallery-item img to open in full-screen lightbox.
+  // Arrow keys + click on prev/next buttons cycle through. ESC closes.
+  (() => {
+    const lb = document.getElementById('wv-lightbox');
+    if (!lb) return;
+    const stage = lb.querySelector('.wv-lightbox-stage img');
+    const counter = lb.querySelector('.wv-lightbox-counter');
+    let images = [];
+    let currentIdx = 0;
+    const refreshImages = () => {
+      images = [...document.querySelectorAll('#bilder .gallery-item:not(.img-broken) img')];
+    };
+    const show = (idx) => {
+      if (!images.length) return;
+      currentIdx = (idx + images.length) % images.length;
+      stage.src = images[currentIdx].src;
+      counter.textContent = (currentIdx + 1) + ' / ' + images.length;
+    };
+    const open = (idx) => { refreshImages(); show(idx); lb.classList.add('is-open'); document.body.style.overflow = 'hidden'; };
+    const close = () => { lb.classList.remove('is-open'); document.body.style.overflow = ''; };
+    document.addEventListener('click', (e) => {
+      const item = e.target.closest('#bilder .gallery-item:not(.img-broken)');
+      if (!item) return;
+      e.preventDefault();
+      refreshImages();
+      const idx = images.findIndex(img => img.parentNode === item);
+      if (idx >= 0) open(idx);
+    });
+    lb.querySelector('.wv-lightbox-close').addEventListener('click', close);
+    lb.querySelector('.wv-lightbox-prev').addEventListener('click', () => show(currentIdx - 1));
+    lb.querySelector('.wv-lightbox-next').addEventListener('click', () => show(currentIdx + 1));
+    lb.addEventListener('click', (e) => { if (e.target === lb) close(); });
+    document.addEventListener('keydown', (e) => {
+      if (!lb.classList.contains('is-open')) return;
+      if (e.key === 'Escape') close();
+      if (e.key === 'ArrowLeft') show(currentIdx - 1);
+      if (e.key === 'ArrowRight') show(currentIdx + 1);
+    });
   })();
 
   // ── Count-up animation on year/number elements ──────────────────────
