@@ -112,7 +112,20 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
   // enforced upstream in the orchestrator — safe to interpolate raw here.
   const PRIMARY = spec.brand?.primary_color || '#2d4a32';
   const SECONDARY = spec.brand?.secondary_color || PRIMARY;
-  const ACCENT = spec.brand?.accent_color || '#b8893d';
+  // Drupal- und WP-Themes haben oft `#0066ff` / `#06c` als pflichtiges
+  // Link-Default in der CSS — das ist KEINE Brand-Accent-Farbe sondern
+  // System-Standard. Filtern und auf Gold zurückfallen falls erkannt.
+  const rawAccent = spec.brand?.accent_color || '';
+  const ACCENT = (rawAccent === '#0066ff' || rawAccent === '#06c' || rawAccent === '' || rawAccent === '#0000ee')
+    ? '#b8893d'
+    : rawAccent;
+  // PRIMARY als RGB-Tupel für den Hero-Overlay (CSS rgba() braucht Numbers).
+  const primaryRgb = (() => {
+    const m = PRIMARY.match(/^#?([0-9a-f]{6})$/i);
+    if (!m) return { r: 28, g: 47, b: 31 };
+    const n = parseInt(m[1], 16);
+    return { r: (n >> 16) & 0xff, g: (n >> 8) & 0xff, b: n & 0xff };
+  })();
   const headingFont = spec.brand?.heading_font_family
     ? `'${spec.brand.heading_font_family}', 'Fraunces', Georgia, serif`
     : "'Fraunces', Georgia, serif";
@@ -165,7 +178,8 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
     .nav { background: var(--bg); border-bottom: 1px solid var(--rule); position: sticky; top: 0; z-index: 50; }
     .nav-inner { max-width: 1300px; margin: 0 auto; padding: 1.1rem 1.5rem; display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; }
     .brand-mark { font-family: var(--display); font-weight: 600; font-size: 1.4rem; line-height: 1.1; letter-spacing: -0.005em; display: inline-flex; align-items: center; gap: 0.85rem; max-width: 60vw; }
-    .brand-logo { width: 56px; height: 56px; object-fit: contain; flex-shrink: 0; }
+    .brand-logo { width: 76px; height: 76px; object-fit: contain; flex-shrink: 0; }
+    @media (max-width: 720px) { .brand-logo { width: 56px; height: 56px; } }
     .brand-crest {
       width: 36px; height: 36px; border-radius: 50%;
       background: var(--primary); color: var(--accent);
@@ -243,7 +257,7 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
       position: relative; min-height: clamp(560px, 84vh, 740px);
       ${hasHeroImage(spec)
         ? `background:
-        linear-gradient(135deg, rgba(28,47,31,0.55) 0%, rgba(28,47,31,0.7) 60%, rgba(28,47,31,0.85) 100%),
+        linear-gradient(135deg, rgba(${primaryRgb.r},${primaryRgb.g},${primaryRgb.b},0.55) 0%, rgba(${primaryRgb.r},${primaryRgb.g},${primaryRgb.b},0.78) 60%, rgba(0,0,0,0.85) 100%),
         url('${getHeroImage(spec, slug)}') center/cover;`
         : `background:
         radial-gradient(ellipse at 20% 20%, rgba(184,137,61,0.16) 0%, transparent 55%),
@@ -766,7 +780,7 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
 <header class="nav">
   <div class="nav-inner">
     <a class="brand-mark" href="#">${getLogo(spec)
-      ? `<img class="brand-logo" src="${escapeHtml(getLogo(spec)!)}" alt="${escapeHtml(spec.business_name)} Logo" width="44" height="44" />`
+      ? `<img class="brand-logo" src="${escapeHtml(getLogo(spec)!)}" alt="${escapeHtml(spec.business_name)} Logo" width="76" height="76" />`
       : `<span class="brand-crest">${escapeHtml(spec.business_name.split(/\s+/).map(w => w[0] || '').slice(0, 2).join('').toUpperCase() || 'V')}</span>`
     }${businessName}</a>
     <input type="checkbox" id="nav-toggle" class="nav-toggle" aria-label="Menü öffnen" />

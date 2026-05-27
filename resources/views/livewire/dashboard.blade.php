@@ -115,6 +115,15 @@ new class extends Component {
                 <span class="kpi-trend">API-Aufwand · Tagessumme</span>
             @endif
         </article>
+
+        <article class="kpi kpi-violet">
+            <div class="kpi-top">
+                <span class="kpi-label">Kosten · gesamt</span>
+                <svg class="kpi-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            </div>
+            <strong class="kpi-value">{{ number_format($totalAllTime / 100, 2, ',', '.') }} <span class="kpi-currency">€</span></strong>
+            <span class="kpi-trend">Alle Suchen + Vorschauen + KI-Calls</span>
+        </article>
     </section>
 
     {{-- Cost-Aufschlüsselung pro Aktivität --}}
@@ -379,6 +388,7 @@ new class extends Component {
     .kpi-amber { --kpi-color: #f59e0b; }
     .kpi-cyan  { --kpi-color: #06b6d4; }
     .kpi-green { --kpi-color: #10b981; }
+    .kpi-violet { --kpi-color: #7c3aed; }
 
     .kpi-top {
         display: flex; align-items: center; justify-content: space-between;
