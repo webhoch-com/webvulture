@@ -46,13 +46,30 @@ export function extractFoundedYear(spec: SiteSpec): number | null {
     spec.tagline ?? '',
     ...((spec.redesigned_sections ?? []).map(s => `${s.title}: ${s.body}`)),
   ].filter(Boolean).join(' ');
-  const beforeRe = /\b(?:seit|gegründet|gegruendet|gründungsjahr|gruendungsjahr|established|since|von)\s*(?:im\s+jahr\s+)?:?\s*(1[78]\d{2}|19\d{2}|20[0-2]\d)\b/i;
-  const afterRe  = /\b(?:im\s+jahr\s+)?(1[78]\d{2}|19\d{2}|20[0-2]\d)\s+(?:gegründet|gegruendet|ins\s+leben|established)\b/i;
+  // beforeRe: removed "von" + "since" triggers — they matched bogus contexts
+  // like "Kapellmeister von 2005 bis 2013" (Puchkirchen audit: returned 2005
+  // instead of the actual 1882 founding).
+  const beforeRe = /\b(?:seit|gegründet|gegruendet|gründungsjahr|gruendungsjahr|established)\s*(?:im\s+jahr\s+)?:?\s*(1[78]\d{2}|19\d{2}|20[0-2]\d)\b/gi;
+  // afterRe: allow up to 60 chars between year and the trigger verb. Direct-
+  // adjacency form missed Puchkirchen "1882 von Kapellmeister Matthias
+  // Gschwandtner gegründet" where 6 words separated year and verb.
+  const afterRe  = /\b(1[78]\d{2}|19\d{2}|20[0-2]\d)\b[^.!?]{0,60}\b(?:gegründet|gegruendet|ins\s+leben\s+gerufen|established|entstanden)\b/gi;
   const currentYear = new Date().getFullYear();
-  const m = text.match(beforeRe) || text.match(afterRe);
-  if (m) {
+  // Collect ALL matches across both patterns, pick the OLDEST. Single-match
+  // .match() returned the first occurrence — that's whatever year appears
+  // earliest in the text, which on Vereinsseiten is usually a recent event
+  // ("seit 2005 Kapellmeister Saminger") not the historic founding.
+  const candidates: number[] = [];
+  for (const m of text.matchAll(beforeRe)) {
     const year = parseInt(m[1], 10);
-    if (year >= 1700 && year <= currentYear) return year;
+    if (year >= 1700 && year <= currentYear) candidates.push(year);
+  }
+  for (const m of text.matchAll(afterRe)) {
+    const year = parseInt(m[1], 10);
+    if (year >= 1700 && year <= currentYear) candidates.push(year);
+  }
+  if (candidates.length > 0) {
+    return Math.min(...candidates);
   }
   // Fallback: use the oldest milestone year if extractHeritageMilestones
   // found ≥2 history-anchored years. This catches sites like Bruckmühl-
