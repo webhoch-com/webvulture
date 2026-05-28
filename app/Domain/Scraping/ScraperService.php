@@ -417,7 +417,11 @@ class ScraperService
      */
     protected function normalizeNavLinks(array $raw): array
     {
-        $junkRe = '/^(zum inhalt|skip to|cookie|toggle|search|suche|login|anmelden|menu|menü|navigation)\b/i';
+        // `u` flag is required: without it, `\b` after a trailing umlaut
+        // ("menü\b") is evaluated byte-wise and never matches, so "Menü"
+        // (a junk nav label) slips through. With PCRE_UTF8 the boundary is
+        // computed per-codepoint and the umlaut alternatives work.
+        $junkRe = '/^(zum inhalt|skip to|cookie|toggle|search|suche|login|anmelden|menu|menü|navigation)\b/iu';
         $out = [];
         foreach ($raw as $label => $href) {
             if (! is_string($label) || ! is_string($href)) {
