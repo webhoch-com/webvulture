@@ -99,6 +99,12 @@ class ScraperService
             foreach ($extracted['images'] ?? [] as $img) {
                 $imagesToDownload[] = ['src' => $img['src'], 'alt' => $img['alt'] ?? '', 'role' => 'content'];
             }
+            // PR-A8: board-member portraits — relaxed dimension filter via role='team'.
+            // Stored alongside other assets in downloaded_assets (role='team');
+            // RebuildPackageBuilder surfaces them as the images.team bucket.
+            foreach ($extracted['team_photos'] ?? [] as $img) {
+                $imagesToDownload[] = ['src' => $img['src'], 'alt' => $img['alt'] ?? '', 'role' => 'team'];
+            }
             $downloadedAssets = $this->assets->downloadAll($lead->id, $imagesToDownload, $finalUrl);
             $heroDownloaded = array_values(array_filter($downloadedAssets, fn ($a) => $a['role'] === 'hero'));
             $galleryDownloaded = array_values(array_filter($downloadedAssets, fn ($a) => $a['role'] === 'gallery'));

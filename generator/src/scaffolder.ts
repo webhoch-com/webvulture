@@ -1422,6 +1422,16 @@ function renderLegalFooter(spec: SiteSpec): string {
 }
 
 function renderImpressumPage(spec: SiteSpec): string {
+  // §5 ECG / §63 GewO verlangt bei Vereinen die vertretungsbefugte Person
+  // (Obmann/Obfrau/Präsident) + ZVR-Zahl. Wir leiten den Vertreter aus den
+  // extrahierten Vorstandsrollen ab — non-Verein-Specs haben diese Rollen
+  // nicht, dort bleibt der Block also weg.
+  const CHAIR_RE = /^(Obmann|Obfrau|Obperson|Vorsitzende[rs]?|Präsident(in)?)\b/i;
+  const chair = (spec.team ?? []).find(m => CHAIR_RE.test(m.role) && !/Stellvertret|Stv\.?/i.test(m.role));
+  const vertretungZeile = chair
+    ? `\n      <dt>Vertretungsbefugt:</dt><dd>${escapeHtml(chair.name)} (${escapeHtml(chair.role)}, Beispiel)</dd>`
+      + `\n      <dt>ZVR-Zahl:</dt><dd>000000000 (Platzhalter — echte Vereins-ZVR-Zahl vor Live-Schaltung eintragen)</dd>`
+    : '';
   return `---
 const spec = ${JSON.stringify(spec, null, 2)};
 ---
@@ -1458,7 +1468,7 @@ ${renderLegalNavBar()}
       <dt>Bezeichnung:</dt><dd>${escapeHtml(spec.business_name)} (Beispielname)</dd>
       <dt>Anschrift:</dt><dd>${spec.contact.address ? escapeHtml(spec.contact.address) + ' (Beispieladresse)' : 'Beispielstraße 1, 5020 Salzburg'}</dd>
       ${spec.contact.phone ? `<dt>Telefon:</dt><dd>${escapeHtml(spec.contact.phone)} (Beispielnummer)</dd>` : ''}
-      ${spec.contact.email ? `<dt>E-Mail:</dt><dd>${escapeHtml(spec.contact.email)} (Beispieladresse)</dd>` : ''}
+      ${spec.contact.email ? `<dt>E-Mail:</dt><dd>${escapeHtml(spec.contact.email)} (Beispieladresse)</dd>` : ''}${vertretungZeile}
       <dt>Unternehmenszweck:</dt><dd>${escapeHtml(spec.tagline)}</dd>
     </dl>
   </article>

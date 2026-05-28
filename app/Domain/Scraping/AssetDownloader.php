@@ -48,14 +48,19 @@ class AssetDownloader
             }
             $seen[$src] = true;
 
-            $result = $this->downloadOne($leadId, $src, $baseUrl);
+            // PR-A8: board-member portraits (role='team') get a relaxed
+            // dimension filter via the 'team' prefix — they are commonly
+            // smaller/square headshots that the ≥400×300 content rule drops.
+            $role = $img['role'] ?? 'content';
+            $prefix = $role === 'team' ? 'team' : '';
+            $result = $this->downloadOne($leadId, $src, $baseUrl, prefix: $prefix);
             if (!$result) {
                 continue;
             }
 
             $downloaded[] = array_merge($result, [
                 'src_original' => $src,
-                'role' => $img['role'] ?? 'content',
+                'role' => $role,
                 'alt' => $img['alt'] ?? '',
             ]);
         }
@@ -131,7 +136,12 @@ class AssetDownloader
                 str_contains(strtolower($resolved), 'logo') ||
                 str_contains(strtolower($resolved), 'wappen')
             );
-            if (!$hasLogoHint && $this->urlLooksLikeNonContentAsset($resolved)) {
+            // PR-A8: team portraits already passed the alt/class board-detection
+            // in HomepageExtractor, so they're high-signal — skip the gallery
+            // blocklist (which drops 'avatar'/'thumb'-named files that are often
+            // exactly the headshots we want). SSRF + dimension checks still run.
+            $isTeamDownload = $prefix === 'team';
+            if (!$hasLogoHint && !$isTeamDownload && $this->urlLooksLikeNonContentAsset($resolved)) {
                 Log::debug("AssetDownloader: skipped non-content URL {$resolved}");
                 return null;
             }
@@ -172,7 +182,23 @@ class AssetDownloader
             $dims = @getimagesizefromstring($contents);
             $width = is_array($dims) ? (int) ($dims[0] ?? 0) : 0;
             $height = is_array($dims) ? (int) ($dims[1] ?? 0) : 0;
-            if ($prefix !== 'logo') {
+            if ($prefix === 'team') {
+                // PR-A8: board portraits are typically square-ish headshots,
+                // often 150–400px. Relax the floor to 150×150 and accept
+                // portrait/square aspects (0.5–2.0), but still reject icons
+                // and extreme strips so a stray sprite can't sneak in.
+                if ($width > 0 && $height > 0) {
+                    if ($width < 150 || $height < 150) {
+                        Log::debug("AssetDownloader: dropped tiny team portrait {$width}x{$height} {$resolved}");
+                        return null;
+                    }
+                    $aspect = $width / $height;
+                    if ($aspect > 2 || $aspect < 0.5) {
+                        Log::debug("AssetDownloader: dropped non-portrait team image {$width}x{$height} {$resolved}");
+                        return null;
+                    }
+                }
+            } elseif ($prefix !== 'logo') {
                 if ($width > 0 && $height > 0) {
                     // Min 400x300 for content/gallery: smaller assets are usually
                     // sponsor/Verbands-Logos (Jimdo's "dimension=201x10000" pattern

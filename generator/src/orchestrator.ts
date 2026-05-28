@@ -912,6 +912,10 @@ export function matchTeamPhotos(
     if (typeof url !== 'string' || url === '') return;
     candidates.push({ url, alt: typeof alt === 'string' ? alt.trim() : '' });
   };
+  // PR-A8: the dedicated team bucket (board-detected portraits, relaxed-filter
+  // download) is highest-signal — try it first so a name-matched headshot wins
+  // over an incidental gallery shot that happens to share the caption.
+  for (const t of (pkg.images?.team ?? [])) push(t.public_url, t.alt);
   for (const g of (pkg.images?.gallery ?? [])) push(g.public_url, g.alt);
   for (const h of (pkg.images?.hero ?? [])) push(h.public_url, h.alt);
   for (const i of (pkg.extracted?.images ?? [])) push(i.src, i.alt);
