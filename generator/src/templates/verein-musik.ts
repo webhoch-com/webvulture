@@ -441,7 +441,7 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
     body { counter-reset: section-anchor; }
     .section-anchor-wrap {
       max-width: 920px; margin: 0 auto;
-      padding: clamp(1.25rem, 3vw, 2.5rem) clamp(1.5rem, 5vw, 5rem);
+      padding: clamp(0.6rem, 1.6vw, 1.25rem) clamp(1.5rem, 5vw, 5rem);
       pointer-events: none;
       counter-increment: section-anchor;
       display: flex; align-items: center; justify-content: center;
@@ -549,7 +549,7 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
 
     /* "Stories" cards — editorial magazine grid for redesigned_sections.
        Replaces the previous linear sequence of equal-height blocks. */
-    .stories-section { padding: clamp(3.25rem, 6vw, 5.5rem) 1.5rem; background: var(--bg); }
+    .stories-section { padding: clamp(2.5rem, 4.5vw, 4rem) 1.5rem; background: var(--bg); }
     .stories-grid {
       max-width: 1300px; margin: 4rem auto 0;
       display: grid; gap: 3rem;
@@ -594,7 +594,7 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
     .vf-wordmark .accent { color: var(--accent); }
 
     /* ─── Section base ───────────────────────────────────── */
-    .section { padding: clamp(3.25rem, 6vw, 5.5rem) 1.5rem; }
+    .section { padding: clamp(2.5rem, 4.5vw, 4rem) 1.5rem; }
     .container { max-width: 1300px; margin: 0 auto; }
     .section-eyebrow { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0; color: var(--accent); font-family: var(--display); font-size: 0.8rem; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 600; margin-bottom: 1rem; }
     .section-eyebrow::before { content: ""; width: 32px; height: 1.5px; background: var(--accent); }
@@ -726,10 +726,19 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
 
     /* ─── Gallery ────────────────────────────────────────── */
     .gallery-grid {
-      display: grid; gap: 0.75rem; margin-top: 4rem;
+      display: grid; gap: 0.75rem; margin-top: 2.5rem;
       grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
     }
     @media (min-width: 720px) { .gallery-grid { grid-template-columns: repeat(3, 1fr); } }
+    /* Sparse-gallery fallback: 1–2 images look lost in a 3-col grid. Center them
+       and let each tile breathe (wider tile + softer 3:2 crop) instead of two
+       small left-aligned squares. */
+    @media (min-width: 720px) {
+      .gallery-grid[data-count="1"] { grid-template-columns: minmax(0, 720px); justify-content: center; }
+      .gallery-grid[data-count="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 920px; margin-left: auto; margin-right: auto; }
+      .gallery-grid[data-count="1"] .gallery-item,
+      .gallery-grid[data-count="2"] .gallery-item { aspect-ratio: 3/2; }
+    }
     .gallery-item { position: relative; aspect-ratio: 4/3; overflow: hidden; border-radius: 8px; background: var(--primary-deep); display: grid; place-items: center; }
     .gallery-item img { width: 100%; height: 100%; object-fit: cover; transition: transform 1s ease; }
     /* Panorama / portrait images: contain instead of cover so they don't get sliced. */
@@ -1029,7 +1038,7 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
     /* Mission-section CSS removed — replaced by .pullquote-* above. */
 
     /* ─── Anfahrt-Section mit Map ─── */
-    .anfahrt-section { padding: clamp(4.5rem, 8vw, 7rem) 1.5rem; background: var(--bg); }
+    .anfahrt-section { padding: clamp(3rem, 5vw, 4.5rem) 1.5rem; background: var(--bg); }
     .anfahrt-grid {
       max-width: 1200px; margin: 0 auto;
       display: grid; gap: 3rem; align-items: center;
@@ -1283,13 +1292,23 @@ ${spec.about?.body ? (() => {
   const VEREIN_PREFIX_RE = /^(Musikverein|Musikkapelle|MV|Trachtenmusikkapelle|TMK|Stadtmusikkapelle|Bürgerkapelle|Marktmusik|Werkskapelle)\b\s*/i;
   const match = spec.business_name.match(VEREIN_PREFIX_RE);
   const place = match ? spec.business_name.slice(match[0].length).replace(/^\W+/, '').trim() : '';
-  const ueberTitle = place ? `Der Musikverein <em>${escapeHtml(place)}</em>.` : 'Über <em>uns</em>.';
+  // Avoid heading/body echo: when the about-text opens by restating the org
+  // ("Der Musikverein …" or the place name), the "Der Musikverein <place>."
+  // title + dropcap read as a duplicate. Switch to a neutral heading then.
+  const rawBodyStart = (spec.about!.body || '').trim().replace(/^[^A-Za-zÄÖÜäöü]+/, '').toLowerCase();
+  const bodyEchoesName =
+    /^(der|die|das)\s+(musik(verein|kapelle)|stadtmusik|bürgerkapelle|marktmusik|werkskapelle|trachtenmusikkapelle)\b/.test(rawBodyStart)
+    || (!!place && rawBodyStart.startsWith(place.toLowerCase()));
+  const ueberEyebrow = bodyEchoesName ? 'Über den Verein' : 'Wer wir sind';
+  const ueberTitle = bodyEchoesName
+    ? 'Wer wir <em>sind</em>.'
+    : (place ? `Der Musikverein <em>${escapeHtml(place)}</em>.` : 'Über <em>uns</em>.');
   return `
 <div class="section-anchor-wrap"><span class="section-anchor" aria-hidden="true"></span></div>
 <section id="ueber-uns" class="section tone-tint">
   <div class="container">
     <div class="section-head">
-      <span class="section-eyebrow">Wer wir sind</span>
+      <span class="section-eyebrow">${ueberEyebrow}</span>
       <h2 class="section-title">${ueberTitle}</h2>
     </div>
     <div class="about-text" style="max-width: 760px; margin: 0 auto;">
@@ -1467,7 +1486,7 @@ ${galleryCount(spec) >= 1 ? `
       <span class="section-eyebrow">Eindrücke</span>
       <h2 class="section-title">Vereinsleben in <em>Bildern</em>.</h2>
     </div>
-    <div class="gallery-grid">
+    <div class="gallery-grid" data-count="${Math.min(galleryCount(spec), 3)}">
       ${spec.media!.gallery!.map((_url, i) => `
         <div class="gallery-item reveal"><img src="${getGalleryImage(spec, slug, i, 800, 600)}" alt="" onerror="this.parentNode.classList.add('img-broken'); this.style.display='none';" onload="if(this.naturalWidth<20||this.naturalHeight<20){this.parentNode.classList.add('img-broken');this.style.display='none';} else if(this.naturalWidth<360){this.parentNode.classList.add('img-small');}"></div>
       `).join('')}

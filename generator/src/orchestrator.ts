@@ -660,7 +660,20 @@ function pickMedia(pkg: RebuildPackage): SiteSpec['media'] {
       alt: g.alt ?? '',
     }))
     .filter((g) => g.src !== '');
-  const raw = [...(pkg.extracted?.images ?? []), ...galleryItems];
+  // Dedupe by image IDENTITY before scoring. The same photo routinely appears
+  // both as a mirrored gallery asset (public_url) AND as a raw <img> (remote
+  // src) — different `src` strings, so a src-keyed Set won't catch it (this is
+  // what rendered duplicate tiles on Rosenau). Key on the normalized original
+  // remote URL; put mirrored gallery items first so they win over hotlinks.
+  const normId = (u: string) => (u || '').split('?')[0].replace(/\/+$/, '').toLowerCase();
+  const identitySeen = new Set<string>();
+  const raw: Array<{ src: string; original_src?: string; alt?: string }> = [];
+  for (const img of [...galleryItems, ...(pkg.extracted?.images ?? [])]) {
+    const id = normId((img as any).original_src || img.src);
+    if (id && identitySeen.has(id)) continue;
+    if (id) identitySeen.add(id);
+    raw.push(img);
+  }
   const logo = pkg.logo_url || undefined;
   const favicon = pkg.favicon_url || undefined;
 
@@ -727,6 +740,7 @@ function pickMedia(pkg: RebuildPackage): SiteSpec['media'] {
     .filter((_, i) => i !== heroIdx)
     .filter((i) => !seen.has(i.src))
     .map((i) => i.src)
+    .filter((src, i, arr) => arr.indexOf(src) === i) // final exact-src dedup
     .slice(0, 24);
 
   return { logo, favicon, hero_image: heroPick.src, gallery };

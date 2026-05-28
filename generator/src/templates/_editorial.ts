@@ -599,7 +599,10 @@ export function extractEnsembles(spec: SiteSpec): Array<{ name: string; context:
 }
 
 export function renderEnsembleGrid(ensembles: Array<{ name: string; context: string }>): string {
-  if (ensembles.length === 0) return '';
+  // Needs ≥2 to justify the "Vielfalt unter einem Dach" (diversity) framing —
+  // a single lonely tile under that headline (and a "01 / 01" counter) reads as
+  // broken, and a lone sub-ensemble is normally already named in the about text.
+  if (ensembles.length < 2) return '';
   // SVG instrument silhouettes — rotate one per tile so each ensemble has
   // a distinct visual mark. All inline so no extra HTTP requests.
   const ICONS = [
@@ -1387,7 +1390,7 @@ export const EDITORIAL_CSS = `
 }
 .pullquote-byline::before { content: ""; width: 36px; height: 1.5px; background: var(--accent, #b8893d); }
 
-.stories-section { padding: clamp(5rem, 9vw, 8rem) 1.5rem; background: var(--bg, #fff); }
+.stories-section { padding: clamp(3rem, 5vw, 4.5rem) 1.5rem; background: var(--bg, #fff); }
 .stories-grid {
   max-width: 1300px; margin: 4rem auto 0;
   display: grid; gap: 3rem;
@@ -1456,7 +1459,7 @@ export const EDITORIAL_CSS = `
 .vf-socials a:hover { background: var(--accent, #b8893d); color: var(--ink, #1f1a14); transform: translateY(-2px); }
 .vf-socials svg { width: 18px; height: 18px; }
 
-.board-section { padding: clamp(5rem, 9vw, 8rem) 1.5rem; }
+.board-section { padding: clamp(3rem, 5vw, 4.5rem) 1.5rem; }
 .board-grid {
   max-width: 1200px; margin: 4rem auto 0;
   display: grid; gap: 2.5rem;
@@ -1560,7 +1563,7 @@ export const EDITORIAL_CSS = `
 .quiet-footer {
   background: linear-gradient(180deg, var(--primary-deep, #1c2f1f) 0%, #0c1410 100%);
   color: rgba(255,255,255,0.75);
-  padding: clamp(4rem, 8vw, 7rem) 1.5rem clamp(2rem, 3vw, 3rem);
+  padding: clamp(2.75rem, 4.5vw, 4rem) 1.5rem clamp(2rem, 3vw, 3rem);
   border-top: 4px solid var(--accent, #b8893d);
 }
 .quiet-footer-inner {
@@ -1636,7 +1639,7 @@ export const EDITORIAL_CSS = `
 /* Newsletter CTA */
 .newsletter-cta {
   background: color-mix(in oklch, var(--primary, #1a1a1a) 6%, white);
-  padding: clamp(4rem, 8vw, 7rem) 1.5rem;
+  padding: clamp(2.75rem, 4.5vw, 4rem) 1.5rem;
   border-top: 1px solid var(--rule, rgba(0,0,0,0.08));
 }
 .newsletter-inner { max-width: 760px; margin: 0 auto; text-align: center; }
@@ -1680,7 +1683,7 @@ export const EDITORIAL_CSS = `
 /* Heritage-Statement (Algunder/Speckbacher pattern). Tall block right
    after hero. Big italic-year as the rooted anchor. */
 .heritage-statement {
-  padding: clamp(5rem, 10vw, 8rem) 1.5rem;
+  padding: clamp(3rem, 5vw, 4.5rem) 1.5rem;
   text-align: center;
   background: var(--bg, #fff);
 }
@@ -1703,7 +1706,7 @@ export const EDITORIAL_CSS = `
 
 /* Heritage-Timeline (horizontal chronik with 3-4 nodes) — Bruckmühl pattern */
 .heritage-timeline {
-  padding: clamp(5rem, 9vw, 7rem) 1.5rem;
+  padding: clamp(3rem, 5vw, 4.5rem) 1.5rem;
   background: color-mix(in oklch, var(--primary, #2d4a32) 6%, white);
 }
 .heritage-timeline .container { max-width: 1200px; margin: 0 auto; }
@@ -1747,7 +1750,7 @@ export const EDITORIAL_CSS = `
 
 /* Media-Section (PR-A5) — Audio/YouTube Embeds mit DSGVO-Click-to-Load */
 .media-section {
-  padding: clamp(4rem, 7vw, 6rem) 1.5rem;
+  padding: clamp(2.75rem, 4.5vw, 4rem) 1.5rem;
   background: color-mix(in oklch, var(--primary, #2d4a32) 4%, var(--surface, #fff));
 }
 .media-section .container { max-width: 1280px; margin: 0 auto; }
@@ -2011,7 +2014,7 @@ export const EDITORIAL_CSS = `
 
 /* Ensemble-Grid — sub-bands as 3-4 brand tiles (Brixen/Eppingen pattern) */
 .ensemble-grid-section {
-  padding: clamp(5rem, 9vw, 8rem) 1.5rem;
+  padding: clamp(3rem, 5vw, 4.5rem) 1.5rem;
   background: var(--bg, #fff);
 }
 .ensemble-grid-section .container { max-width: 1300px; margin: 0 auto; }
@@ -2061,7 +2064,7 @@ export const EDITORIAL_CSS = `
 
 /* Künstlerische-Leitung-Card — single tall card before Vorstand-grid */
 .leitung-section {
-  padding: clamp(5rem, 9vw, 8rem) 1.5rem;
+  padding: clamp(3rem, 5vw, 4.5rem) 1.5rem;
   background: color-mix(in oklch, var(--primary, #2d4a32) 4%, white);
 }
 .leitung-section .container { max-width: 1200px; margin: 0 auto; }
