@@ -26,6 +26,21 @@ export function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+/**
+ * PR-A8: gate for portrait URLs before they reach an <img src>. The orchestrator
+ * only ever attaches mirrored `/storage/...` paths or absolute http(s) URLs, but
+ * this stays defensive: reject anything that isn't a same-origin relative path or
+ * an http(s) absolute URL, so a malformed spec can never inject `javascript:`,
+ * `data:` or a protocol-relative redirect into the rendered markup. escapeHtml
+ * still runs on the value at the call-site for attribute-context safety.
+ */
+export function isSafePhotoUrl(url: unknown): url is string {
+  if (typeof url !== 'string' || url.length === 0 || url.length > 2048) return false;
+  if (/^https?:\/\//i.test(url)) return true;          // absolute http(s)
+  if (url.startsWith('/') && !url.startsWith('//')) return true; // same-origin path (not protocol-relative)
+  return false;
+}
+
 // ─── Extractors (pure) ────────────────────────────────────────────────────────
 
 /**
@@ -200,12 +215,14 @@ function looksLikeContactDataSnippet(s: string): boolean {
  * fewer than 2 valid matches (one match alone reads worse than none).
  * Matches are bounded — Name must be 4–60 chars, alphabet/space/hyphen only.
  */
-export function extractBoardMembers(spec: SiteSpec): Array<{ name: string; role: string }> {
+export function extractBoardMembers(spec: SiteSpec): Array<{ name: string; role: string; photo?: string }> {
   // Prefer spec.team wenn vom orchestrator schon befüllt (neuerer Pfad mit
   // breiterer Rollen-Liste + Separator-toleranter Pattern). Fallback auf die
   // regex-basierte Extraktion aus raw_text_excerpt.
+  // PR-A8: carry through the optional photo (orchestrator attaches it by
+  // matching the member name against a downloaded image's alt-text).
   if (spec.team && spec.team.length > 0) {
-    return spec.team.map(m => ({ name: m.name, role: m.role }));
+    return spec.team.map(m => ({ name: m.name, role: m.role, photo: m.photo }));
   }
 
   // Set-based join: raw_text_excerpt already contains about.body and the
@@ -1070,7 +1087,7 @@ export function renderTrustBadgeSection(
  * BEFORE the regular Vorstand-grid. Premium pattern from Algunder (Mozarteum-
  * graduate Kapellmeister profile).
  */
-export function renderKuenstlerischeLeitung(board: Array<{ name: string; role: string }>): string {
+export function renderKuenstlerischeLeitung(board: Array<{ name: string; role: string; photo?: string }>): string {
   // Find the first Kapellmeister-equivalent role
   // Keep this list tight — generic roles like "Trainer" would let a sport-
   // club coach get promoted to a "Künstlerische Leitung"-card with a music-
@@ -1079,11 +1096,15 @@ export function renderKuenstlerischeLeitung(board: Array<{ name: string; role: s
   const leiter = board.find(m => LEITER_RE.test(m.role));
   if (!leiter) return '';
   const initials = leiter.name.split(/\s+/).map(w => w[0] || '').slice(0, 2).join('').toUpperCase();
+  // PR-A8: real portrait when matched, else the initials-monogram.
+  const portrait = isSafePhotoUrl(leiter.photo)
+    ? `<div class="leitung-portrait has-photo"><img src="${escapeHtml(leiter.photo!)}" alt="${escapeHtml(leiter.name)}" loading="lazy" decoding="async" /></div>`
+    : `<div class="leitung-portrait" aria-hidden="true">${escapeHtml(initials)}</div>`;
   return `
 <section class="leitung-section">
   <div class="container">
     <div class="leitung-inner">
-      <div class="leitung-portrait" aria-hidden="true">${escapeHtml(initials)}</div>
+      ${portrait}
       <div class="leitung-body">
         <span class="section-eyebrow">Künstlerische Leitung</span>
         <h2 class="section-title leitung-name">${escapeHtml(leiter.name)}</h2>
@@ -1116,13 +1137,19 @@ export function renderRatingPill(spec: SiteSpec): string {
 </div>`;
 }
 
-export function renderBoardSection(board: Array<{ name: string; role: string }>): string {
+export function renderBoardSection(board: Array<{ name: string; role: string; photo?: string }>): string {
   if (board.length === 0) return '';
   const cards = board.map(m => {
     const initials = m.name.split(/\s+/).map(w => w[0] || '').slice(0, 2).join('').toUpperCase();
+    // PR-A8: render the scraped portrait when one was matched, otherwise fall
+    // back to the medal-style initials-monogram. Only http(s)/relative URLs
+    // pass — a non-string or javascript:/data: URL collapses to the monogram.
+    const avatar = isSafePhotoUrl(m.photo)
+      ? `<div class="board-portrait"><img src="${escapeHtml(m.photo!)}" alt="${escapeHtml(m.name)}" loading="lazy" decoding="async" /></div>`
+      : `<div class="board-monogram" aria-hidden="true"><span>${escapeHtml(initials)}</span></div>`;
     return `
       <article class="board-card">
-        <div class="board-monogram" aria-hidden="true">${escapeHtml(initials)}</div>
+        ${avatar}
         <h4>${escapeHtml(m.name)}</h4>
         <div class="role">${escapeHtml(m.role)}</div>
       </article>
@@ -1462,6 +1489,30 @@ export const EDITORIAL_CSS = `
     0 0 0 5px color-mix(in oklch, var(--accent, #b8893d) 28%, transparent),
     0 18px 36px -14px rgba(124, 45, 45, 0.35),
     inset 0 -8px 16px -10px rgba(184, 137, 61, 0.4);
+}
+/* PR-A8: scraped portrait — same medal framing as the monogram so a mixed
+   grid (some members with photos, some without) reads as one consistent set. */
+.board-portrait {
+  width: clamp(86px, 13vw, 128px); height: clamp(86px, 13vw, 128px);
+  margin: 0 auto 1.25rem;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 3px double var(--accent, #b8893d);
+  box-shadow:
+    0 0 0 4px color-mix(in oklch, var(--accent, #b8893d) 18%, transparent),
+    0 12px 28px -14px rgba(124, 45, 45, 0.25);
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s;
+}
+.board-portrait img {
+  width: 100%; height: 100%; object-fit: cover; display: block;
+  /* gentle warm grade so colour photos sit in the Trachten palette */
+  filter: saturate(0.92) contrast(1.02);
+}
+.board-card:hover .board-portrait {
+  transform: translateY(-3px) rotate(-1deg);
+  box-shadow:
+    0 0 0 5px color-mix(in oklch, var(--accent, #b8893d) 28%, transparent),
+    0 18px 36px -14px rgba(124, 45, 45, 0.35);
 }
 .board-card h4 {
   font-family: var(--display, Georgia, serif); font-weight: 500;
@@ -2030,6 +2081,12 @@ export const EDITORIAL_CSS = `
   letter-spacing: 0.04em;
   border: 4px solid var(--accent, #b8893d);
   box-shadow: 0 24px 60px -24px rgba(0,0,0,0.4);
+}
+/* PR-A8: photo variant of the Künstlerische-Leitung portrait. */
+.leitung-portrait.has-photo { overflow: hidden; background: var(--bg-2, #f0e8d3); }
+.leitung-portrait.has-photo img {
+  width: 100%; height: 100%; object-fit: cover; display: block;
+  filter: saturate(0.92) contrast(1.02);
 }
 .leitung-body .leitung-name {
   margin-top: 0.4rem; margin-bottom: 0.5rem;

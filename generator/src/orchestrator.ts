@@ -319,6 +319,10 @@ export async function orchestrate(pkg: RebuildPackage): Promise<OrchestrationRes
   // raw text + nav-page-Inhalte und extrahieren bekannte Verein-Rollen.
   const team = extractTeam(textContent);
   if (team && team.length > 0) {
+    // PR-A8: try to attach a portrait to each board member by matching their
+    // full name against the alt-text of an already-downloaded image. Pure
+    // additive — members without a match keep the initials-monogram fallback.
+    matchTeamPhotos(team, pkg);
     baseSpec.team = team;
   }
 
@@ -873,4 +877,79 @@ function extractTeam(text: string): SiteSpec['team'] {
   }
 
   return team;
+}
+
+/**
+ * PR-A8: Vorstand-Foto-Matching.
+ *
+ * Vereinsseiten that present their board as captioned photos render
+ * `<img alt="Obmann Hans Müller" src="…">`. The scraper already downloads
+ * such images into the rebuild package (gallery/hero/content buckets, each
+ * carrying its alt-text). This joins those images to the text-extracted
+ * board members purely on the alt-text — when an image's alt contains a
+ * member's FIRST and LAST name, we attach its URL as `member.photo`.
+ *
+ * Deliberately conservative to avoid mis-labelling group shots:
+ *  - requires BOTH name parts present (a single last-name in a caption like
+ *    "Familie Müller" won't match the wrong person)
+ *  - skips alts that read like a collective ("Gruppenfoto", "Vorstand 2024",
+ *    "…kapelle"), which would otherwise match several members at once
+ *  - never assigns the same image to two members
+ *
+ * No network calls, no new download path — it only re-uses images that
+ * already passed the AssetDownloader security + dimension filters. Members
+ * without a match keep the initials-monogram fallback in the template.
+ *
+ * Exported for the scripts/test-team-photos verification harness.
+ */
+export function matchTeamPhotos(
+  team: NonNullable<SiteSpec['team']>,
+  pkg: RebuildPackage,
+): void {
+  type Candidate = { url: string; alt: string };
+  const candidates: Candidate[] = [];
+  const push = (url: string | undefined | null, alt: string | undefined | null) => {
+    if (typeof url !== 'string' || url === '') return;
+    candidates.push({ url, alt: typeof alt === 'string' ? alt.trim() : '' });
+  };
+  for (const g of (pkg.images?.gallery ?? [])) push(g.public_url, g.alt);
+  for (const h of (pkg.images?.hero ?? [])) push(h.public_url, h.alt);
+  for (const i of (pkg.extracted?.images ?? [])) push(i.src, i.alt);
+
+  // Only alt-carrying images can be name-matched.
+  const named = candidates.filter((c) => c.alt.length >= 3);
+  if (named.length === 0) return;
+
+  const norm = (s: string) =>
+    s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ß/g, 'ss');
+
+  // Tokenize into a whole-word set. Whole-token matching (not substring) is
+  // essential: substring matching mis-assigns faces because German surnames
+  // nest ("Bauer" ⊂ "Neubauer", "Mayer" ⊂ "Obermayer") and short first names
+  // hide inside longer words ("Ed" ⊂ "Friederike"). Both name parts must
+  // appear as standalone tokens in the caption.
+  const tokenSet = (s: string) => new Set(norm(s).split(/[^a-z0-9]+/).filter(Boolean));
+
+  // Collective-caption guard: these describe a group, not one person.
+  const GROUP_RE = /\b(gruppe|gruppenfoto|kapelle|verein|orchester|ensemble|alle|gesamt|mitglieder|vorstand|register|reihe|familie)\b/i;
+
+  const used = new Set<string>();
+  for (const member of team) {
+    const parts = member.name.split(/\s+/).filter(Boolean);
+    if (parts.length < 2) continue;
+    const first = norm(parts[0]);
+    const last = norm(parts[parts.length - 1]);
+    if (first.length < 2 || last.length < 2) continue;
+
+    for (const c of named) {
+      if (used.has(c.url)) continue;
+      if (GROUP_RE.test(c.alt)) continue;
+      const tokens = tokenSet(c.alt);
+      if (tokens.has(first) && tokens.has(last)) {
+        member.photo = c.url;
+        used.add(c.url);
+        break;
+      }
+    }
+  }
 }
