@@ -725,25 +725,45 @@ function pickMedia(pkg: RebuildPackage): SiteSpec['media'] {
     return m.w >= 1200 && m.h >= 600 && m.w >= m.h; // landscape, full-bleed-tauglich
   };
 
-  // Hero: bevorzuge das erste hero-taugliche Foto (groß + landscape). Wenn
-  // keines da ist, normales scored[0].
+  // Hero: bevorzuge das erste hero-taugliche Foto (groß + landscape).
   let heroIdx = scored.findIndex((s) => isHeroSized(s.src));
-  if (heroIdx < 0) heroIdx = 0;
-  const heroPick = scored[heroIdx];
-  seen.add(heroPick.src);
+  if (heroIdx < 0) {
+    // No ideal hero-sized photo. Accept the top-scored image as a hero ONLY if
+    // it is not KNOWN to be small or banner-shaped — a 426×176 logo stretched
+    // to a full-bleed hero looks terrible (Rosenau "MVR"-Zoom). If the best
+    // candidate is known-too-small, render NO hero image: the template then
+    // falls back to the clean decor hero. Images with unknown dimensions are
+    // allowed (legit large extracted photos often lack dimension metadata).
+    const cand = scored[0];
+    const m = galleryMeta.get(cand.src);
+    const knownBad = !!m && (m.w < 900 || m.h < 450 || (m.w / m.h) > 2.2 || m.h > m.w);
+    if (!knownBad) heroIdx = 0;
+  }
+  const heroPick = heroIdx >= 0 ? scored[heroIdx] : null;
+  if (heroPick) seen.add(heroPick.src);
 
   // Gallery: von 8 auf 24 hochgesetzt. Templates können selbst entscheiden
   // wie viele sie tatsächlich rendern — aber wenn nur 8 ankommen, gibt es
   // keine Wahl. 24 ist genug für Editorial-Mosaike mit Reserve fürs
-  // onerror-Hide-broken-Pattern.
+  // onerror-Hide-broken-Pattern. heroIdx < 0 ⇒ kein Hero gewählt, alle Bilder
+  // bleiben für die Galerie verfügbar.
+  // Keep KNOWN-small / banner-shaped assets (e.g. a 426×176 logo-banner) out
+  // of the gallery too — as square-ish tiles they read as broken crops. Only
+  // excludes images whose dimensions we actually know; unknown-dim extracted
+  // photos pass (the client-side onload self-heal still hides true junk).
+  const isJunkBySize = (src: string): boolean => {
+    const m = galleryMeta.get(src);
+    return !!m && (m.w < 500 || m.w / m.h > 2.4 || m.w / m.h < 0.4);
+  };
   const gallery = scored
     .filter((_, i) => i !== heroIdx)
     .filter((i) => !seen.has(i.src))
+    .filter((i) => !isJunkBySize(i.src))
     .map((i) => i.src)
     .filter((src, i, arr) => arr.indexOf(src) === i) // final exact-src dedup
     .slice(0, 24);
 
-  return { logo, favicon, hero_image: heroPick.src, gallery };
+  return { logo, favicon, hero_image: heroPick ? heroPick.src : undefined, gallery };
 }
 
 function scoreImage(src: string, alt: string): number {
