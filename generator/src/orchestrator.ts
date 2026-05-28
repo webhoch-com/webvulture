@@ -740,7 +740,11 @@ function pickMedia(pkg: RebuildPackage): SiteSpec['media'] {
     // allowed (legit large extracted photos often lack dimension metadata).
     const cand = scored[0];
     const m = galleryMeta.get(cand.src);
-    const knownBad = !!m && (m.w < 900 || m.h < 450 || (m.w / m.h) > 2.2 || m.h > m.w);
+    // Only reject genuinely hero-unworthy assets — tiny logos/banners (Rosenau
+    // 426×176) and portraits. A decent-but-not-huge landscape photo (e.g. a
+    // 781×399 Festzelt shot) is fine upscaled and SHOULD stay the hero; an
+    // earlier 900/450 floor wrongly demoted those to the bare decor hero.
+    const knownBad = !!m && (m.w < 560 || m.h < 300 || (m.w / m.h) > 2.2 || m.h > m.w * 1.2);
     if (!knownBad) heroIdx = 0;
   }
   const heroPick = heroIdx >= 0 ? scored[heroIdx] : null;
@@ -757,7 +761,7 @@ function pickMedia(pkg: RebuildPackage): SiteSpec['media'] {
   // photos pass (the client-side onload self-heal still hides true junk).
   const isJunkBySize = (src: string): boolean => {
     const m = galleryMeta.get(src);
-    return !!m && (m.w < 500 || m.w / m.h > 2.4 || m.w / m.h < 0.4);
+    return !!m && (m.w < 400 || m.w / m.h > 2.4 || m.w / m.h < 0.36);
   };
   const gallery = scored
     .filter((_, i) => i !== heroIdx)
