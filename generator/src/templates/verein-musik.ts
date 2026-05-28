@@ -1189,6 +1189,25 @@ export function renderVereinMusikPage(spec: SiteSpec, slug: string): string {
     }
     ${REDESIGNED_SECTIONS_CSS}
     ${EDITORIAL_CSS}
+    /* ── Override (must follow EDITORIAL_CSS) ────────────────────────────────
+       verein-musik renders EMPTY <span class="section-anchor"> dividers and
+       draws the number via a counter ::before. EDITORIAL_CSS (above) restyles
+       .section-anchor as a 16rem outlined watermark meant for templates that
+       put the number IN the span — applied to our empty spans it reserved a
+       ~218px-tall empty line-box, producing the giant blank bands between
+       sections ("zu viele weiße Sektionen"). Re-assert the compact divider. */
+    .section-anchor-wrap {
+      max-width: 920px; margin: 0 auto;
+      padding: clamp(0.6rem, 1.6vw, 1.25rem) clamp(1.5rem, 5vw, 5rem);
+      display: flex; align-items: center; justify-content: center; gap: 1.5rem;
+      overflow: visible;
+    }
+    .section-anchor {
+      display: inline-flex; align-items: center; gap: 0.75rem;
+      font-family: var(--display); font-weight: 500;
+      font-size: 1.1rem; line-height: 1; letter-spacing: 0.18em;
+      -webkit-text-stroke: 0; color: var(--accent); opacity: 0.75;
+    }
   </style>
 </head>
 <body>
@@ -1292,13 +1311,40 @@ ${spec.about?.body ? (() => {
   const VEREIN_PREFIX_RE = /^(Musikverein|Musikkapelle|MV|Trachtenmusikkapelle|TMK|Stadtmusikkapelle|Bürgerkapelle|Marktmusik|Werkskapelle)\b\s*/i;
   const match = spec.business_name.match(VEREIN_PREFIX_RE);
   const place = match ? spec.business_name.slice(match[0].length).replace(/^\W+/, '').trim() : '';
+  // Clean the about-body ONCE so both the heading-echo check and the rendered
+  // dropcap see the same text. The cleaner can skip to a later sentence, so a
+  // raw-body check would miss an echo that only appears after cleaning.
+  const cleanAboutBody = (raw: string): string => {
+    const FEED_MARKER = /\s*(?:Social Media|Frühschoppen|Save the date|Save-the-date|Gestern\b|Heute\b|Morgen\b|Kirchenkonzert\b|Maiblasen\b|🎶|🥁|☀️|⛪️|»\s*Bildergalerie|» Seiten|nächste Seite|🎵|🎺|Neuigkeiten und Termine|Der erste wichtige Termin|Der nächste\s+(?:wichtige\s+)?Termin|Frühlingskonzert|Frühlngskonzert|Herbstkonzert|Adventskonzert|in diesem Jahr,\s+das|Termin in diesem Jahr|Konzertwertung|haben\s+wir\s+(?:bereits|schon)|fand\s+statt|Folgen Sie uns|Termin\s*[:.]|Veranstaltung\s*[:.])/i;
+    let body = raw.trim();
+    body = body.replace(/^[^A-Za-zÄÖÜäöü(]+/, '');
+    if (/^[a-zäöüß]/.test(body)) {
+      const nextSentence = body.search(/[.!?]\s+[A-ZÄÖÜ]/);
+      if (nextSentence > 0 && nextSentence < body.length - 10) {
+        body = body.slice(nextSentence + 1).trim();
+      }
+    }
+    const re = new RegExp(FEED_MARKER.source, FEED_MARKER.flags + 'g');
+    let bestCut = -1;
+    for (const m of body.matchAll(re)) {
+      const pos = m.index ?? -1;
+      if (pos >= 80) { bestCut = pos; break; }
+    }
+    const HARD_MARKER = /\s*(?:🎶|🥁|☀️|⛪️|🎵|🎺|Save the date|Save-the-date|»\s*Bildergalerie|» Seiten|nächste Seite|Social Media\b|Frühschoppen\b|Frühlingskonzert\b|Frühlngskonzert\b|Herbstkonzert\b|Adventskonzert\b|Kirchenkonzert\b|Maiblasen\b|Gestern\b|Heute\b|Morgen\b|Save\s+the\s+date|Folgen\s+Sie\s+uns|Wir\s+freuen\s+uns\s+auf)/i;
+    const hardCut = body.search(HARD_MARKER);
+    if (hardCut >= 20 && (bestCut < 0 || hardCut < bestCut)) bestCut = hardCut;
+    if (bestCut > 0) body = body.slice(0, bestCut).replace(/\s+\S{0,12}$/, '').trim();
+    body = body.replace(/\s*\([^)]{0,3}\s*$/, '').trim();
+    return body;
+  };
+  const cleanBody = cleanAboutBody(spec.about!.body);
   // Avoid heading/body echo: when the about-text opens by restating the org
   // ("Der Musikverein …" or the place name), the "Der Musikverein <place>."
   // title + dropcap read as a duplicate. Switch to a neutral heading then.
-  const rawBodyStart = (spec.about!.body || '').trim().replace(/^[^A-Za-zÄÖÜäöü]+/, '').toLowerCase();
+  const bodyStart = cleanBody.toLowerCase();
   const bodyEchoesName =
-    /^(der|die|das)\s+(musik(verein|kapelle)|stadtmusik|bürgerkapelle|marktmusik|werkskapelle|trachtenmusikkapelle)\b/.test(rawBodyStart)
-    || (!!place && rawBodyStart.startsWith(place.toLowerCase()));
+    /^(der|die|das)\s+(musik(verein|kapelle)|stadtmusik|bürgerkapelle|marktmusik|werkskapelle|trachtenmusikkapelle)\b/.test(bodyStart)
+    || (!!place && bodyStart.startsWith(place.toLowerCase()));
   const ueberEyebrow = bodyEchoesName ? 'Über den Verein' : 'Wer wir sind';
   const ueberTitle = bodyEchoesName
     ? 'Wer wir <em>sind</em>.'
@@ -1312,51 +1358,7 @@ ${spec.about?.body ? (() => {
       <h2 class="section-title">${ueberTitle}</h2>
     </div>
     <div class="about-text" style="max-width: 760px; margin: 0 auto;">
-      <p class="dropcap">${(() => {
-        // Sanitize about-body before rendering. Scraped Vereinsseiten often
-        // concatenate the about-paragraph with an event-feed sidebar (Social
-        // Media · Frühschoppen · Gestern (17. Mai)... · 🎶🥁) — the LLM that
-        // produces about.body sometimes preserves the join, producing a
-        // dropcap that reads as broken mid-sentence. Strip everything after
-        // a clear feed-pollution marker. Also strip leading non-letter chars
-        // so :first-letter never renders a digit.
-        const FEED_MARKER = /\s*(?:Social Media|Frühschoppen|Save the date|Save-the-date|Gestern\b|Heute\b|Morgen\b|Kirchenkonzert\b|Maiblasen\b|🎶|🥁|☀️|⛪️|»\s*Bildergalerie|» Seiten|nächste Seite|🎵|🎺|Neuigkeiten und Termine|Der erste wichtige Termin|Der nächste\s+(?:wichtige\s+)?Termin|Frühlingskonzert|Frühlngskonzert|Herbstkonzert|Adventskonzert|in diesem Jahr,\s+das|Termin in diesem Jahr|Konzertwertung|haben\s+wir\s+(?:bereits|schon)|fand\s+statt|Folgen Sie uns|Termin\s*[:.]|Veranstaltung\s*[:.])/i;
-        let body = spec.about!.body.trim();
-        // Strip leading non-letter chars (digits, punctuation) so the dropcap
-        // never renders a non-letter as the giant first-letter.
-        body = body.replace(/^[^A-Za-zÄÖÜäöü(]+/, '');
-        // If body now starts with a lowercase letter (the prefix sentence was
-        // chopped server-side, e.g. Bruckmühl "...als Feuerwehr-Musikkapelle"),
-        // skip to the next sentence so the dropcap is a real uppercase start.
-        if (/^[a-zäöüß]/.test(body)) {
-          const nextSentence = body.search(/[.!?]\s+[A-ZÄÖÜ]/);
-          if (nextSentence > 0 && nextSentence < body.length - 10) {
-            body = body.slice(nextSentence + 1).trim();
-          }
-        }
-        // Walk ALL feed-marker positions; pick the EARLIEST that's ≥80 chars
-        // into the body so we don't chop a legit opening sentence containing
-        // a marker word ("Die Neuigkeiten und Termine sind wichtig...") but
-        // still catch a marker that follows after substantive content. If
-        // body is shorter than 80 and starts with a marker, cut anyway.
-        const re = new RegExp(FEED_MARKER.source, FEED_MARKER.flags + 'g');
-        let bestCut = -1;
-        for (const m of body.matchAll(re)) {
-          const pos = m.index ?? -1;
-          if (pos >= 80) { bestCut = pos; break; }  // first one past 80 wins
-        }
-        // Aggressive markers always cut regardless of position (these are
-        // never legit body content — emoji feed-rows, "Save the date").
-        // HARD_MARKER cuts at any position ≥20. These are never legit
-        // body content for a Verein about-section.
-        const HARD_MARKER = /\s*(?:🎶|🥁|☀️|⛪️|🎵|🎺|Save the date|Save-the-date|»\s*Bildergalerie|» Seiten|nächste Seite|Social Media\b|Frühschoppen\b|Frühlingskonzert\b|Frühlngskonzert\b|Herbstkonzert\b|Adventskonzert\b|Kirchenkonzert\b|Maiblasen\b|Gestern\b|Heute\b|Morgen\b|Save\s+the\s+date|Folgen\s+Sie\s+uns|Wir\s+freuen\s+uns\s+auf)/i;
-        const hardCut = body.search(HARD_MARKER);
-        if (hardCut >= 20 && (bestCut < 0 || hardCut < bestCut)) bestCut = hardCut;
-        if (bestCut > 0) body = body.slice(0, bestCut).replace(/\s+\S{0,12}$/, '').trim();
-        // Drop trailing dangling open-parens and incomplete clauses
-        body = body.replace(/\s*\([^)]{0,3}\s*$/, '').trim();
-        return escapeHtml(body);
-      })()}</p>
+      <p class="dropcap">${escapeHtml(cleanBody)}</p>
     </div>
   </div>
 </section>`;
