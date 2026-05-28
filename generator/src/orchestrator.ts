@@ -653,22 +653,26 @@ function pickMedia(pkg: RebuildPackage): SiteSpec['media'] {
   // mit eigener /bildergalerie Subpage waren die echten Galerie-Bilder
   // dort, aber wurden komplett ignoriert. Lead 12 (Musikverein Puchkirchen)
   // hatte 19 gallery-Items die nie ins rendering kamen.
-  const galleryItems = (pkg.images?.gallery ?? [])
-    .map((g) => ({
-      src: g.public_url ?? '',
-      original_src: g.src_original ?? '',
-      alt: g.alt ?? '',
-    }))
-    .filter((g) => g.src !== '');
+  const toItem = (g: { public_url?: string; src_original?: string; alt?: string }) => ({
+    src: g.public_url ?? '',
+    original_src: g.src_original ?? '',
+    alt: g.alt ?? '',
+  });
+  // The downloaded HERO bucket holds the scraper's best full-bleed candidates
+  // (large, landscape) — it was previously only used for dimension metadata and
+  // never entered the scored pool, so a great 1920×1282 hero photo lost to a
+  // tiny 426×176 banner from extracted.images (Rosenau). Include it FIRST.
+  const heroItems = (pkg.images?.hero ?? []).map(toItem).filter((g) => g.src !== '');
+  const galleryItems = (pkg.images?.gallery ?? []).map(toItem).filter((g) => g.src !== '');
   // Dedupe by image IDENTITY before scoring. The same photo routinely appears
-  // both as a mirrored gallery asset (public_url) AND as a raw <img> (remote
-  // src) — different `src` strings, so a src-keyed Set won't catch it (this is
-  // what rendered duplicate tiles on Rosenau). Key on the normalized original
-  // remote URL; put mirrored gallery items first so they win over hotlinks.
+  // both as a mirrored asset (public_url) AND as a raw <img> (remote src) —
+  // different `src` strings, so a src-keyed Set won't catch it (this is what
+  // rendered duplicate tiles on Rosenau). Key on the normalized original remote
+  // URL; put mirrored hero+gallery items first so they win over hotlinks.
   const normId = (u: string) => (u || '').split('?')[0].replace(/\/+$/, '').toLowerCase();
   const identitySeen = new Set<string>();
   const raw: Array<{ src: string; original_src?: string; alt?: string }> = [];
-  for (const img of [...galleryItems, ...(pkg.extracted?.images ?? [])]) {
+  for (const img of [...heroItems, ...galleryItems, ...(pkg.extracted?.images ?? [])]) {
     const id = normId((img as any).original_src || img.src);
     if (id && identitySeen.has(id)) continue;
     if (id) identitySeen.add(id);
