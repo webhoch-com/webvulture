@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node --env-file=.env dist/server.js",
     "dev": "tsx watch src/server.ts",
-    "build": "tsc"
+    "build": "tsc",
+    "test": "tsx scripts/test-team-photos.mts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.37.0",
