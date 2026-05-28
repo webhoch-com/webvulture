@@ -18,6 +18,7 @@
  */
 import type { SiteSpec } from '../types.js';
 import { getFavicon } from './_media.js';
+import { extractEnsembles } from './_editorial.js';
 
 function escapeHtml(s: string): string {
   return String(s)
@@ -171,6 +172,16 @@ function renderJsonLd(spec: SiteSpec, kind: SchemaKind, url: string): string {
     const memberCount = (spec as any).member_count;
     if (memberCount && Number.isFinite(Number(memberCount))) {
       data.numberOfEmployees = { '@type': 'QuantitativeValue', value: Number(memberCount) };
+    }
+    // subOrganization: Klangkörper/Ensembles (Jugendkapelle, Big Band, …) als
+    // eigene MusicGroup-Sub-Typen. Google rendert diese als verbundene Gruppen
+    // im Knowledge Panel. Quelle = derselbe Text-Extractor wie das Ensemble-Grid.
+    const ensembles = extractEnsembles(spec);
+    if (ensembles.length > 0) {
+      data.subOrganization = ensembles.map(e => ({
+        '@type': 'MusicGroup',
+        name: e.name,
+      }));
     }
   }
 

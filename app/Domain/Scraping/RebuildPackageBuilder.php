@@ -91,6 +91,13 @@ class RebuildPackageBuilder
             'images' => [
                 'hero' => $analysis?->hero_images ?? [],
                 'gallery' => $analysis?->gallery_images ?? [],
+                // PR-A8: board-member portraits (role='team') for the Vorstand-
+                // Foto-Matcher. Carry public_url + alt so the generator can
+                // join them to text-extracted board members by name.
+                'team' => array_values(array_filter(
+                    $analysis?->downloaded_assets ?? [],
+                    fn ($a) => ($a['role'] ?? null) === 'team',
+                )),
                 'all_local' => $analysis?->downloaded_assets ?? [],
                 'screenshots' => $screenshots,
             ],

@@ -80,6 +80,8 @@ export interface RebuildPackage {
   images?: {
     hero?: Array<{ public_url?: string; src_original?: string; alt?: string; width?: number; height?: number }>;
     gallery?: Array<{ public_url?: string; src_original?: string; alt?: string; width?: number; height?: number }>;
+    /** PR-A8: board-member portraits (role='team'), relaxed-filter download. */
+    team?: Array<{ public_url?: string; src_original?: string; alt?: string; width?: number; height?: number }>;
     all_local?: unknown[];
     screenshots?: Array<{ name: string; path: string; slot: string }>;
   };

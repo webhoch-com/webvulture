@@ -30,6 +30,7 @@ class HomepageExtractor
             'images' => $this->images($crawler, $baseUrl),
             'hero_images' => $this->extractHeroImages($crawler, $baseUrl),
             'gallery_images' => $this->extractGalleryImages($crawler, $baseUrl),
+            'team_photos' => $this->teamPhotos($crawler, $baseUrl),
             'socials' => $this->socials($crawler),
             'nav_links' => $this->navLinks($crawler, $baseUrl),
             'brand_colors' => $this->brandColors($html),
@@ -722,6 +723,77 @@ class HomepageExtractor
         }
 
         return array_slice($images, 0, 15);
+    }
+
+    /**
+     * PR-A8: Vorstand-Foto-Kandidaten.
+     *
+     * Vereinsseiten präsentieren ihren Vorstand oft als beschriftete Fotos:
+     *   <img alt="Obmann Hans Müller" src="…">  ODER
+     *   <figure class="vorstand-member"><img …><figcaption>Hans Müller</figcaption>
+     *
+     * Diese Bilder fallen häufig durch den AssetDownloader-Dimensionsfilter
+     * (Porträts sind oft < 400×300), weshalb der Vorstand-Foto-Matcher im
+     * Generator sie sonst nie sieht. Wir sammeln Kandidaten anhand zweier
+     * Signale — (a) das alt-Attribut nennt eine Vereinsrolle, (b) das Bild
+     * oder ein Vorfahre trägt eine board/vorstand/team/member-Klasse — und
+     * markieren sie als role='team', damit der Downloader sie mit gelockertem
+     * Porträt-Filter herunterlädt.
+     *
+     * @return array<int, array{src: string, alt: string}>
+     */
+    protected function teamPhotos(Crawler $c, string $baseUrl): array
+    {
+        $roleRe = '/\b(Obmann|Obfrau|Obperson|Vorsitzende|Präsident|Kapellmeister|Kapellmeisterin|'
+            .'Dirigent|Stabführer|Schriftführer|Kassier|Kassenwart|Jugendreferent|Jugendleiter|'
+            .'Notenwart|Archivar|Pressereferent|Beisitzer|Beirat|Stellvertreter)/iu';
+        $classRe = '/\b(board|vorstand|team|member|mitglied|funktion[aä]r|leitung|portrait|person)\b/i';
+
+        $photos = [];
+        $seen = [];
+
+        try {
+            $c->filter('img[src]')->each(function (Crawler $img) use (&$photos, &$seen, $baseUrl, $roleRe, $classRe) {
+                $src = $img->attr('src');
+                if (! $src || str_starts_with($src, 'data:')) {
+                    return;
+                }
+
+                $alt = trim($img->attr('alt') ?? '');
+                $imgClass = $img->attr('class') ?? '';
+
+                // Vorfahren-Klassen (figure/div/li-Wrapper) bis 3 Ebenen hoch prüfen.
+                $ancestorClass = '';
+                try {
+                    $node = $img->getNode(0);
+                    for ($depth = 0; $depth < 3 && $node?->parentNode; $depth++) {
+                        $node = $node->parentNode;
+                        if ($node instanceof \DOMElement) {
+                            $ancestorClass .= ' '.$node->getAttribute('class');
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    // Vorfahren-Walk best-effort — ignorieren wenn DOM zickt.
+                }
+
+                $altHasRole = $alt !== '' && preg_match($roleRe, $alt);
+                $classHints = preg_match($classRe, $imgClass.' '.$ancestorClass);
+                if (! $altHasRole && ! $classHints) {
+                    return;
+                }
+
+                $resolved = $this->resolveUrl($src, $baseUrl);
+                if (isset($seen[$resolved])) {
+                    return;
+                }
+                $seen[$resolved] = true;
+                $photos[] = ['src' => $resolved, 'alt' => $alt];
+            });
+        } catch (\Throwable $e) {
+            \Log::debug('HomepageExtractor: teamPhotos step failed', ['error' => $e->getMessage()]);
+        }
+
+        return array_slice($photos, 0, 20);
     }
 
     protected function socials(Crawler $c): array

@@ -103,6 +103,22 @@ check('matches against the downloaded gallery bucket (public_url)', () => {
   assert.equal(team[0].photo, '/storage/eva.jpg');
 });
 
+check('PR-A8: prefers the dedicated team bucket over a gallery shot', () => {
+  const team: Team = [{ role: 'Obmann', name: 'Hans Müller' }];
+  const pkg = {
+    business: { name: 'MV', category: 'Verein', city: 'x' },
+    extracted: { images: [] },
+    images: {
+      // both captions name the same person — the board-detected portrait
+      // (team bucket) must win over the incidental gallery shot.
+      team: [{ public_url: '/storage/portrait-hans.jpg', alt: 'Obmann Hans Müller' }],
+      gallery: [{ public_url: '/storage/group-hans.jpg', alt: 'Hans Müller beim Konzert' }],
+    },
+  } as unknown as RebuildPackage;
+  matchTeamPhotos(team, pkg);
+  assert.equal(team[0].photo, '/storage/portrait-hans.jpg');
+});
+
 console.log('isSafePhotoUrl:');
 
 check('accepts absolute http(s) + same-origin path', () => {
