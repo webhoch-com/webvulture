@@ -1682,10 +1682,14 @@ export const EDITORIAL_CSS = `
 
 /* Heritage-Statement (Algunder/Speckbacher pattern). Tall block right
    after hero. Big italic-year as the rooted anchor. */
+/* Dark tannengrün anchor: a cream "Seit 18xx"-statement right after the hero
+   used to start a long run of near-identical cream sections ("zu viele weiße
+   Sektionen"). On dark green the bold serif headline reads as a confident
+   chapter-break and sets the cream/green rhythm for the rest of the page. */
 .heritage-statement {
-  padding: clamp(3rem, 5vw, 4.5rem) 1.5rem;
+  padding: clamp(3.5rem, 6vw, 5.5rem) 1.5rem;
   text-align: center;
-  background: var(--bg, #fff);
+  background: linear-gradient(135deg, var(--primary, #2d4a32) 0%, var(--primary-deep, #1c2f1f) 100%);
 }
 .heritage-inner { max-width: 1100px; margin: 0 auto; }
 .heritage-kicker {
@@ -1693,16 +1697,16 @@ export const EDITORIAL_CSS = `
   font-size: 0.82rem; letter-spacing: 0.22em; text-transform: uppercase;
   color: var(--accent, #b8893d); font-weight: 600;
   margin-bottom: 1.5rem;
-  padding: 0.4rem 1rem; border: 1px solid var(--accent, #b8893d);
+  padding: 0.4rem 1rem; border: 1px solid color-mix(in oklch, var(--accent, #b8893d) 60%, transparent);
   border-radius: 999px;
 }
 .heritage-headline {
   font-family: var(--display, Georgia, serif); font-weight: 500;
   font-size: clamp(2.5rem, 7vw, 6rem); line-height: 1.05;
-  letter-spacing: -0.025em; color: var(--ink, #1a1a1a);
+  letter-spacing: -0.025em; color: #fbf7ee;
   max-width: 22ch; margin: 0 auto;
 }
-.heritage-headline em { font-style: italic; color: var(--primary, #2d4a32); font-weight: 500; }
+.heritage-headline em { font-style: italic; color: var(--accent, #b8893d); font-weight: 500; }
 
 /* Heritage-Timeline (horizontal chronik with 3-4 nodes) — Bruckmühl pattern */
 .heritage-timeline {
@@ -1892,10 +1896,13 @@ export const EDITORIAL_CSS = `
 /* Trust-Section (PR-A4) — Verband-Mitgliedschaft + Konzertwertungen
    als prominenter Qualitätsnachweis direkt nach Heritage-Statement. */
 .trust-section {
-  padding: clamp(3rem, 5vw, 4.5rem) 1.5rem;
-  background: color-mix(in oklch, var(--accent, #b8893d) 6%, var(--bg, #fbf7ee));
-  border-top: 1px solid color-mix(in oklch, var(--accent, #b8893d) 22%, transparent);
-  border-bottom: 1px solid color-mix(in oklch, var(--accent, #b8893d) 22%, transparent);
+  padding: clamp(3.5rem, 6vw, 5.5rem) 1.5rem;
+  /* Dark tannengrün anchor: the gold Eichenlaub-Kranz + white Wertungs-cards
+     read as a badge-of-honour on dark green, and it splits the long upper
+     cream run (stats→timeline→about→ensembles). */
+  background: linear-gradient(135deg, var(--primary, #2d4a32) 0%, var(--primary-deep, #1c2f1f) 100%);
+  border-top: 1px solid color-mix(in oklch, var(--accent, #b8893d) 35%, transparent);
+  border-bottom: 1px solid color-mix(in oklch, var(--accent, #b8893d) 35%, transparent);
   position: relative;
   overflow: hidden;
 }
@@ -1923,7 +1930,7 @@ export const EDITORIAL_CSS = `
 }
 .trust-verband-body strong {
   font-family: var(--display, Georgia, serif); font-size: 1.1rem;
-  color: var(--ink, #1f1a14); font-weight: 600; line-height: 1.35;
+  color: #fbf7ee; font-weight: 600; line-height: 1.35;
 }
 .trust-wertung-grid {
   display: grid; gap: 1rem; margin-top: 0.75rem;
@@ -2062,12 +2069,18 @@ export const EDITORIAL_CSS = `
   line-height: 1.7; color: var(--ink-2, #4a4030);
 }
 
-/* Künstlerische-Leitung-Card — single tall card before Vorstand-grid */
+/* Künstlerische-Leitung-Card — single tall card before Vorstand-grid.
+   Dark tannengrün anchor (breaks the mid-page cream run): the conductor
+   portrait + name read as a premium spotlight on dark green. */
 .leitung-section {
-  padding: clamp(3rem, 5vw, 4.5rem) 1.5rem;
-  background: color-mix(in oklch, var(--primary, #2d4a32) 4%, white);
+  padding: clamp(3.5rem, 6vw, 5.5rem) 1.5rem;
+  background: linear-gradient(135deg, var(--primary-deep, #1c2f1f) 0%, var(--primary, #2d4a32) 100%);
 }
 .leitung-section .container { max-width: 1200px; margin: 0 auto; }
+.leitung-section .section-eyebrow { color: var(--accent, #b8893d); }
+.leitung-section .section-title,
+.leitung-section .leitung-name { color: #fbf7ee; }
+.leitung-section .leitung-name em { color: var(--accent, #b8893d); }
 .leitung-inner {
   display: grid; gap: 3rem;
   grid-template-columns: 1fr; align-items: center;
@@ -2077,13 +2090,14 @@ export const EDITORIAL_CSS = `
   width: clamp(180px, 28vw, 240px); height: clamp(180px, 28vw, 240px);
   margin: 0 auto;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--primary, #2d4a32) 0%, var(--primary-deep, #1c2f1f) 100%);
+  /* Gold medal on the dark section so the monogram pops instead of blending. */
+  background: linear-gradient(135deg, var(--accent, #b8893d) 0%, #d9a94e 100%);
   display: grid; place-items: center;
   font-family: var(--display, Georgia, serif); font-weight: 500;
-  font-size: clamp(3.5rem, 6vw, 5rem); color: var(--accent, #b8893d);
+  font-size: clamp(3.5rem, 6vw, 5rem); color: var(--primary-deep, #1c2f1f);
   letter-spacing: 0.04em;
-  border: 4px solid var(--accent, #b8893d);
-  box-shadow: 0 24px 60px -24px rgba(0,0,0,0.4);
+  border: 4px solid color-mix(in oklch, #fbf7ee 70%, transparent);
+  box-shadow: 0 24px 60px -24px rgba(0,0,0,0.55);
 }
 /* PR-A8: photo variant of the Künstlerische-Leitung portrait. */
 .leitung-portrait.has-photo { overflow: hidden; background: var(--bg-2, #f0e8d3); }
@@ -2102,7 +2116,7 @@ export const EDITORIAL_CSS = `
 }
 .leitung-body .leitung-blurb {
   font-family: var(--serif, Georgia, serif); font-size: 1.1rem;
-  line-height: 1.75; color: var(--ink-2, #4a4030);
+  line-height: 1.75; color: color-mix(in oklch, #fbf7ee 88%, var(--primary, #2d4a32));
   max-width: 56ch;
 }
 `;
