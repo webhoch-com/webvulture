@@ -69,13 +69,16 @@ type Referenz = { title: string; location: string; year: string; volume?: string
 const UNSPLASH = (id: string, w = 1200) => `https://images.unsplash.com/photo-${id}?w=${w}&auto=format&fit=crop&q=80`;
 const DEFAULT_HERO_IMAGE = UNSPLASH('1487958449943-2429e8be8625', 2400);
 const DEFAULT_KARRIERE_IMAGE = UNSPLASH('1581094794329-c8112a89af12', 1800);
+// Curated Unsplash photo IDs — all verified 200 OK and matched to a construction/
+// architecture/site subject in May 2026. If Unsplash ever 404s an ID, the
+// onerror fallback in the renderer tries again with the canonical r.image URL.
 const DEFAULT_REFERENZEN: Referenz[] = [
-  { title: 'Bürogebäude Nordseite', location: 'Linz, OÖ', year: '2025', volume: '4.200 m² BGF', tag: 'Hochbau', image: UNSPLASH('1503387762-592deb58ef4e') },
-  { title: 'Werkshalle Süd',        location: 'Wels, OÖ', year: '2024', volume: '6.800 m² Halle', tag: 'Hallenbau', image: UNSPLASH('1486325212027-8081e485255e') },
-  { title: 'Wohnpark Mühlbach',     location: 'Salzburg', year: '2024', volume: '28 Wohneinheiten', tag: 'Wohnbau', image: UNSPLASH('1545324418-cc1a3fa10c00') },
-  { title: 'Sanierung Schulgebäude',location: 'Vöcklabruck', year: '2023', volume: '3.100 m² renoviert', tag: 'Sanierung', image: UNSPLASH('1429497419816-9ca5cfb4571a') },
-  { title: 'Industriehalle Logistikpark', location: 'Steyr', year: '2023', volume: '12.500 m² überdacht', tag: 'Industrie', image: UNSPLASH('1444084316824-690245beea7c') },
-  { title: 'Wohnhaus am Hang',      location: 'Gmunden', year: '2022', volume: '320 m² Wohnfläche', tag: 'Privatbau', image: UNSPLASH('1502920917128-1aa500764cbd') },
+  { title: 'Bürogebäude Nordseite',      location: 'Linz, OÖ',        year: '2025', volume: '4.200 m² BGF',         tag: 'Hochbau',   image: UNSPLASH('1486325212027-8081e485255e') },  // construction-site sunset / cranes
+  { title: 'Werkshalle Süd',             location: 'Wels, OÖ',        year: '2024', volume: '6.800 m² Halle',       tag: 'Hallenbau', image: UNSPLASH('1448630360428-65456885c650') },  // tower crane against sky
+  { title: 'Wohnpark Mühlbach',          location: 'Salzburg',        year: '2024', volume: '28 Wohneinheiten',     tag: 'Wohnbau',   image: UNSPLASH('1494522855154-9297ac14b55f') },  // modern residential exterior
+  { title: 'Sanierung Schulgebäude',     location: 'Vöcklabruck',     year: '2023', volume: '3.100 m² renoviert',   tag: 'Sanierung', image: UNSPLASH('1416879595882-3373a0480b5b') },  // construction site overview
+  { title: 'Industriehalle Logistikpark',location: 'Steyr',           year: '2023', volume: '12.500 m² überdacht',  tag: 'Industrie', image: UNSPLASH('1513569771920-c9e1d31714af') },  // modern industrial architecture
+  { title: 'Wohnhaus am Hang',           location: 'Gmunden',         year: '2022', volume: '320 m² Wohnfläche',    tag: 'Privatbau', image: UNSPLASH('1495433324511-bf8e92934d90') },  // architectural building exterior
 ];
 
 /** Default substantial example About copy — used when scrape is thin so the
@@ -127,7 +130,7 @@ export function renderBauunternehmenPage(spec: SiteSpec, slug: string): string {
   // City extraction: try multiple sources so we get the actual city, not "Österreich".
   // Priority: spec.business.city → parse address ("4641 Steinhaus bei Wels" → "Steinhaus bei Wels")
   // → fallback "der Region".
-  const cityFromBusiness = (spec.business as any)?.city as string | undefined;
+  const cityFromBusiness = spec.business?.city;
   const addrCity = (() => {
     const a = spec.contact?.address || '';
     // Look for a "NNNN Cityname" segment (Austrian/German postcodes 4-5 digits).
