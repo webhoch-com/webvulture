@@ -16,6 +16,7 @@ class ScraperService
         protected HomepageExtractor $extractor,
         protected LeadStorageService $store,
         protected AssetDownloader $assets,
+        protected LogoColorExtractor $logoColor,
     ) {}
 
     public function scrape(Lead $lead): WebsiteAnalysis
@@ -88,6 +89,14 @@ class ScraperService
 
             // ── Download assets (logo + content/hero/gallery images) ─────────
             $logoAsset = $this->assets->downloadLogo($lead->id, $extracted['logo_url'] ?? null, $finalUrl);
+            // Dominant non-neutral pixel colour from the logo. Templates use it
+            // as the per-demo accent so each Bauunternehmen demo reads as branded
+            // to its company. Falls back gracefully when no logo was downloaded.
+            $logoColor = null;
+            if ($logoAsset && ! empty($logoAsset['local_path'])) {
+                $absPath = \Illuminate\Support\Facades\Storage::disk('public')->path($logoAsset['local_path']);
+                $logoColor = $this->logoColor->extract($absPath);
+            }
 
             $imagesToDownload = [];
             foreach ($extracted['hero_images'] ?? [] as $img) {
@@ -133,6 +142,7 @@ class ScraperService
                     'logo_url' => $extracted['logo_url'],
                     'logo_path' => $logoAsset['local_path'] ?? null,
                     'logo_mime' => $logoAsset['mime'] ?? null,
+                    'logo_color' => $logoColor,
                     'favicon_url' => $extracted['favicon_url'] ?? null,
                     'contact' => $extracted['contact'],
                     'services' => $extracted['services'],

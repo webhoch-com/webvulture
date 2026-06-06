@@ -84,6 +84,9 @@ class RebuildPackageBuilder
                 'primary_color' => $analysis?->primary_color,
                 'secondary_color' => $analysis?->secondary_color,
                 'accent_color' => $analysis?->accent_color,
+                /** Dominant non-neutral colour extracted from the logo pixels.
+                 *  Templates can pick it for per-demo branding. */
+                'logo_color' => $analysis?->logo_color,
                 'heading_font_family' => $analysis?->heading_font_family,
                 'body_font_family' => $analysis?->body_font_family,
                 'font_imports' => $analysis?->font_imports ?? [],
