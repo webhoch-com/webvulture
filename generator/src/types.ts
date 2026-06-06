@@ -115,6 +115,9 @@ export interface SiteSpec {
   business?: {
     rating?: number;
     review_count?: number;
+    /** City / Standort, carried through from the lead so templates can render
+     *  "in {city}" copy even when no scraped address is available. */
+    city?: string;
   };
   hero: {
     headline: string;

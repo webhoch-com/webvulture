@@ -31,6 +31,9 @@ export async function orchestrate(pkg: RebuildPackage): Promise<OrchestrationRes
   const phone = pkg.business?.phone || pkg.extracted?.contact?.phone || '';
   const email = pkg.extracted?.contact?.email || '';
   const address = pkg.business?.address || pkg.extracted?.contact?.address || '';
+  // pkg.business.city comes from lead.city — preserve it so templates can
+  // address the Standort cleanly without parsing the (often-empty) address.
+  const city = pkg.business?.city?.trim() || '';
   const website = pkg.business?.website || '';
 
   const scrapedTitle = pkg.extracted?.title?.trim() || '';
@@ -281,6 +284,11 @@ export async function orchestrate(pkg: RebuildPackage): Promise<OrchestrationRes
       rating: pkg.business.rating,
       review_count: pkg.business.review_count,
     };
+  }
+  // Always carry city through — templates need it for "in {city}" copy even
+  // when there is no Google-rating / review-count to render a trust pill.
+  if (city) {
+    baseSpec.business = { ...(baseSpec.business ?? {}), city } as SiteSpec['business'];
   }
 
   // ─── Socials (top-level for footer-strip rendering) ───────────────────────
