@@ -147,27 +147,22 @@ export function renderBauunternehmenPage(spec: SiteSpec, slug: string): string {
   const city = (cityFromBusiness?.trim() || addrCity || 'der Region').trim();
   const cityEsc = escapeHtml(city);
   const tagline = escapeHtml(spec.tagline || '');
-  // Always-on hero headline + subhead. Scraped values win when substantive.
-  const scrapedHead = (spec.hero?.headline || '').trim();
-  const headline = escapeHtml(scrapedHead.length > 4 ? scrapedHead : 'Wir bauen, was bleibt.');
-  const scrapedSub = (spec.hero?.subheadline || '').trim();
-  // Subhead: prefer scraped only when it's actually a substantive sentence —
-  // a bare "Wolf System Bauunternehmen aus Scharnstein." is weaker than the
-  // default industrial pitch. Threshold: ≥110 chars catches real subheadlines.
-  const subhead = escapeHtml(scrapedSub.length >= 110 ? scrapedSub : DEFAULT_HERO_SUB);
-  const ctaText = escapeHtml(spec.hero?.cta_text || PRESET.cta_text);
+  // PER USER DIRECTIVE: copy is ALWAYS the curated default. A richer scrape
+  // doesn't win — it just bleeds nav-menus / footer junk in (we observed this
+  // on Granit Bau where a comma-less navigation list became the subheadline).
+  // The contract: only logo, business name and city are injected from the lead.
+  const headline = 'Wir bauen, was bleibt.';
+  const subhead = escapeHtml(DEFAULT_HERO_SUB);
+  const ctaText = escapeHtml(PRESET.cta_text);
 
   const foundedYear = extractFoundedYear(spec);
-  const heritageMilestones = extractHeritageMilestones(spec);
-  const pullQuote = pickPullQuote(spec);
-  const sponsors = extractSponsors(spec);
 
-  // Always-on substantial About body. Use scraped if it's actually a paragraph;
-  // otherwise inject the default template with {businessName} + {location}.
-  const scrapedAbout = (spec.about?.body || '').trim();
-  const aboutBody = scrapedAbout.length >= 200
-    ? scrapedAbout
-    : DEFAULT_ABOUT_TEMPLATE.replace('{businessName}', rawName).replace('{location}', city);
+  // Always-on About body, always using the default template substituted with
+  // the business name + city. Scraped about.body is intentionally ignored —
+  // it routinely contains word-salad on B2B sites that has no editorial value.
+  const aboutBody = DEFAULT_ABOUT_TEMPLATE
+    .replace('{businessName}', rawName)
+    .replace('{location}', city);
 
   // Sparten — prefer real services from spec when available, else preset defaults.
   type Sparte = { kicker: string; title: string; body: string; icon: string };
@@ -216,7 +211,7 @@ const spec = ${JSON.stringify(spec, null, 2)};
 
   <!-- HERO ─────────────────────────────────────────────────────── -->
   <section class="hero hero-with-image" id="top">
-    <div class="hero-bg" style="background-image:linear-gradient(180deg, rgba(15,16,17,0.25) 0%, rgba(15,16,17,0.55) 55%, rgba(15,16,17,0.94) 100%), url('${escapeHtml(hasHeroImage(spec) ? getHeroImage(spec, slug, 2400, 1400) : DEFAULT_HERO_IMAGE)}')" aria-hidden="true"></div>
+    <div class="hero-bg" style="background-image:linear-gradient(180deg, rgba(15,16,17,0.25) 0%, rgba(15,16,17,0.55) 55%, rgba(15,16,17,0.94) 100%), url('${escapeHtml(DEFAULT_HERO_IMAGE)}')" aria-hidden="true"></div>
     <div class="hero-inner">
       <div class="hero-eyebrow">
         <span class="mono">▎ ${escapeHtml(spec.business?.rating ? `★ ${spec.business.rating.toFixed(1)}` : 'BAUUNTERNEHMEN')}</span>
@@ -246,9 +241,6 @@ const spec = ${JSON.stringify(spec, null, 2)};
   <!-- HERITAGE STATEMENT — dark anchor, always renders ────────────── -->
   ${renderHeritageBlock(rawName, cityEsc, foundedYear)}
 
-  <!-- TIMELINE ───────────────────────────────────────────────────── -->
-  ${heritageMilestones.length >= 2 ? renderHeritageTimeline(heritageMilestones) : ''}
-
   <!-- SPARTEN / GESCHÄFTSFELDER ─────────────────────────────────── -->
   ${renderSpartenSection(sparten)}
 
@@ -267,14 +259,8 @@ const spec = ${JSON.stringify(spec, null, 2)};
   <!-- ZERTIFIZIERUNGEN — placeholder badge strip ─────────────────── -->
   ${renderZertifizierungen()}
 
-  <!-- TEAM / FÜHRUNG ─────────────────────────────────────────────── -->
-  ${spec.team && spec.team.length >= 2 ? renderBoardSection(spec.team) : ''}
-
   <!-- KARRIERE CTA — dark prominent ─────────────────────────────── -->
   ${renderKarriereSection(businessName)}
-
-  <!-- SPONSORS / PARTNER ────────────────────────────────────────── -->
-  ${sponsors.length > 0 ? renderSponsorsStrip(sponsors) : ''}
 
   <!-- ANFAHRT + KONTAKT ─────────────────────────────────────────── -->
   ${renderAnfahrtKontakt(spec, ctaText)}
@@ -475,12 +461,14 @@ function renderReferenzen(refs: Referenz[], spec: SiteSpec, slug: string): strin
     </div>
     <div class="referenzen-grid stagger-group">
       ${refs.slice(0, 6).map((r, i) => {
-        const liveImg = hasGalleryImages(spec) && i < galleryCount(spec) ? getGalleryImage(spec, slug, i, 1200, 800) : '';
-        const src = liveImg || r.image;
+        // Per user directive: always use the curated default Referenz photo.
+        // Scraped gallery images displaced our defaults with team headshots
+        // and unrelated content on Granit Bau — defaults give a predictable,
+        // construction-themed grid every time.
         return `
         <article class="referenz-card reveal">
           <div class="referenz-image">
-            <img src="${escapeHtml(src)}" alt="${escapeHtml(r.title)}" onerror="this.onerror=null;this.src='${escapeHtml(r.image)}';">
+            <img src="${escapeHtml(r.image)}" alt="${escapeHtml(r.title)}">
             <div class="referenz-image-overlay" aria-hidden="true">
               <span class="mono">N° ${String(i + 1).padStart(2, '0')}</span>
             </div>
