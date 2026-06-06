@@ -472,7 +472,7 @@ function renderReferenzen(refs: Referenz[], spec: SiteSpec, slug: string): strin
         return `
         <article class="referenz-card reveal">
           <div class="referenz-image">
-            <img src="${escapeHtml(src)}" alt="${escapeHtml(r.title)}" loading="lazy" onerror="this.onerror=null;this.src='${escapeHtml(r.image)}';">
+            <img src="${escapeHtml(src)}" alt="${escapeHtml(r.title)}" onerror="this.onerror=null;this.src='${escapeHtml(r.image)}';">
             <div class="referenz-image-overlay" aria-hidden="true">
               <span class="mono">N° ${String(i + 1).padStart(2, '0')}</span>
             </div>
