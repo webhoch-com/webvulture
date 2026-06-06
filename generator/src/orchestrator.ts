@@ -31,9 +31,6 @@ export async function orchestrate(pkg: RebuildPackage): Promise<OrchestrationRes
   const phone = pkg.business?.phone || pkg.extracted?.contact?.phone || '';
   const email = pkg.extracted?.contact?.email || '';
   const address = pkg.business?.address || pkg.extracted?.contact?.address || '';
-  // pkg.business.city comes from lead.city — preserve it so templates can
-  // address the Standort cleanly without parsing the (often-empty) address.
-  const city = pkg.business?.city?.trim() || '';
   const website = pkg.business?.website || '';
 
   const scrapedTitle = pkg.extracted?.title?.trim() || '';
