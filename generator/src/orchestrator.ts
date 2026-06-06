@@ -553,6 +553,7 @@ function defaultCta(kind: LayoutKind): string {
     case 'restaurant': return 'Tisch reservieren';
     case 'friseur': return 'Termin vereinbaren';
     case 'handwerk': return 'Angebot anfragen';
+    case 'bauunternehmen': return 'Bauvorhaben anfragen';
     case 'arzt': return 'Termin vereinbaren';
     case 'verein':
     case 'verein_musik':
@@ -596,6 +597,7 @@ function defaultPrimaryColor(kind: LayoutKind): string {
     case 'restaurant': return '#a31621';
     case 'friseur': return '#7c3aed';
     case 'handwerk': return '#c2410c';
+    case 'bauunternehmen': return '#0f1011';  // Graphit/anthrazit — Industriell-Editorial DNA
     case 'arzt': return '#0e7490';
     case 'verein':
     case 'verein_musik': return '#2d4a32';

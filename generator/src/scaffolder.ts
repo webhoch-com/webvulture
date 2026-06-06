@@ -71,6 +71,12 @@ function defaultProcessSteps(layoutKind: string): Array<{ title: string; body: s
       { title: 'Sauberes Arbeiten', body: 'Pünktlich, freundlich, mit Respekt vor Ihren Räumen.' },
       { title: 'Garantie & Service', body: 'Ein Anruf — und wir sind wieder da. Auch Jahre später.' },
     ],
+    bauunternehmen: [
+      { title: 'Planung & Konzept', body: 'Vom ersten Lokalaugenschein bis zum verbindlichen Bauvertrag — wir begleiten jede Entscheidung.' },
+      { title: 'Konstruktion & Statik', body: 'Saubere Pläne, geprüfte Statik, transparente Materialwahl.' },
+      { title: 'Ausführung', body: 'Eigene Bauleitung, eingespielte Gewerke, terminsichere Übergabe.' },
+      { title: 'Übergabe & Service', body: 'Funktionsabnahme, vollständige Dokumentation, Garantie über die gesetzlichen Fristen hinaus.' },
+    ],
     kanzlei: [
       { title: 'Erstgespräch', body: 'In vertraulichem Rahmen klären wir Ihre Situation und mögliche Wege.' },
       { title: 'Strategie', body: 'Wir empfehlen den effizientesten Weg — auch wenn das gegen ein Mandat spricht.' },
@@ -123,6 +129,12 @@ function defaultTrustFacts(layoutKind: string): Array<{ label: string; value: st
       { value: '500+', label: 'Aufträge realisiert' },
       { value: 'Festpreis', label: 'Garantiert' },
       { value: '5 Jahre', label: 'Gewährleistung' },
+    ],
+    bauunternehmen: [
+      { value: '500+', label: 'Realisierte Projekte' },
+      { value: '60', label: 'Jahre am Markt' },
+      { value: 'ISO 9001', label: 'Zertifiziert' },
+      { value: 'Eigene Bauleitung', label: 'Aus einer Hand' },
     ],
     kanzlei: [
       { value: '20+', label: 'Jahre Erfahrung' },
@@ -434,7 +446,7 @@ function renderAstroPage(spec: SiteSpec, slug: string, previewBaseDomain: string
     : spec.hero.subheadline;
   const ogTitle = `${spec.business_name} — ${spec.tagline}`.slice(0, 90);
   const fullUrl = `https://${slug}.${previewBaseDomain}/`;
-  const heroSubject = encodeURIComponent(layoutKind === 'restaurant' ? 'restaurant interior' : layoutKind === 'friseur' ? 'hair salon' : layoutKind === 'handwerk' ? 'craftsmanship workshop' : layoutKind === 'arzt' ? 'medical practice' : layoutKind === 'verein' ? 'community gathering' : 'business');
+  const heroSubject = encodeURIComponent(layoutKind === 'restaurant' ? 'restaurant interior' : layoutKind === 'friseur' ? 'hair salon' : layoutKind === 'handwerk' ? 'craftsmanship workshop' : layoutKind === 'bauunternehmen' ? 'modern construction site architecture' : layoutKind === 'arzt' ? 'medical practice' : layoutKind === 'verein' ? 'community gathering' : 'business');
 
   // Stat block — animates the rating/review counts on scroll
   const stats: Array<{ value: string; label: string; suffix?: string; numeric?: boolean }> = [];
@@ -446,6 +458,7 @@ function renderAstroPage(spec: SiteSpec, slug: string, previewBaseDomain: string
   const HEADING_MAP: Record<string, { eyebrow: string; heading: string }> = {
     arzt: { eyebrow: 'Medizinische Leistungen', heading: 'Behandlungsschwerpunkte' },
     handwerk: { eyebrow: 'Leistungsspektrum', heading: 'Unsere Leistungen' },
+    bauunternehmen: { eyebrow: 'Geschäftsfelder', heading: 'Was wir bauen' },
     verein: { eyebrow: 'Was wir machen', heading: 'Vereinsangebote' },
     restaurant: { eyebrow: 'Auf einen Blick', heading: 'Was wir anbieten' },
     friseur: { eyebrow: 'Behandlungen', heading: 'Unsere Leistungen' },
@@ -474,6 +487,7 @@ function renderAstroPage(spec: SiteSpec, slug: string, previewBaseDomain: string
     : layoutKind === 'galerie' ? 'Portfolio'
     : layoutKind === 'autohaus' ? 'Angebote'
     : layoutKind === 'bestattung' ? 'Begleitung'
+    : layoutKind === 'bauunternehmen' ? 'Geschäftsfelder'
     : 'Leistungen';
 
   // Bestattung: override colors to muted/calming palette for sensitivity
@@ -1669,6 +1683,9 @@ export async function scaffoldAstroProject(
   } else if (layoutKind === 'handwerk') {
     const { renderHandwerkPage } = await import('./templates/handwerk.js');
     indexHtml = renderHandwerkPage(spec, slug);
+  } else if (layoutKind === 'bauunternehmen') {
+    const { renderBauunternehmenPage } = await import('./templates/bauunternehmen.js');
+    indexHtml = renderBauunternehmenPage(spec, slug);
   } else if (layoutKind === 'fitness') {
     const { renderFitnessPage } = await import('./templates/fitness.js');
     indexHtml = renderFitnessPage(spec, slug);

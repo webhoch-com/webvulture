@@ -3,6 +3,7 @@ export type LayoutKind =
   | 'restaurant'
   | 'friseur'
   | 'handwerk'
+  | 'bauunternehmen'
   | 'arzt'
   | 'verein'
   | 'verein_musik'

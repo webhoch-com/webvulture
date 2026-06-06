@@ -8,6 +8,7 @@ enum LayoutKind: string
     case Restaurant = 'restaurant';
     case Friseur = 'friseur';
     case Handwerk = 'handwerk';
+    case Bauunternehmen = 'bauunternehmen';
     case Arzt = 'arzt';
     /** @deprecated Use VereinMusik / VereinSport / VereinTradition. Retained as fallback for unmatched Vereine. */
     case Verein = 'verein';
@@ -32,6 +33,7 @@ enum LayoutKind: string
             self::Restaurant => 'Restaurant / Gastro',
             self::Friseur => 'Friseur / Beauty',
             self::Handwerk => 'Handwerk',
+            self::Bauunternehmen => 'Bauunternehmen',
             self::Arzt => 'Arzt / Praxis',
             self::Verein => 'Verein (allgemein)',
             self::VereinMusik => 'Musikverein',
@@ -57,6 +59,7 @@ enum LayoutKind: string
             self::Restaurant => 'Speisekarte, Reservierung, Anfahrt — für Lokale, Cafés, Bistros, Bäckereien, Imbiss.',
             self::Friseur => 'Service-Liste mit Preisen, Online-Booking-CTA — für Friseur, Barber, Beauty, Massage, Spa.',
             self::Handwerk => 'Leistungen, Referenzen, Notdienst-CTA — für Maler, Elektriker, Sanitär, Schlüsseldienst, Reinigung.',
+            self::Bauunternehmen => 'Industriell-editorial Layout: Geschäftsfelder, Referenzen, Process-Timeline, Zertifizierungen — für Hoch-/Tief-/Hallenbau, Generalunternehmer, Bauträger.',
             self::Arzt => 'Sprechzeiten, Termin-Anfrage, Datenschutz-betont — für Ärzte, Therapeuten, Heilpraktiker, Apotheker.',
             self::Verein => 'Generisches Verein-Layout (Fallback) — bevorzugt VereinMusik/VereinSport/VereinTradition.',
             self::VereinMusik => 'Musikkapelle / Chor / Orchester — Konzerttermine, Klangkörper, Probelokal.',
@@ -82,6 +85,7 @@ enum LayoutKind: string
             self::Restaurant => 'o-cake',
             self::Friseur => 'o-sparkles',
             self::Handwerk => 'o-wrench-screwdriver',
+            self::Bauunternehmen => 'o-building-office',
             self::Arzt => 'o-heart',
             self::Verein => 'o-user-group',
             self::VereinMusik => 'o-musical-note',
@@ -107,6 +111,7 @@ enum LayoutKind: string
             self::Restaurant => '🍽️',
             self::Friseur => '💇',
             self::Handwerk => '🔧',
+            self::Bauunternehmen => '🏗️',
             self::Arzt => '🩺',
             self::Verein => '🎺',
             self::VereinMusik => '🎼',
