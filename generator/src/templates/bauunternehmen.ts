@@ -915,17 +915,14 @@ function baseStyles(headingFont: string, bodyFont: string, primary: string, acce
     .heritage-headline em { font-style: italic; color: var(--accent); font-weight: 600; }
     .count-up { display: inline-block; }
 
-    /* ── Reveal animation ──
-       DEFAULT = VISIBLE. Animation only kicks in when JS confirms it can run
-       (adds .js-reveal class to the html element). This way noscript visits,
-       Playwright fullPage screenshots and SEO crawlers all see fully-rendered
-       content, while JS visits get the staggered entrance animation. */
-    .reveal { transition: opacity 0.8s cubic-bezier(0.22, 1, 0.36, 1), transform 0.8s cubic-bezier(0.22, 1, 0.36, 1); }
-    html.js-reveal .reveal:not(.is-visible) { opacity: 0; transform: translateY(28px); }
-    .stagger-group .reveal { transition-delay: calc(var(--stagger-i, 0) * 70ms); }
-    @media (prefers-reduced-motion: reduce) {
-      html.js-reveal .reveal { opacity: 1 !important; transform: none !important; transition: none; }
-    }
+    /* ── Reveal: NO-OP for visibility ──
+       Lesson learned: IO-gated opacity-0 reveals are fragile (Playwright
+       fullPage captures, no-script crawlers, slow JS). For this template
+       the page DOM is the source of truth: content is always visible. Motion
+       comes from the marquee, count-up trustbar, hover-lift cards, and the
+       process-beam-fill — none of which can hide content. */
+    .reveal { /* visibility no-op, kept as a hook for hover effects/JS */ }
+    .stagger-group { /* no-op */ }
     `;
 }
 
@@ -984,37 +981,11 @@ function motionScript(): string {
     }
   } catch (e) {}
 
-  // ── Stagger index ─────────────────────────────────────────────
-  document.querySelectorAll('.stagger-group').forEach(function(g){
-    var i = 0; g.querySelectorAll('.reveal').forEach(function(r){ r.style.setProperty('--stagger-i', i++); });
-  });
-
-  // ── IntersectionObserver reveal ───────────────────────────────
-  // Opt-IN to the hide-and-animate pattern only when IO is available — default
-  // .reveal CSS leaves elements visible (see "DEFAULT = VISIBLE" comment in
-  // the CSS). This way crawlers / noscript / Playwright fullPage screenshots
-  // see fully-rendered content, while JS-enabled visits get the staggered
-  // entrance animation.
-  if ('IntersectionObserver' in window) {
-    var vh = window.innerHeight;
-    document.documentElement.classList.add('js-reveal');
-    var io = new IntersectionObserver(function(entries){
-      entries.forEach(function(e){
-        if (e.isIntersecting) { e.target.classList.add('is-visible'); io.unobserve(e.target); }
-      });
-    }, { threshold: 0.05, rootMargin: '0px 0px -40px 0px' });
-    document.querySelectorAll('.reveal').forEach(function(el){
-      var rect = el.getBoundingClientRect();
-      if (rect.top < vh + 100) {
-        // Already in viewport — mark visible immediately. The transition
-        // smoothly animates from the opacity-0 state set in the same frame
-        // as the .js-reveal class was added to the html element.
-        el.classList.add('is-visible');
-      } else {
-        io.observe(el);
-      }
-    });
-  }
+  /* Reveal animation entirely removed — content is now always visible.
+     We had repeated failures: IO-gated opacity-0 fights Playwright fullPage
+     captures, no-script crawlers, and a 0.8s transition window where content
+     looks empty even during a real scroll. Motion is now restricted to
+     non-visibility effects (marquee, count-up, hover-lift, beam-fill). */
 
   // ── Count-up on trustbar / stats ──────────────────────────────
   function countUp(el) {
