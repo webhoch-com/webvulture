@@ -223,6 +223,23 @@ export const BRANCH_PRESETS: Record<LayoutKind, BranchPreset> = {
     cta_style: 'quiet',
     section_tones: ['cream', 'offwhite', 'cream', 'tint', 'cream'],
   },
+  bauunternehmen: {
+    // Industriell-Editorial — Graphit + Beton-Creme + Safety-Gelb
+    // Familjen Grotesk (industrielle EU-Charakter) + Public Sans (neutrale Grotesk)
+    // + JetBrains Mono (technische Labels/Nummerierungen).
+    // Bewusst KEIN Inter, Space Grotesk oder Roboto — Anti-AI-Slop-Wahl.
+    bg: '#f4f1ec',             // Beton-Creme (Wolf/Granit-Inspiration)
+    ink: '#0f1011',            // Graphit/Anthrazit
+    accent: '#f59e0b',         // Safety-Gelb (Baustellen-Anker)
+    primary: '#0f1011',        // Graphit dominates — ink-theater
+    secondary: '#1e3a5f',      // Konstruktiv-Blau (Refinement-Akzent)
+    display_font: "'Familjen Grotesk', 'Inter Tight', system-ui, sans-serif",
+    body_font: "'Public Sans', system-ui, sans-serif",
+    font_imports: ['https://fonts.bunny.net/css?family=familjen-grotesk:500,600,700|public-sans:300,400,500,600,700|jetbrains-mono:400,500,600&display=swap'],
+    cta_text: 'Bauvorhaben anfragen',
+    cta_style: 'loud',
+    section_tones: ['cream', 'carbon', 'offwhite', 'carbon', 'cream'],
+  },
   autohaus: {
     bg: '#FFFFFF',
     ink: '#0E0E10',
