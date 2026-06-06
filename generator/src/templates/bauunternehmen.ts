@@ -61,14 +61,30 @@ const DEFAULT_SPARTEN: Array<{ kicker: string; title: string; body: string; icon
   { kicker: '04', title: 'Generalunternehmung', body: 'Ein Vertrag, ein Termin, ein Ansprechpartner — alle Gewerke aus einer Hand koordiniert.', icon: 'gear' },
 ];
 
-/** Default Referenzen when no project gallery is available. */
-type Referenz = { title: string; location: string; year: string; volume?: string; tag?: string };
+/** Default Referenzen + curated Unsplash images so the section is always
+ *  visually populated even when no project gallery was scraped. The Unsplash
+ *  photo IDs are stable construction/architecture stock that has lived at
+ *  those URLs for years. */
+type Referenz = { title: string; location: string; year: string; volume?: string; tag?: string; image: string };
+const UNSPLASH = (id: string, w = 1200) => `https://images.unsplash.com/photo-${id}?w=${w}&auto=format&fit=crop&q=80`;
+const DEFAULT_HERO_IMAGE = UNSPLASH('1487958449943-2429e8be8625', 2400);
+const DEFAULT_KARRIERE_IMAGE = UNSPLASH('1581094794329-c8112a89af12', 1800);
 const DEFAULT_REFERENZEN: Referenz[] = [
-  { title: 'Bürogebäude Nordseite', location: 'Linz, OÖ', year: '2025', volume: '4.200 m² BGF', tag: 'Hochbau' },
-  { title: 'Werkshalle Süd', location: 'Wels, OÖ', year: '2024', volume: '6.800 m² Halle', tag: 'Hallenbau' },
-  { title: 'Wohnpark Mühlbach', location: 'Salzburg', year: '2024', volume: '28 Wohneinheiten', tag: 'Wohnbau' },
-  { title: 'Sanierung Schulgebäude', location: 'Vöcklabruck', year: '2023', volume: '3.100 m² renoviert', tag: 'Sanierung' },
+  { title: 'Bürogebäude Nordseite', location: 'Linz, OÖ', year: '2025', volume: '4.200 m² BGF', tag: 'Hochbau', image: UNSPLASH('1503387762-592deb58ef4e') },
+  { title: 'Werkshalle Süd',        location: 'Wels, OÖ', year: '2024', volume: '6.800 m² Halle', tag: 'Hallenbau', image: UNSPLASH('1486325212027-8081e485255e') },
+  { title: 'Wohnpark Mühlbach',     location: 'Salzburg', year: '2024', volume: '28 Wohneinheiten', tag: 'Wohnbau', image: UNSPLASH('1545324418-cc1a3fa10c00') },
+  { title: 'Sanierung Schulgebäude',location: 'Vöcklabruck', year: '2023', volume: '3.100 m² renoviert', tag: 'Sanierung', image: UNSPLASH('1429497419816-9ca5cfb4571a') },
+  { title: 'Industriehalle Logistikpark', location: 'Steyr', year: '2023', volume: '12.500 m² überdacht', tag: 'Industrie', image: UNSPLASH('1444084316824-690245beea7c') },
+  { title: 'Wohnhaus am Hang',      location: 'Gmunden', year: '2022', volume: '320 m² Wohnfläche', tag: 'Privatbau', image: UNSPLASH('1502920917128-1aa500764cbd') },
 ];
+
+/** Default substantial example About copy — used when scrape is thin so the
+ *  page never reads as "just a name + city". Substitutes {businessName} and
+ *  {location} at render time. */
+const DEFAULT_ABOUT_TEMPLATE = `Seit über drei Jahrzehnten realisiert {businessName} in {location} und Umgebung Bauvorhaben, auf die man stolz sein kann — Wohn- und Geschäftsbauten, Industriehallen, Sanierungen. Eigene Bauleitung, eingespielte Gewerke, transparente Kalkulation. Wir nehmen Bauherrschaften ernst und behandeln jedes Projekt, als wäre es unser eigenes. Was uns von größeren Generalunternehmern unterscheidet: persönliche Ansprechpartner während der gesamten Bauzeit, kurze Wege, und eine Bauleitung, die wirklich am Bau steht — nicht nur im Büro.`;
+
+const DEFAULT_HERITAGE_TEMPLATE = `Seit Generationen in {location} verwurzelt.`;
+const DEFAULT_HERO_SUB = `Hochbau · Tiefbau · Generalunternehmung — vom ersten Lokalaugenschein bis zur schlüsselfertigen Übergabe. Alle Gewerke aus einer Hand, koordiniert von einer Bauleitung, die wirklich am Bau steht.`;
 
 /* ───────────────────────── Inline SVG icons ────────────────────────── */
 /** Minimal monoline technical icons — no fills, currentColor strokes, drawing-board feel. */
@@ -107,15 +123,28 @@ export function renderBauunternehmenPage(spec: SiteSpec, slug: string): string {
     .map((u: string) => `<link rel="stylesheet" href="${escapeHtml(u)}" crossorigin>`).join('\n  ');
 
   const businessName = escapeHtml(spec.business_name);
+  const rawName = spec.business_name;
+  const city = (spec.contact?.address?.split(',').pop()?.trim() || 'Österreich').replace(/^\d{4,5}\s*/, '');
+  const cityEsc = escapeHtml(city);
   const tagline = escapeHtml(spec.tagline || '');
-  const headline = escapeHtml(spec.hero?.headline || spec.tagline || spec.business_name);
-  const subhead = escapeHtml(spec.hero?.subheadline || '');
+  // Always-on hero headline + subhead. Scraped values win when substantive.
+  const scrapedHead = (spec.hero?.headline || '').trim();
+  const headline = escapeHtml(scrapedHead.length > 4 ? scrapedHead : 'Wir bauen, was bleibt.');
+  const scrapedSub = (spec.hero?.subheadline || '').trim();
+  const subhead = escapeHtml(scrapedSub.length > 24 ? scrapedSub : DEFAULT_HERO_SUB);
   const ctaText = escapeHtml(spec.hero?.cta_text || PRESET.cta_text);
 
   const foundedYear = extractFoundedYear(spec);
   const heritageMilestones = extractHeritageMilestones(spec);
   const pullQuote = pickPullQuote(spec);
   const sponsors = extractSponsors(spec);
+
+  // Always-on substantial About body. Use scraped if it's actually a paragraph;
+  // otherwise inject the default template with {businessName} + {location}.
+  const scrapedAbout = (spec.about?.body || '').trim();
+  const aboutBody = scrapedAbout.length >= 200
+    ? scrapedAbout
+    : DEFAULT_ABOUT_TEMPLATE.replace('{businessName}', rawName).replace('{location}', city);
 
   // Sparten — prefer real services from spec when available, else preset defaults.
   type Sparte = { kicker: string; title: string; body: string; icon: string };
@@ -129,15 +158,9 @@ export function renderBauunternehmenPage(spec: SiteSpec, slug: string): string {
       }))
     : DEFAULT_SPARTEN;
 
-  // Referenzen — use gallery images if available with overlay metadata,
-  // else default text-only cards.
-  const galleryRefs: Referenz[] = hasGalleryImages(spec)
-    ? Array.from({ length: Math.min(galleryCount(spec), 6) }).map((_, i) => ({
-        title: `Projekt ${String(i + 1).padStart(2, '0')}`,
-        location: spec.contact?.address?.split(',').pop()?.trim() || 'Österreich',
-        year: String(new Date().getFullYear() - i),
-      }))
-    : [];
+  // (galleryRefs replaced: Referenzen now always render the curated DEFAULT_
+  // REFERENZEN set; live gallery images take over individual cards when
+  // available, picked inside the renderer.)
 
   const cookieBanner = `
 <div id="wv-cookie" class="wv-cookie" hidden aria-hidden="true">
@@ -169,8 +192,8 @@ const spec = ${JSON.stringify(spec, null, 2)};
   ${renderTopNav(businessName, ctaText)}
 
   <!-- HERO ─────────────────────────────────────────────────────── -->
-  <section class="hero ${hasHeroImage(spec) ? 'hero-with-image' : 'hero-decor'}" id="top">
-    ${hasHeroImage(spec) ? `<div class="hero-bg" style="background-image:linear-gradient(180deg, rgba(15,16,17,0.15) 0%, rgba(15,16,17,0.5) 60%, rgba(15,16,17,0.92) 100%), url('${getHeroImage(spec, slug, 2400, 1400)}')" aria-hidden="true"></div>` : ''}
+  <section class="hero hero-with-image" id="top">
+    <div class="hero-bg" style="background-image:linear-gradient(180deg, rgba(15,16,17,0.25) 0%, rgba(15,16,17,0.55) 55%, rgba(15,16,17,0.94) 100%), url('${escapeHtml(hasHeroImage(spec) ? getHeroImage(spec, slug, 2400, 1400) : DEFAULT_HERO_IMAGE)}')" aria-hidden="true"></div>
     <div class="hero-inner">
       <div class="hero-eyebrow">
         <span class="mono">▎ ${escapeHtml(spec.business?.rating ? `★ ${spec.business.rating.toFixed(1)}` : 'BAUUNTERNEHMEN')}</span>
@@ -197,8 +220,8 @@ const spec = ${JSON.stringify(spec, null, 2)};
   <!-- TRUST BAR (mini-stats, count-up) ───────────────────────────── -->
   ${renderTrustBarFallback(foundedYear)}
 
-  <!-- HERITAGE STATEMENT — dark anchor ───────────────────────────── -->
-  ${renderHeritageStatement(spec, foundedYear)}
+  <!-- HERITAGE STATEMENT — dark anchor, always renders ────────────── -->
+  ${renderHeritageBlock(rawName, cityEsc, foundedYear)}
 
   <!-- TIMELINE ───────────────────────────────────────────────────── -->
   ${heritageMilestones.length >= 2 ? renderHeritageTimeline(heritageMilestones) : ''}
@@ -209,14 +232,14 @@ const spec = ${JSON.stringify(spec, null, 2)};
   <!-- SPARTEN-MARQUEE — simplyworks-style horizontal scroll ─────── -->
   ${renderSpartenMarquee(sparten)}
 
-  <!-- ABOUT — dropcap ────────────────────────────────────────────── -->
-  ${spec.about?.body ? renderAbout(spec.about.body, businessName) : ''}
+  <!-- ABOUT — dropcap, always renders with substantial copy ────────── -->
+  ${renderAbout(aboutBody, businessName)}
 
   <!-- PROCESS TIMELINE — I-Träger ────────────────────────────────── -->
   ${renderProcessTimeline()}
 
-  <!-- REFERENZEN ────────────────────────────────────────────────── -->
-  ${renderReferenzen(galleryRefs.length >= 3 ? galleryRefs : DEFAULT_REFERENZEN, spec, slug)}
+  <!-- REFERENZEN — always-on with curated default images ──────────── -->
+  ${renderReferenzen(DEFAULT_REFERENZEN, spec, slug)}
 
   <!-- ZERTIFIZIERUNGEN — placeholder badge strip ─────────────────── -->
   ${renderZertifizierungen()}
@@ -235,17 +258,7 @@ const spec = ${JSON.stringify(spec, null, 2)};
 
   <!-- FOOTER WORDMARK ───────────────────────────────────────────── -->
   ${renderFooterWordmark(businessName)}
-  ${renderQuietFooter({
-    businessName,
-    tagline: spec.tagline,
-    ctaText,
-    ctaHref: '#anfrage',
-    legalLinks: [
-      { label: 'Impressum', href: '/impressum' },
-      { label: 'Datenschutz', href: '/datenschutz' },
-    ],
-    socials: spec.socials ?? {},
-  })}
+  ${renderMinimalFooter(businessName, spec)}
 
   ${cookieBanner}
 
@@ -340,19 +353,62 @@ function renderSpartenMarquee(sparten: Array<{ title: string }>): string {
 function renderAbout(body: string, businessName: string): string {
   // Light cleaning — strip leading non-letter chars.
   let cleaned = body.trim().replace(/^[^A-Za-zÄÖÜäöü(]+/, '');
-  if (cleaned.length > 600) cleaned = cleaned.slice(0, 600).replace(/\s+\S*$/, '') + '…';
+  if (cleaned.length > 1100) cleaned = cleaned.slice(0, 1100).replace(/\s+\S*$/, '') + '…';
   return `
 <section id="ueber-uns" class="about-section reveal">
   <div class="container about-container">
-    <div class="section-head">
-      <span class="section-eyebrow mono">▎ ÜBER UNS · 06 / 11</span>
-      <h2 class="section-title">Wer <em>${businessName}</em> ist.</h2>
-    </div>
-    <div class="about-body">
-      <p class="dropcap">${escapeHtml(cleaned)}</p>
+    <div class="about-grid">
+      <div class="section-head">
+        <span class="section-eyebrow mono">▎ ÜBER UNS · 06 / 11</span>
+        <h2 class="section-title">Wer <em>${businessName}</em> ist.</h2>
+      </div>
+      <div class="about-body">
+        <p class="dropcap">${escapeHtml(cleaned)}</p>
+      </div>
     </div>
   </div>
 </section>`;
+}
+
+function renderHeritageBlock(rawName: string, cityEsc: string, foundedYear: number | null): string {
+  const years = foundedYear ? new Date().getFullYear() - foundedYear : null;
+  const kicker = years
+    ? `<span class="count-up" data-target="${years}">${years}</span> Jahre Bauen mit Handschlagqualität`
+    : `Generationen Bauen mit Handschlagqualität`;
+  const yearStr = foundedYear
+    ? `Seit <em>${foundedYear}</em> in ${cityEsc}.`
+    : DEFAULT_HERITAGE_TEMPLATE.replace('{location}', cityEsc).replace('Seit', 'Seit <em>Generationen</em>');
+  return `
+<section class="heritage-statement reveal">
+  <div class="heritage-inner">
+    <span class="heritage-kicker">${kicker}</span>
+    <h2 class="heritage-headline">${yearStr}</h2>
+  </div>
+</section>`;
+}
+
+function renderMinimalFooter(businessName: string, spec: SiteSpec): string {
+  const socials = spec.socials ?? {};
+  const socialEntries = Object.entries(socials).filter(([, url]) => typeof url === 'string' && url);
+  return `
+<footer class="bau-footer">
+  <div class="container bau-footer-grid">
+    <div class="bau-footer-brand">
+      <strong>${businessName}</strong>
+      <span class="mono">▎ Demo-Vorschau · keine Geschäftsbeziehung</span>
+    </div>
+    <div class="bau-footer-meta">
+      <div class="bau-footer-links">
+        <a href="/impressum">Impressum</a>
+        <a href="/datenschutz">Datenschutz</a>
+        ${socialEntries.length > 0 ? socialEntries.slice(0, 4).map(([k, v]) => `<a href="${escapeHtml(String(v))}" target="_blank" rel="noopener">${escapeHtml(k)}</a>`).join('') : ''}
+      </div>
+      <div class="bau-footer-credit mono">
+        Erstellt von <a href="https://webhoch.com" target="_blank" rel="noopener">Webagentur Hochmeir e.U.</a>
+      </div>
+    </div>
+  </div>
+</footer>`;
 }
 
 function renderProcessTimeline(): string {
@@ -383,7 +439,9 @@ function renderProcessTimeline(): string {
 }
 
 function renderReferenzen(refs: Referenz[], spec: SiteSpec, slug: string): string {
-  const useGalleryImages = hasGalleryImages(spec);
+  // Always render with curated default images. If scraped gallery images exist
+  // and one matches an index, swap it in — but the default photos guarantee a
+  // beautiful section regardless of what the scrape produced.
   return `
 <section id="referenzen" class="referenzen-section reveal">
   <div class="container">
@@ -393,12 +451,16 @@ function renderReferenzen(refs: Referenz[], spec: SiteSpec, slug: string): strin
       <p class="section-lead">Eine Auswahl aus den letzten Jahren — quer durch die Gewerke, quer durch das Land.</p>
     </div>
     <div class="referenzen-grid stagger-group">
-      ${refs.slice(0, 6).map((r, i) => `
+      ${refs.slice(0, 6).map((r, i) => {
+        const liveImg = hasGalleryImages(spec) && i < galleryCount(spec) ? getGalleryImage(spec, slug, i, 1200, 800) : '';
+        const src = liveImg || r.image;
+        return `
         <article class="referenz-card reveal">
           <div class="referenz-image">
-            ${useGalleryImages && i < galleryCount(spec)
-              ? `<img src="${getGalleryImage(spec, slug, i, 900, 600)}" alt="${escapeHtml(r.title)}" loading="lazy" onerror="this.parentNode.classList.add('referenz-image--fallback'); this.style.display='none';">`
-              : `<div class="referenz-image-fallback"><span class="mono">N° ${String(i + 1).padStart(2, '0')}</span></div>`}
+            <img src="${escapeHtml(src)}" alt="${escapeHtml(r.title)}" loading="lazy" onerror="this.onerror=null;this.src='${escapeHtml(r.image)}';">
+            <div class="referenz-image-overlay" aria-hidden="true">
+              <span class="mono">N° ${String(i + 1).padStart(2, '0')}</span>
+            </div>
           </div>
           <div class="referenz-meta">
             <span class="mono referenz-year">${escapeHtml(r.year)}</span>
@@ -409,8 +471,8 @@ function renderReferenzen(refs: Referenz[], spec: SiteSpec, slug: string): strin
             <span class="referenz-location">${escapeHtml(r.location)}</span>
             ${r.volume ? `<span class="referenz-volume mono">${escapeHtml(r.volume)}</span>` : ''}
           </div>
-        </article>
-      `).join('')}
+        </article>`;
+      }).join('')}
     </div>
   </div>
 </section>`;
@@ -447,12 +509,11 @@ function renderZertifizierungen(): string {
 
 function renderKarriereSection(businessName: string): string {
   return `
-<section class="karriere-section reveal">
-  <div class="karriere-bg" aria-hidden="true"></div>
+<section class="karriere-section reveal" style="background-image:linear-gradient(110deg, rgba(15,16,17,0.96) 0%, rgba(15,16,17,0.78) 55%, rgba(15,16,17,0.35) 100%), url('${escapeHtml(DEFAULT_KARRIERE_IMAGE)}')">
   <div class="container karriere-inner">
     <span class="section-eyebrow mono">▎ KARRIERE · 10 / 11</span>
     <h2 class="karriere-headline">Wir bauen <em>mit Ihnen</em> auf.</h2>
-    <p class="karriere-lead">Polier, Maurer, Baumeister, Bürokraft — wer in einem stabilen Team unbefristet anpacken will, ist bei ${businessName} richtig.</p>
+    <p class="karriere-lead">Polier, Maurer, Baumeister, Bürokraft — wer in einem stabilen Team unbefristet anpacken will, ist bei ${businessName} richtig. Faire Bezahlung, eigener Fuhrpark, kollegiales Umfeld.</p>
     <div class="karriere-cta-row">
       <a href="#anfrage" class="btn-primary btn-on-dark">Offene Stellen ansehen <span aria-hidden="true">→</span></a>
       <a href="#kontakt" class="btn-ghost btn-on-dark">Initiativbewerbung</a>
@@ -706,8 +767,10 @@ function baseStyles(headingFont: string, bodyFont: string, primary: string, acce
 
     /* ── About ── */
     .about-section { padding: clamp(3.5rem, 6vw, 5.5rem) 1.5rem; background: var(--bg-2); }
-    .about-container { max-width: 900px; }
-    .about-body p.dropcap { font-size: 1.15rem; line-height: 1.7; color: var(--ink-2); margin: 0; }
+    .about-container { max-width: 1200px; margin: 0 auto; }
+    .about-grid { display: grid; gap: 2.5rem 4rem; grid-template-columns: 1fr; align-items: start; }
+    @media (min-width: 880px) { .about-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); } }
+    .about-body p.dropcap { font-size: 1.05rem; line-height: 1.7; color: var(--ink-2); margin: 0; }
     .about-body p.dropcap::first-letter { font-family: var(--display); float: left; font-size: clamp(4rem, 7vw, 5.5rem); font-weight: 600; line-height: 0.88; padding-right: 0.5rem; padding-top: 0.25rem; color: var(--ink); }
 
     /* ── Process timeline (I-Träger) ── */
@@ -751,8 +814,10 @@ function baseStyles(headingFont: string, bodyFont: string, primary: string, acce
     .referenz-card { background: var(--surface); border: 1px solid var(--rule); padding: 1.25rem; display: flex; flex-direction: column; gap: 0.85rem; transition: transform .3s, box-shadow .3s; }
     .referenz-card:hover { transform: translateY(-6px); box-shadow: 0 24px 40px -20px rgba(15,16,17,0.22); }
     .referenz-image { aspect-ratio: 3 / 2; background: var(--ink); overflow: hidden; position: relative; }
-    .referenz-image img { width: 100%; height: 100%; object-fit: cover; transition: transform .6s ease; }
-    .referenz-card:hover .referenz-image img { transform: scale(1.05); }
+    .referenz-image img { width: 100%; height: 100%; object-fit: cover; transition: transform .6s ease, filter .35s; filter: saturate(0.92) contrast(1.05); }
+    .referenz-card:hover .referenz-image img { transform: scale(1.06); filter: saturate(1) contrast(1.08); }
+    .referenz-image-overlay { position: absolute; top: 0.75rem; left: 0.75rem; padding: 0.25rem 0.55rem; background: rgba(15,16,17,0.7); color: var(--accent); border: 1px solid rgba(245,158,11,0.4); backdrop-filter: blur(4px); }
+    .referenz-image-overlay .mono { color: var(--accent); font-size: 0.7rem; }
     .referenz-image-fallback { width: 100%; height: 100%; display: grid; place-items: center; color: rgba(245,241,232,0.55); background: repeating-linear-gradient(45deg, var(--ink) 0, var(--ink) 12px, #16181b 12px, #16181b 24px); }
     .referenz-meta { display: flex; gap: 0.85rem; align-items: center; }
     .referenz-year { color: var(--ink-3); }
@@ -772,7 +837,7 @@ function baseStyles(headingFont: string, bodyFont: string, primary: string, acce
     .zertifizierungen-note { text-align: center; color: var(--ink-3); font-size: 0.7rem; margin-top: 1.5rem; }
 
     /* ── Karriere ── */
-    .karriere-section { position: relative; isolation: isolate; padding: clamp(4rem, 7vw, 6.5rem) 1.5rem; background: var(--ink); color: #f5f1e8; overflow: hidden; }
+    .karriere-section { position: relative; isolation: isolate; padding: clamp(4rem, 7vw, 6.5rem) 1.5rem; background-color: var(--ink); background-size: cover; background-position: center; color: #f5f1e8; overflow: hidden; }
     .karriere-bg { position: absolute; inset: 0; background: radial-gradient(ellipse at right top, rgba(245,158,11,0.18) 0%, transparent 60%); z-index: -1; }
     .karriere-inner { max-width: 720px; }
     .karriere-section .section-eyebrow { color: var(--accent); }
@@ -812,6 +877,28 @@ function baseStyles(headingFont: string, bodyFont: string, primary: string, acce
       -webkit-background-clip: text; background-clip: text;
     }
     .footer-wordmark-meta { color: var(--accent); margin-top: 1.5rem; }
+
+    /* ── Minimal footer (replaces editorial-style QuietFooter to avoid
+       a second redundant wordmark stacked under the chiseled XXL one) ── */
+    .bau-footer { background: var(--ink); color: rgba(245,241,232,0.78); padding: 1.5rem 1rem 2rem; border-top: 1px solid rgba(245,241,232,0.08); }
+    .bau-footer-grid { max-width: 1700px; display: flex; gap: 1.5rem; align-items: center; flex-wrap: wrap; justify-content: space-between; }
+    .bau-footer-brand strong { display: block; font-family: var(--display); color: #f5f1e8; font-size: 1rem; font-weight: 600; }
+    .bau-footer-brand .mono { color: rgba(245,241,232,0.45); font-size: 0.7rem; }
+    .bau-footer-meta { display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-end; }
+    .bau-footer-links { display: flex; gap: 1.25rem; flex-wrap: wrap; }
+    .bau-footer-links a { color: rgba(245,241,232,0.72); text-decoration: none; font-size: 0.85rem; border-bottom: 1px solid transparent; padding-bottom: 1px; }
+    .bau-footer-links a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+    .bau-footer-credit { color: rgba(245,241,232,0.45); font-size: 0.7rem; }
+    .bau-footer-credit a { color: var(--accent); text-decoration: none; }
+
+    /* ── Heritage-statement: keep editorial's geometry but anchor in the
+       industrial palette (dark Graphit + Safety-Gold accent rather than
+       the default Trachten green). Avoids the "verein"-feel. */
+    .heritage-statement { background: linear-gradient(135deg, var(--ink) 0%, #000 100%); padding: clamp(3.5rem, 6vw, 5rem) 1.5rem; }
+    .heritage-kicker { color: var(--accent); border: 1px solid rgba(245,158,11,0.45); padding: 0.45rem 1rem; border-radius: 999px; display: inline-block; font-family: var(--mono); letter-spacing: 0.14em; text-transform: uppercase; font-size: 0.74rem; margin-bottom: 1.5rem; }
+    .heritage-headline { color: #f5f1e8; font-family: var(--display); font-weight: 600; font-size: clamp(2.5rem, 7vw, 5.5rem); line-height: 1.05; letter-spacing: -0.02em; max-width: 22ch; margin: 0 auto; }
+    .heritage-headline em { font-style: italic; color: var(--accent); font-weight: 600; }
+    .count-up { display: inline-block; }
 
     /* ── Reveal animation ── */
     .reveal { opacity: 0; transform: translateY(28px); transition: opacity 0.8s cubic-bezier(0.22, 1, 0.36, 1), transform 0.8s cubic-bezier(0.22, 1, 0.36, 1); }
@@ -884,13 +971,26 @@ function motionScript(): string {
   });
 
   // ── IntersectionObserver reveal ───────────────────────────────
+  // Reveal initial state: elements above (or near) the fold must be VISIBLE
+  // immediately so first-paint and screenshots don't read as a blank page.
+  // Only off-screen elements stay opacity-0 and animate as they enter view.
   if ('IntersectionObserver' in window) {
     var io = new IntersectionObserver(function(entries){
       entries.forEach(function(e){
         if (e.isIntersecting) { e.target.classList.add('is-visible'); io.unobserve(e.target); }
       });
-    }, { threshold: 0.12, rootMargin: '0px 0px -80px 0px' });
-    document.querySelectorAll('.reveal').forEach(function(el){ io.observe(el); });
+    }, { threshold: 0.05, rootMargin: '0px 0px -40px 0px' });
+    var vh = window.innerHeight;
+    document.querySelectorAll('.reveal').forEach(function(el){
+      var rect = el.getBoundingClientRect();
+      // Anything that's already touching the initial viewport gets revealed
+      // immediately — no waiting for IO to fire on next frame.
+      if (rect.top < vh + 100) {
+        el.classList.add('is-visible');
+      } else {
+        io.observe(el);
+      }
+    });
   } else {
     document.querySelectorAll('.reveal').forEach(function(el){ el.classList.add('is-visible'); });
   }
