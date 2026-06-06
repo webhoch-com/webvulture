@@ -237,6 +237,15 @@ export async function orchestrate(pkg: RebuildPackage): Promise<OrchestrationRes
   if (scrapedColor) {
     baseSpec.brand.primary_color = scrapedColor;
   }
+  // Logo-extracted dominant colour — carries through to brand.logo_color so the
+  // template can prefer it for the accent/CTA. Higher signal than CSS-scraped
+  // accent because logos are the most stable brand mark.
+  const logoColor = pkg.brand?.logo_color
+    ? normalizeHex(pkg.brand.logo_color)
+    : null;
+  if (logoColor) {
+    baseSpec.brand.logo_color = logoColor;
+  }
 
   // ─── Forward the structured brand block from the PHP RebuildPackageBuilder ──
   // Previously dropped on the floor: secondary + accent + fonts. Surfacing them

@@ -66,6 +66,10 @@ export interface RebuildPackage {
     primary_color?: string | null;
     secondary_color?: string | null;
     accent_color?: string | null;
+    /** Dominant non-neutral hex colour extracted from the scraped logo pixels.
+     *  Templates can prefer this over scraped CSS-accent to look "branded to
+     *  the company" even when the surrounding website uses a generic accent. */
+    logo_color?: string | null;
     heading_font_family?: string | null;
     body_font_family?: string | null;
     /** Raw `<link>`/`@import` URLs to load the original fonts at render time. */
@@ -159,6 +163,10 @@ export interface SiteSpec {
      */
     secondary_color?: string;
     accent_color?: string;
+    /** Dominant non-neutral colour extracted from the scraped logo pixels — a
+     *  per-demo brand anchor that templates can prefer over CSS-scraped accent
+     *  to look more strongly branded to the company. */
+    logo_color?: string;
     /** Heading typeface name as detected from `<style>`/`@font-face`. */
     heading_font_family?: string;
     /** Body typeface name. */

@@ -112,7 +112,12 @@ const PROCESS_STEPS: Array<{ phase: string; title: string; body: string }> = [
 export function renderBauunternehmenPage(spec: SiteSpec, slug: string): string {
   const PRESET = getBranchPreset('bauunternehmen');
   const primary = spec.brand?.primary_color || PRESET.primary;
-  const accent = spec.brand?.accent_color || PRESET.accent;
+  // Accent priority: logo-extracted colour (per-demo brand anchor, highest
+  // signal — colours come from the LOGO pixels) → CSS-scraped accent_color
+  // → industrial-editorial Safety-Gold default. The logo win makes each demo
+  // read as truly branded to its company, per the user's "farblich an die
+  // Logo-Farben angepasst" Direktive.
+  const accent = spec.brand?.logo_color || spec.brand?.accent_color || PRESET.accent;
   const headingFont = spec.brand?.heading_font_family
     ? `'${spec.brand.heading_font_family}', ${PRESET.display_font}`
     : PRESET.display_font;
