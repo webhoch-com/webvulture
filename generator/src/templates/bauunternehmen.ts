@@ -83,7 +83,7 @@ const DEFAULT_REFERENZEN: Referenz[] = [
  *  {location} at render time. */
 const DEFAULT_ABOUT_TEMPLATE = `Seit über drei Jahrzehnten realisiert {businessName} in {location} und Umgebung Bauvorhaben, auf die man stolz sein kann — Wohn- und Geschäftsbauten, Industriehallen, Sanierungen. Eigene Bauleitung, eingespielte Gewerke, transparente Kalkulation. Wir nehmen Bauherrschaften ernst und behandeln jedes Projekt, als wäre es unser eigenes. Was uns von größeren Generalunternehmern unterscheidet: persönliche Ansprechpartner während der gesamten Bauzeit, kurze Wege, und eine Bauleitung, die wirklich am Bau steht — nicht nur im Büro.`;
 
-const DEFAULT_HERITAGE_TEMPLATE = `Seit Generationen in {location} verwurzelt.`;
+const DEFAULT_HERITAGE_TEMPLATE = `Seit <em>Generationen</em> in {location} verwurzelt.`;
 const DEFAULT_HERO_SUB = `Hochbau · Tiefbau · Generalunternehmung — vom ersten Lokalaugenschein bis zur schlüsselfertigen Übergabe. Alle Gewerke aus einer Hand, koordiniert von einer Bauleitung, die wirklich am Bau steht.`;
 
 /* ───────────────────────── Inline SVG icons ────────────────────────── */
@@ -124,14 +124,29 @@ export function renderBauunternehmenPage(spec: SiteSpec, slug: string): string {
 
   const businessName = escapeHtml(spec.business_name);
   const rawName = spec.business_name;
-  const city = (spec.contact?.address?.split(',').pop()?.trim() || 'Österreich').replace(/^\d{4,5}\s*/, '');
+  // City extraction: try multiple sources so we get the actual city, not "Österreich".
+  // Priority: spec.business.city → parse address ("4641 Steinhaus bei Wels" → "Steinhaus bei Wels")
+  // → fallback "der Region".
+  const cityFromBusiness = (spec.business as any)?.city as string | undefined;
+  const addrCity = (() => {
+    const a = spec.contact?.address || '';
+    // Look for a "NNNN Cityname" segment (Austrian/German postcodes 4-5 digits).
+    const m = a.match(/\b\d{4,5}\s+([A-Za-zÄÖÜäöüß\-./ ]{2,40}?)(?:[,\n]|$)/);
+    if (m) return m[1].trim();
+    // Last comma-separated chunk minus leading zip.
+    return (a.split(',').pop()?.trim() || '').replace(/^\d{4,5}\s*/, '');
+  })();
+  const city = (cityFromBusiness?.trim() || addrCity || 'der Region').trim();
   const cityEsc = escapeHtml(city);
   const tagline = escapeHtml(spec.tagline || '');
   // Always-on hero headline + subhead. Scraped values win when substantive.
   const scrapedHead = (spec.hero?.headline || '').trim();
   const headline = escapeHtml(scrapedHead.length > 4 ? scrapedHead : 'Wir bauen, was bleibt.');
   const scrapedSub = (spec.hero?.subheadline || '').trim();
-  const subhead = escapeHtml(scrapedSub.length > 24 ? scrapedSub : DEFAULT_HERO_SUB);
+  // Subhead: prefer scraped only when it's actually a substantive sentence —
+  // a bare "Wolf System Bauunternehmen aus Scharnstein." is weaker than the
+  // default industrial pitch. Threshold: ≥110 chars catches real subheadlines.
+  const subhead = escapeHtml(scrapedSub.length >= 110 ? scrapedSub : DEFAULT_HERO_SUB);
   const ctaText = escapeHtml(spec.hero?.cta_text || PRESET.cta_text);
 
   const foundedYear = extractFoundedYear(spec);
@@ -377,7 +392,7 @@ function renderHeritageBlock(rawName: string, cityEsc: string, foundedYear: numb
     : `Generationen Bauen mit Handschlagqualität`;
   const yearStr = foundedYear
     ? `Seit <em>${foundedYear}</em> in ${cityEsc}.`
-    : DEFAULT_HERITAGE_TEMPLATE.replace('{location}', cityEsc).replace('Seit', 'Seit <em>Generationen</em>');
+    : DEFAULT_HERITAGE_TEMPLATE.replace('{location}', cityEsc);
   return `
 <section class="heritage-statement reveal">
   <div class="heritage-inner">
@@ -900,12 +915,16 @@ function baseStyles(headingFont: string, bodyFont: string, primary: string, acce
     .heritage-headline em { font-style: italic; color: var(--accent); font-weight: 600; }
     .count-up { display: inline-block; }
 
-    /* ── Reveal animation ── */
-    .reveal { opacity: 0; transform: translateY(28px); transition: opacity 0.8s cubic-bezier(0.22, 1, 0.36, 1), transform 0.8s cubic-bezier(0.22, 1, 0.36, 1); }
-    .reveal.is-visible { opacity: 1; transform: translateY(0); }
+    /* ── Reveal animation ──
+       DEFAULT = VISIBLE. Animation only kicks in when JS confirms it can run
+       (adds .js-reveal class to the html element). This way noscript visits,
+       Playwright fullPage screenshots and SEO crawlers all see fully-rendered
+       content, while JS visits get the staggered entrance animation. */
+    .reveal { transition: opacity 0.8s cubic-bezier(0.22, 1, 0.36, 1), transform 0.8s cubic-bezier(0.22, 1, 0.36, 1); }
+    html.js-reveal .reveal:not(.is-visible) { opacity: 0; transform: translateY(28px); }
     .stagger-group .reveal { transition-delay: calc(var(--stagger-i, 0) * 70ms); }
     @media (prefers-reduced-motion: reduce) {
-      .reveal { opacity: 1; transform: none; transition: none; }
+      html.js-reveal .reveal { opacity: 1 !important; transform: none !important; transition: none; }
     }
     `;
 }
@@ -971,28 +990,30 @@ function motionScript(): string {
   });
 
   // ── IntersectionObserver reveal ───────────────────────────────
-  // Reveal initial state: elements above (or near) the fold must be VISIBLE
-  // immediately so first-paint and screenshots don't read as a blank page.
-  // Only off-screen elements stay opacity-0 and animate as they enter view.
+  // Opt-IN to the hide-and-animate pattern only when IO is available — default
+  // .reveal CSS leaves elements visible (see "DEFAULT = VISIBLE" comment in
+  // the CSS). This way crawlers / noscript / Playwright fullPage screenshots
+  // see fully-rendered content, while JS-enabled visits get the staggered
+  // entrance animation.
   if ('IntersectionObserver' in window) {
+    var vh = window.innerHeight;
+    document.documentElement.classList.add('js-reveal');
     var io = new IntersectionObserver(function(entries){
       entries.forEach(function(e){
         if (e.isIntersecting) { e.target.classList.add('is-visible'); io.unobserve(e.target); }
       });
     }, { threshold: 0.05, rootMargin: '0px 0px -40px 0px' });
-    var vh = window.innerHeight;
     document.querySelectorAll('.reveal').forEach(function(el){
       var rect = el.getBoundingClientRect();
-      // Anything that's already touching the initial viewport gets revealed
-      // immediately — no waiting for IO to fire on next frame.
       if (rect.top < vh + 100) {
+        // Already in viewport — mark visible immediately. The transition
+        // smoothly animates from the opacity-0 state set in the same frame
+        // as the .js-reveal class was added to the html element.
         el.classList.add('is-visible');
       } else {
         io.observe(el);
       }
     });
-  } else {
-    document.querySelectorAll('.reveal').forEach(function(el){ el.classList.add('is-visible'); });
   }
 
   // ── Count-up on trustbar / stats ──────────────────────────────
