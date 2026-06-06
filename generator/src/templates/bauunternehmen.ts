@@ -77,7 +77,7 @@ const DEFAULT_REFERENZEN: Referenz[] = [
   { title: 'Werkshalle Süd',             location: 'Wels, OÖ',        year: '2024', volume: '6.800 m² Halle',       tag: 'Hallenbau', image: UNSPLASH('1448630360428-65456885c650') },  // tower crane against sky
   { title: 'Wohnpark Mühlbach',          location: 'Salzburg',        year: '2024', volume: '28 Wohneinheiten',     tag: 'Wohnbau',   image: UNSPLASH('1494522855154-9297ac14b55f') },  // modern residential exterior
   { title: 'Sanierung Schulgebäude',     location: 'Vöcklabruck',     year: '2023', volume: '3.100 m² renoviert',   tag: 'Sanierung', image: UNSPLASH('1416879595882-3373a0480b5b') },  // construction site overview
-  { title: 'Industriehalle Logistikpark',location: 'Steyr',           year: '2023', volume: '12.500 m² überdacht',  tag: 'Industrie', image: UNSPLASH('1513569771920-c9e1d31714af') },  // modern industrial architecture
+  { title: 'Industriehalle Logistikpark',location: 'Steyr',           year: '2023', volume: '12.500 m² überdacht',  tag: 'Industrie', image: UNSPLASH('1574691250077-03a929faece5') },  // industrial / construction site
   { title: 'Wohnhaus am Hang',           location: 'Gmunden',         year: '2022', volume: '320 m² Wohnfläche',    tag: 'Privatbau', image: UNSPLASH('1495433324511-bf8e92934d90') },  // architectural building exterior
 ];
 
@@ -642,17 +642,22 @@ function baseStyles(headingFont: string, bodyFont: string, primary: string, acce
     .legal-demo-meta strong { color: #fff; }
 
     .wv-cookie {
-      position: fixed; left: 1rem; right: 1rem; bottom: 1rem;
-      max-width: 720px; margin: 0 auto;
+      /* Anchored bottom-right as a discrete card. Stays out of hero shots and
+         first-impression screenshots while remaining clearly visible to a
+         real user who hasn't yet given consent. */
+      position: fixed; right: 1.25rem; bottom: 1.25rem; left: auto;
+      max-width: 380px; width: calc(100% - 2.5rem);
       background: var(--ink); color: #f5f1e8;
-      border-radius: 4px; padding: 1.25rem 1.5rem;
+      border-radius: 4px; padding: 1rem 1.15rem;
       display: none; z-index: 50;
       border: 1px solid var(--accent);
-      box-shadow: 0 28px 60px -20px rgba(0,0,0,0.6);
+      box-shadow: 0 24px 50px -16px rgba(0,0,0,0.55);
+    }
+    @media (max-width: 540px) {
+      .wv-cookie { left: 1rem; right: 1rem; max-width: none; width: auto; }
     }
     .wv-cookie[data-state="visible"] { display: block; }
-    .wv-cookie-inner { display: grid; gap: 1rem; grid-template-columns: 1fr; }
-    @media (min-width: 720px) { .wv-cookie-inner { grid-template-columns: 1fr auto; align-items: center; } }
+    .wv-cookie-inner { display: flex; flex-direction: column; gap: 0.85rem; }
     .wv-cookie-text strong { display: block; font-family: var(--display); font-size: 1rem; margin-bottom: 0.25rem; letter-spacing: 0.02em; }
     .wv-cookie-text p { margin: 0; font-size: 0.85rem; color: rgba(245,241,232,0.78); }
     .wv-cookie-text a { color: var(--accent); }
