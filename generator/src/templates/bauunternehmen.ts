@@ -75,7 +75,7 @@ const DEFAULT_KARRIERE_IMAGE = UNSPLASH('1581094794329-c8112a89af12', 1800);
 const DEFAULT_REFERENZEN: Referenz[] = [
   { title: 'Bürogebäude Nordseite',      location: 'Linz, OÖ',        year: '2025', volume: '4.200 m² BGF',         tag: 'Hochbau',   image: UNSPLASH('1486325212027-8081e485255e') },  // construction-site sunset / cranes
   { title: 'Werkshalle Süd',             location: 'Wels, OÖ',        year: '2024', volume: '6.800 m² Halle',       tag: 'Hallenbau', image: UNSPLASH('1448630360428-65456885c650') },  // tower crane against sky
-  { title: 'Wohnpark Mühlbach',          location: 'Salzburg',        year: '2024', volume: '28 Wohneinheiten',     tag: 'Wohnbau',   image: UNSPLASH('1494522855154-9297ac14b55f') },  // modern residential exterior
+  { title: 'Wohnpark Mühlbach',          location: 'Salzburg',        year: '2024', volume: '28 Wohneinheiten',     tag: 'Wohnbau',   image: UNSPLASH('1493809842364-78817add7ffb') },  // modern apartment interior (Cloud-Gate ID was a sculpture, not a Wohnpark)
   { title: 'Sanierung Schulgebäude',     location: 'Vöcklabruck',     year: '2023', volume: '3.100 m² renoviert',   tag: 'Sanierung', image: UNSPLASH('1416879595882-3373a0480b5b') },  // construction site overview
   { title: 'Industriehalle Logistikpark',location: 'Steyr',           year: '2023', volume: '12.500 m² überdacht',  tag: 'Industrie', image: UNSPLASH('1574691250077-03a929faece5') },  // industrial / construction site
   { title: 'Wohnhaus am Hang',           location: 'Gmunden',         year: '2022', volume: '320 m² Wohnfläche',    tag: 'Privatbau', image: UNSPLASH('1495433324511-bf8e92934d90') },  // architectural building exterior
