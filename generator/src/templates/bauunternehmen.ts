@@ -118,15 +118,14 @@ export function renderBauunternehmenPage(spec: SiteSpec, slug: string): string {
   // read as truly branded to its company, per the user's "farblich an die
   // Logo-Farben angepasst" Direktive.
   const accent = spec.brand?.logo_color || spec.brand?.accent_color || PRESET.accent;
-  const headingFont = spec.brand?.heading_font_family
-    ? `'${spec.brand.heading_font_family}', ${PRESET.display_font}`
-    : PRESET.display_font;
-  const bodyFont = spec.brand?.body_font_family
-    ? `'${spec.brand.body_font_family}', ${PRESET.body_font}`
-    : PRESET.body_font;
-  const fontImports = (spec.brand?.font_imports && spec.brand.font_imports.length > 0)
-    ? spec.brand.font_imports
-    : PRESET.font_imports;
+  // Typography is fully template-driven, per the pure-defaults contract.
+  // Scraped heading/body fonts intentionally IGNORED — they routinely bring
+  // in generic system fonts like "Open Sans" (Wolf System scrape) that
+  // undermine the Familjen-Grotesk industrial-editorial DNA. The accent and
+  // logo colour are enough per-demo branding.
+  const headingFont = PRESET.display_font;
+  const bodyFont = PRESET.body_font;
+  const fontImports = PRESET.font_imports;
   const fontImportTags = fontImports
     .map((u: string) => `<link rel="stylesheet" href="${escapeHtml(u)}" crossorigin>`).join('\n  ');
 
