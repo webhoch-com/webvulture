@@ -80,7 +80,7 @@ export function renderVereinTraditionPage(spec: SiteSpec, slug: string): string 
     ? `'${spec.brand.body_font_family}', 'Lora', Georgia, serif`
     : "'Lora', Georgia, serif";
   const fontImportTags = (spec.brand?.font_imports && spec.brand.font_imports.length > 0)
-    ? spec.brand.font_imports.map(u => `<link rel="stylesheet" href="${u}" crossorigin>`).join('\n  ')
+    ? spec.brand.font_imports.map(u => `<link rel="stylesheet" href="${escapeHtml(u)}" crossorigin>`).join('\n  ')
     : `<link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
   <link href="https://fonts.bunny.net/css?family=cinzel:400,500,600,700|lora:400,500,600,700&display=swap" rel="stylesheet">`;
 

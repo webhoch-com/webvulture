@@ -38,3 +38,8 @@ Thumbs.db
 # PHP backup files
 *.bak
 *.bak-*
+
+# macOS Finder duplicate-on-restore artifacts
+* 2.*
+* 2/
+* [2-9].*

@@ -1,6 +1,6 @@
 import { exec } from 'node:child_process';
 import { mkdir, cp, rm } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve as resolvePath } from 'node:path';
 import { promisify } from 'node:util';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
@@ -8,6 +8,7 @@ import { readFileSync } from 'node:fs';
 const execAsync = promisify(exec);
 
 const ARTIFACTS_DIR = process.env.ARTIFACTS_DIR ?? '/tmp/wv-artifacts';
+const PROJECTS_DIR = process.env.PROJECTS_DIR ?? '/tmp/wv-projects';
 const PREVIEW_ROOT_DOMAIN = process.env.PREVIEW_ROOT_DOMAIN ?? 'webseiten-werkstatt.at';
 const PREVIEW_SCHEME = process.env.PREVIEW_SCHEME ?? 'https';
 
@@ -28,18 +29,29 @@ export async function buildAstroProject(
     throw new Error(`Invalid slug "${slug}" — must match ${SLUG_RE}`);
   }
 
+  // Path-traversal guard: the caller-supplied astroProjectPath becomes the
+  // `cwd` of `npm install` and `npx astro build`. A compromised upstream
+  // could otherwise smuggle "/tmp/wv-projects/../../etc/cron.d/..." to run
+  // npm install in a sensitive directory. Resolve and require it to live
+  // strictly under PROJECTS_DIR.
+  const resolvedProject = resolvePath(astroProjectPath);
+  const resolvedRoot = resolvePath(PROJECTS_DIR);
+  if (resolvedProject !== resolvedRoot && !resolvedProject.startsWith(resolvedRoot + '/')) {
+    throw new Error(`astroProjectPath "${astroProjectPath}" escapes PROJECTS_DIR (${resolvedRoot})`);
+  }
+
   await execAsync('npm install --prefer-offline --no-audit --no-fund', {
-    cwd: astroProjectPath,
+    cwd: resolvedProject,
     timeout: 360_000,
   });
 
   await execAsync('npx astro build', {
-    cwd: astroProjectPath,
+    cwd: resolvedProject,
     timeout: 360_000,
     env: { ...process.env, NODE_ENV: 'production' },
   });
 
-  const distPath = join(astroProjectPath, 'dist');
+  const distPath = join(resolvedProject, 'dist');
 
   // Keyed by slug — matches Nginx wildcard vhost {slug}.webseiten-werkstatt.at → /var/www/.../{slug}/
   const artifactDir = join(ARTIFACTS_DIR, slug);

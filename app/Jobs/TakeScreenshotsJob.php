@@ -27,6 +27,14 @@ class TakeScreenshotsJob implements ShouldQueue
         $analysis = $lead->websiteAnalysis;
 
         if (! $analysis || ! $lead->website) {
+            // Used to silently return — operator + caller (chained from
+            // ScrapeSiteJob) saw the job succeed but no screenshots appeared.
+            Log::info('TakeScreenshotsJob: skipping (missing analysis or website)', [
+                'lead_id' => $this->leadId,
+                'has_analysis' => (bool) $analysis,
+                'has_website' => (bool) $lead->website,
+            ]);
+
             return;
         }
 

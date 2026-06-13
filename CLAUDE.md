@@ -55,9 +55,11 @@ Neue Domain-Services brauchen mindestens einen Unit-Test. Neue Webhook-Routen br
 - [ ] `composer dev` läuft sauber, `php artisan test` grün
 - [ ] Pflicht-Reviews aus globaler `~/.claude/CLAUDE.md` (code-review + security-guidance) durchgelaufen
 
-## Predesigned-Layouts (Roadmap, noch nicht implementiert)
+## Branchen-Templates (implementiert)
 
-Geplante Erweiterung — siehe Plan in `~/.claude/plans/alalysiere-diese-gesamte-app-lazy-thunder.md` Phase 4. Branchen-Templates für: Restaurant, Friseur, Handwerk, Arzt, **Verein** (Musik/Sport, regionaler Fokus).
+**20 Branchen-Templates** unter `generator/src/templates/` — Enum `LayoutKind` in `generator/src/types.ts` ist die Source-of-Truth: `standard`, `restaurant`, `friseur`, `handwerk`, `bauunternehmen`, `arzt`, `verein`, `verein_musik`, `verein_sport`, `verein_tradition`, `golfclub`, `kanzlei`, `hotel`, `fitness`, `einzelhandel`, `galerie`, `autohaus`, `energie`, `bestattung`, `tier`.
+
+Pure-Defaults-Vertrag: Jedes Template bringt kuratierte Beispiel-Texte und -Bilder mit. Pro Demo werden **nur Logo, Firmenname und Ort** eingesetzt; die Akzentfarbe wird per `LogoColorExtractor` aus dem Logo abgeleitet. Neue Templates immer in `LayoutKind` + `orchestrator.ts` (defaultCta/defaultFontStyle/defaultPrimaryColor) + diese Liste eintragen.
 
 ## Deploy-Flow
 

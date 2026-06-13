@@ -702,7 +702,7 @@ new class extends Component {
                         @if($a->downloaded_assets && count((array) $a->downloaded_assets))
                             <div class="mt-3">
                                 <div class="text-xs text-base-content/60 uppercase tracking-wider mb-2">Asset-Vorschau</div>
-                                <div class="grid grid-cols-4 gap-2">
+                                <div class="grid grid-cols-3 sm:grid-cols-4 gap-2">
                                     @foreach(array_slice((array) $a->downloaded_assets, 0, 8) as $asset)
                                         @if(!empty($asset['public_url']))
                                             <img src="{{ str_replace(['http://localhost','https://localhost'], request()->getSchemeAndHttpHost(), $asset['public_url']) }}"
@@ -994,5 +994,19 @@ new class extends Component {
         display: flex; flex-wrap: wrap; gap: 0.5rem;
         padding-top: 1.25rem;
         border-top: 1px solid rgba(0,0,0,0.06);
+    }
+
+    /* ─── Detail rows in cards: prevent label/value collision on mobile ── */
+    .lead-show .lead-hero-actions .btn,
+    .lead-show .lead-hero-actions .x-button { min-height: 44px; }
+    @media (max-width: 480px) {
+        /* Stack each <dt>/<dd> pair vertically so long values (e.g. URLs)
+           don't collide with the label or overflow the card. */
+        .lead-show dl > div.flex { flex-direction: column; align-items: flex-start; }
+        .lead-show dl > div.flex > .truncate { max-width: 100% !important; text-align: left; }
+        .lead-show dl > div.flex > span,
+        .lead-show dl > div.flex > a { text-align: left; }
+        /* Quick-meta row links/badges shrink-friendly */
+        .lead-quick-item { max-width: 100%; word-break: break-word; }
     }
 </style>

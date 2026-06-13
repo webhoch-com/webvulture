@@ -1,2 +1,29 @@
+# WebVulture is an internal admin tool. Nothing here should ever appear
+# in search results. The blanket User-agent: * rule covers conforming bots;
+# the explicit per-agent blocks name AI crawlers observed ignoring the wildcard.
 User-agent: *
+Disallow: /
+
+User-agent: GPTBot
+Disallow: /
+
+User-agent: ChatGPT-User
+Disallow: /
+
+User-agent: PerplexityBot
+Disallow: /
+
+User-agent: ClaudeBot
+Disallow: /
+
+User-agent: Google-Extended
+Disallow: /
+
+User-agent: Bytespider
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: anthropic-ai
 Disallow: /

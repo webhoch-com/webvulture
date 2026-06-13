@@ -545,7 +545,8 @@ new #[Layout('components.layouts.guest')] class extends Component {
         flex-shrink: 0;
         width: 20px; height: 20px;
         border-radius: 6px;
-        border: 1.5px solid rgba(255,255,255,0.2);
+        /* Was rgba(255,255,255,0.2) — invisible on the white card. */
+        border: 1.5px solid rgba(10,10,10,0.18);
         background: rgba(0,0,0,0.025);
         position: relative;
         transition: all .2s;
@@ -660,9 +661,15 @@ new #[Layout('components.layouts.guest')] class extends Component {
         .auth-brand-hero { margin: 1rem 0; }
         .auth-headline { font-size: clamp(2rem, 8vw, 2.5rem); }
         .auth-lead { font-size: 0.96rem; }
-        .auth-brand-stats { grid-template-columns: repeat(3, 1fr); padding: 1.25rem 0; }
-        .auth-stat strong { font-size: 1.5rem; }
-        .auth-stat span { font-size: 0.65rem; }
+        .auth-brand-stats { grid-template-columns: repeat(3, 1fr); padding: 1.25rem 0; gap: 0.5rem; }
+        .auth-stat strong { font-size: clamp(1.1rem, 4vw, 1.5rem); word-break: break-word; }
+        .auth-stat span { font-size: 0.62rem; word-break: break-word; }
         .auth-brand-foot { font-size: 0.76rem; padding-bottom: 0; }
+    }
+    @media (max-width: 360px) {
+        /* On the smallest phones, "5+ Jahre" + "Self-hosted" wraps awkwardly
+           at 3 columns — stack to 1 col so each stat keeps full width. */
+        .auth-brand-stats { grid-template-columns: 1fr 1fr; }
+        .auth-brand-stats .auth-stat:nth-child(3) { grid-column: 1 / -1; }
     }
 </style>
