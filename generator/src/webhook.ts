@@ -1,17 +1,40 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 const secret = process.env.GENERATOR_SECRET ?? process.env.WV_SECRET ?? '';
+// LARAVEL_APP_URL is the only legitimate target for outbound webhook calls.
+// We enforce a strict origin allowlist so a compromised caller cannot trick
+// the generator into POSTing to internal services (169.254.169.254 IMDS,
+// localhost:6379 Redis, etc.) by supplying an attacker-controlled webhook_url.
+const ALLOWED_WEBHOOK_ORIGIN = (process.env.LARAVEL_APP_URL ?? process.env.APP_URL ?? '').replace(/\/+$/, '');
 
 if (!secret) {
   // eslint-disable-next-line no-console
   console.warn('[webhook] GENERATOR_SECRET is empty — webhook calls will be rejected by Laravel');
+}
+if (!ALLOWED_WEBHOOK_ORIGIN) {
+  // eslint-disable-next-line no-console
+  console.warn('[webhook] LARAVEL_APP_URL/APP_URL is empty — callWebhook() will reject every URL');
 }
 
 function sign(timestamp: string, body: string): string {
   return createHmac('sha256', secret).update(`${timestamp}.${body}`).digest('hex');
 }
 
+/** SSRF guard: only POST back to the configured Laravel origin. */
+function isAllowedWebhookUrl(target: string): boolean {
+  if (!ALLOWED_WEBHOOK_ORIGIN) return false;
+  let parsed: URL;
+  try { parsed = new URL(target); } catch { return false; }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
+  let allowed: URL;
+  try { allowed = new URL(ALLOWED_WEBHOOK_ORIGIN); } catch { return false; }
+  return parsed.origin === allowed.origin;
+}
+
 export async function callWebhook(url: string, body: Record<string, unknown>): Promise<void> {
+  if (!isAllowedWebhookUrl(url)) {
+    throw new Error(`callWebhook: refused — URL ${url} is not the configured LARAVEL_APP_URL origin`);
+  }
   const timestamp = String(Math.floor(Date.now() / 1000));
   const rawBody = JSON.stringify(body);
   const sig = sign(timestamp, rawBody);

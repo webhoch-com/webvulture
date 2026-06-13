@@ -213,23 +213,25 @@ new class extends Component {
 
     <aside class="settings-status">
         <h3>Status aller Slots</h3>
-        <table>
-            <thead><tr><th>Slot</th><th>Quelle</th><th>Status</th></tr></thead>
-            <tbody>
-                @foreach ($statusList as $row)
-                    <tr>
-                        <td><code>{{ $row['group'] }}.{{ $row['key'] }}</code></td>
-                        <td>
-                            @if ($row['source'] === 'db') <span class="src-db">DB</span>
-                            @elseif ($row['source'] === 'env') <span class="src-env">.env</span>
-                            @else <span class="src-missing">leer</span>
-                            @endif
-                        </td>
-                        <td>{{ $row['present'] ? '✓ gesetzt' : '— leer' }}</td>
-                    </tr>
-                @endforeach
-            </tbody>
-        </table>
+        <div class="settings-status-wrap">
+            <table>
+                <thead><tr><th>Slot</th><th>Quelle</th><th>Status</th></tr></thead>
+                <tbody>
+                    @foreach ($statusList as $row)
+                        <tr>
+                            <td><code>{{ $row['group'] }}.{{ $row['key'] }}</code></td>
+                            <td>
+                                @if ($row['source'] === 'db') <span class="src-db">DB</span>
+                                @elseif ($row['source'] === 'env') <span class="src-env">.env</span>
+                                @else <span class="src-missing">leer</span>
+                                @endif
+                            </td>
+                            <td>{{ $row['present'] ? '✓ gesetzt' : '— leer' }}</td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
     </aside>
 </div>
 
@@ -251,8 +253,8 @@ new class extends Component {
 
     .settings-flash { padding: .85rem 1.15rem; border-radius: 10px; background: rgba(34,197,94,.1); border: 1px solid rgba(34,197,94,.3); color: #15803d; font-weight: 500; }
 
-    .settings-tabs { display: flex; gap: .5rem; flex-wrap: wrap; border-bottom: 1px solid rgba(0,0,0,.08); padding-bottom: 0; }
-    .settings-tab { padding: .75rem 1.25rem; border: none; background: none; cursor: pointer; font-weight: 500; color: rgba(10,10,10,.55); border-bottom: 2px solid transparent; transition: all .15s; font-family: inherit; font-size: .95rem; }
+    .settings-tabs { display: flex; gap: .5rem; flex-wrap: wrap; border-bottom: 1px solid rgba(0,0,0,.08); padding-bottom: 0; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .settings-tab { padding: .75rem 1.25rem; border: none; background: none; cursor: pointer; font-weight: 500; color: rgba(10,10,10,.55); border-bottom: 2px solid transparent; transition: all .15s; font-family: inherit; font-size: .95rem; min-height: 44px; white-space: nowrap; }
     .settings-tab:hover { color: #0a0a0a; }
     .settings-tab.is-active { color: #ec65ba; border-bottom-color: #ec65ba; }
 
@@ -262,10 +264,10 @@ new class extends Component {
     .settings-field { display: flex; flex-direction: column; gap: .5rem; }
     .settings-field label { display: flex; align-items: center; gap: .5rem; font-family: 'JetBrains Mono', monospace; font-size: .72rem; letter-spacing: .12em; text-transform: uppercase; font-weight: 600; color: rgba(10,10,10,.6); }
     .settings-badge { background: rgba(124,58,237,.1); color: #7c3aed; padding: .15rem .55rem; border-radius: 999px; font-size: .65rem; letter-spacing: .04em; }
-    .settings-input-row { display: flex; gap: .5rem; align-items: stretch; }
-    .settings-input { flex: 1; padding: .85rem 1.1rem; background: rgba(0,0,0,.025); border: 1px solid rgba(0,0,0,.1); border-radius: 10px; font-family: 'JetBrains Mono', monospace; font-size: .95rem; outline: none; transition: all .2s; }
+    .settings-input-row { display: flex; gap: .5rem; align-items: stretch; min-width: 0; }
+    .settings-input { flex: 1; min-width: 0; padding: .85rem 1.1rem; background: rgba(0,0,0,.025); border: 1px solid rgba(0,0,0,.1); border-radius: 10px; font-family: 'JetBrains Mono', monospace; font-size: .95rem; outline: none; transition: all .2s; min-height: 44px; }
     .settings-input:focus { border-color: #ec65ba; background: rgba(236,101,186,.05); box-shadow: 0 0 0 4px rgba(236,101,186,.1); }
-    .settings-clear { padding: 0 1rem; background: rgba(0,0,0,.05); border: 1px solid rgba(0,0,0,.1); border-radius: 10px; cursor: pointer; font-size: 1.2rem; color: rgba(10,10,10,.5); transition: all .15s; }
+    .settings-clear { flex-shrink: 0; padding: 0 1rem; background: rgba(0,0,0,.05); border: 1px solid rgba(0,0,0,.1); border-radius: 10px; cursor: pointer; font-size: 1.2rem; color: rgba(10,10,10,.5); transition: all .15s; min-width: 44px; min-height: 44px; }
     .settings-clear:hover { background: rgba(248,113,113,.1); border-color: rgba(248,113,113,.3); color: #dc2626; }
     .settings-help { color: rgba(10,10,10,.5); font-size: .82rem; }
 
@@ -273,7 +275,7 @@ new class extends Component {
     .settings-tests h3 { margin: 0 0 1rem; font-family: 'Fraunces', Georgia, serif; font-size: 1.05rem; font-weight: 500; }
     .settings-test-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: .75rem; }
     .settings-test-tile { display: flex; flex-direction: column; gap: .5rem; }
-    .settings-test-btn { padding: .65rem 1rem; background: #fff; border: 1px solid rgba(0,0,0,.1); border-radius: 8px; cursor: pointer; font-weight: 500; font-size: .9rem; transition: all .15s; font-family: inherit; }
+    .settings-test-btn { padding: .65rem 1rem; background: #fff; border: 1px solid rgba(0,0,0,.1); border-radius: 8px; cursor: pointer; font-weight: 500; font-size: .9rem; transition: all .15s; font-family: inherit; min-height: 44px; }
     .settings-test-btn:hover { background: rgba(6,182,212,.08); border-color: rgba(6,182,212,.3); }
     .settings-test-btn:disabled { opacity: .5; }
     .settings-test-result { font-size: .82rem; line-height: 1.4; margin: 0; padding: .5rem .75rem; border-radius: 6px; }
@@ -287,8 +289,9 @@ new class extends Component {
 
     .settings-status { background: rgba(0,0,0,.02); border: 1px solid rgba(0,0,0,.08); border-radius: 16px; padding: 1.5rem; }
     .settings-status h3 { margin: 0 0 1rem; font-family: 'Fraunces', Georgia, serif; font-size: 1.05rem; font-weight: 500; }
-    .settings-status table { width: 100%; border-collapse: collapse; font-size: .88rem; }
-    .settings-status th, .settings-status td { padding: .5rem .75rem; text-align: left; border-bottom: 1px solid rgba(0,0,0,.06); }
+    .settings-status-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 -1.5rem; padding: 0 1.5rem; }
+    .settings-status table { width: 100%; border-collapse: collapse; font-size: .88rem; min-width: 480px; }
+    .settings-status th, .settings-status td { padding: .5rem .75rem; text-align: left; border-bottom: 1px solid rgba(0,0,0,.06); white-space: nowrap; }
     .settings-status th { font-family: 'JetBrains Mono', monospace; font-size: .7rem; letter-spacing: .1em; text-transform: uppercase; color: rgba(10,10,10,.5); font-weight: 600; }
     .settings-status code { font-size: .82rem; background: rgba(0,0,0,.04); padding: .15rem .4rem; border-radius: 4px; }
     .src-db { color: #15803d; font-weight: 600; }

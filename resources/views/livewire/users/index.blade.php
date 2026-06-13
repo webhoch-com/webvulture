@@ -14,8 +14,21 @@ new class extends Component {
     public string $newPassword = '';
     public string $newRole = 'member';
 
+    /**
+     * Defense-in-depth: the route uses `admin` middleware, but Livewire's
+     * `/livewire/update` POSTs re-run server-side code paths and a middleware
+     * misconfiguration in the future should NOT silently expose user-mutation
+     * to non-admins. Every state-changing action hard-aborts unless the
+     * caller is still an admin at the moment of the call.
+     */
+    private function assertAdmin(): void
+    {
+        abort_unless(auth()->user()?->isAdmin() === true, 403, 'Nur Administratoren.');
+    }
+
     public function createUser(): void
     {
+        $this->assertAdmin();
         $validated = $this->validate([
             'newName' => 'required|string|min:2|max:120',
             'newEmail' => 'required|email|unique:users,email',
@@ -37,6 +50,7 @@ new class extends Component {
 
     public function toggleActive(int $userId): void
     {
+        $this->assertAdmin();
         $u = User::find($userId);
         if (! $u) {
             return;
@@ -52,6 +66,7 @@ new class extends Component {
 
     public function changeRole(int $userId, string $role): void
     {
+        $this->assertAdmin();
         if (! in_array($role, ['admin', 'member'], true)) {
             return;
         }
@@ -112,37 +127,39 @@ new class extends Component {
 
     <section class="users-card">
         <h2>Bestehende Benutzer</h2>
-        <table class="users-table">
-            <thead><tr><th>Name</th><th>E-Mail</th><th>Rolle</th><th>Status</th><th></th></tr></thead>
-            <tbody>
-                @foreach ($users as $u)
-                    <tr @if (! $u->is_active) class="is-inactive" @endif>
-                        <td>{{ $u->name }}</td>
-                        <td><code>{{ $u->email }}</code></td>
-                        <td>
-                            <select wire:change="changeRole({{ $u->id }}, $event.target.value)" class="users-role">
-                                <option value="member" @selected($u->role?->value === 'member')>Mitarbeiter</option>
-                                <option value="admin" @selected($u->role?->value === 'admin')>Administrator</option>
-                            </select>
-                        </td>
-                        <td>
-                            @if ($u->is_active) <span class="users-pill users-pill-ok">aktiv</span>
-                            @else <span class="users-pill users-pill-off">deaktiviert</span>
-                            @endif
-                        </td>
-                        <td>
-                            @if ($u->id !== auth()->id())
-                                <button wire:click="toggleActive({{ $u->id }})" class="users-btn users-btn-ghost">
-                                    {{ $u->is_active ? 'Deaktivieren' : 'Aktivieren' }}
-                                </button>
-                            @else
-                                <span class="users-self">(Sie selbst)</span>
-                            @endif
-                        </td>
-                    </tr>
-                @endforeach
-            </tbody>
-        </table>
+        <div class="users-table-wrap">
+            <table class="users-table">
+                <thead><tr><th>Name</th><th>E-Mail</th><th>Rolle</th><th>Status</th><th></th></tr></thead>
+                <tbody>
+                    @foreach ($users as $u)
+                        <tr @if (! $u->is_active) class="is-inactive" @endif>
+                            <td>{{ $u->name }}</td>
+                            <td><code>{{ $u->email }}</code></td>
+                            <td>
+                                <select wire:change="changeRole({{ $u->id }}, $event.target.value)" class="users-role">
+                                    <option value="member" @selected($u->role?->value === 'member')>Mitarbeiter</option>
+                                    <option value="admin" @selected($u->role?->value === 'admin')>Administrator</option>
+                                </select>
+                            </td>
+                            <td>
+                                @if ($u->is_active) <span class="users-pill users-pill-ok">aktiv</span>
+                                @else <span class="users-pill users-pill-off">deaktiviert</span>
+                                @endif
+                            </td>
+                            <td>
+                                @if ($u->id !== auth()->id())
+                                    <button wire:click="toggleActive({{ $u->id }})" class="users-btn users-btn-ghost">
+                                        {{ $u->is_active ? 'Deaktivieren' : 'Aktivieren' }}
+                                    </button>
+                                @else
+                                    <span class="users-self">(Sie selbst)</span>
+                                @endif
+                            </td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
     </section>
 </div>
 
@@ -165,22 +182,24 @@ new class extends Component {
     .users-input:focus { border-color: #ec65ba; background: rgba(236,101,186,.05); box-shadow: 0 0 0 4px rgba(236,101,186,.1); }
     .users-error { font-size: .82rem; color: #dc2626; }
 
-    .users-table { width: 100%; border-collapse: collapse; font-size: .92rem; }
-    .users-table th, .users-table td { padding: .65rem .75rem; text-align: left; border-bottom: 1px solid rgba(0,0,0,.06); }
+    .users-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 calc(-1 * clamp(1.5rem, 3vw, 2rem)); padding: 0 clamp(1.5rem, 3vw, 2rem); }
+    .users-table { width: 100%; border-collapse: collapse; font-size: .92rem; min-width: 640px; }
+    .users-table th, .users-table td { padding: .65rem .75rem; text-align: left; border-bottom: 1px solid rgba(0,0,0,.06); white-space: nowrap; }
     .users-table th { font-family: 'JetBrains Mono', monospace; font-size: .7rem; letter-spacing: .1em; text-transform: uppercase; color: rgba(10,10,10,.5); font-weight: 600; }
     .users-table tr.is-inactive { opacity: .5; }
     .users-table code { font-size: .85rem; background: rgba(0,0,0,.04); padding: .15rem .4rem; border-radius: 4px; }
-    .users-role { padding: .35rem .5rem; border: 1px solid rgba(0,0,0,.1); border-radius: 6px; background: #fff; font-size: .85rem; }
+    .users-role { padding: .55rem .55rem; border: 1px solid rgba(0,0,0,.1); border-radius: 6px; background: #fff; font-size: .85rem; min-height: 44px; }
 
     .users-pill { padding: .2rem .6rem; border-radius: 999px; font-size: .72rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
     .users-pill-ok { background: rgba(34,197,94,.15); color: #15803d; }
     .users-pill-off { background: rgba(0,0,0,.08); color: rgba(10,10,10,.5); }
     .users-self { font-size: .85rem; color: rgba(10,10,10,.5); font-style: italic; }
 
-    .users-btn { padding: .65rem 1.25rem; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: .9rem; font-family: inherit; transition: all .15s; }
+    .users-btn { padding: .65rem 1.25rem; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: .9rem; font-family: inherit; transition: all .15s; min-height: 44px; }
     .users-btn-primary { background: linear-gradient(135deg, #ec65ba, #7c3aed); color: #fff; align-self: flex-start; }
     .users-btn-primary:disabled { opacity: .6; cursor: not-allowed; }
     .users-btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 22px -8px rgba(236,101,186,.5); }
-    .users-btn-ghost { background: #fff; border: 1px solid rgba(0,0,0,.1); color: rgba(10,10,10,.7); padding: .35rem .85rem; font-size: .82rem; }
+    .users-btn-ghost { background: #fff; border: 1px solid rgba(0,0,0,.1); color: rgba(10,10,10,.7); padding: .55rem .85rem; font-size: .82rem; min-height: 40px; }
     .users-btn-ghost:hover { background: rgba(0,0,0,.04); border-color: rgba(0,0,0,.2); }
+    .users-input { min-height: 44px; }
 </style>

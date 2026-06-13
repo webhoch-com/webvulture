@@ -251,14 +251,32 @@ class ScraperService
         if (preg_match('/^(fc[0-9a-f]{2}:|fd[0-9a-f]{2}:|fe80:)/', $host)) {
             throw new \RuntimeException("Blocked IPv6 private address: {$host}");
         }
-        // Resolve and re-check (defense against DNS rebinding to private IPs)
-        $records = @dns_get_record($host, DNS_A);
-        if (is_array($records)) {
-            foreach ($records as $r) {
-                $ip = $r['ip'] ?? '';
-                if ($ip && preg_match('/^(127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.|0\.0\.0\.0)/', $ip)) {
-                    throw new \RuntimeException("Blocked DNS-resolved private address: {$ip} (host: {$host})");
+        // Resolve and re-check (defense against DNS rebinding to private IPs).
+        // Check BOTH A (IPv4) and AAAA (IPv6) — without the AAAA check, an
+        // attacker who publishes A=8.8.8.8 + AAAA=fe80::1 (or any private v6)
+        // bypasses the v4 guard. AssetMirror/AssetDownloader do this correctly;
+        // this used to lag behind them.
+        $allIps = [];
+        $a = @dns_get_record($host, DNS_A);
+        if (is_array($a)) {
+            foreach ($a as $r) {
+                if (! empty($r['ip'])) {
+                    $allIps[] = $r['ip'];
                 }
+            }
+        }
+        $aaaa = @dns_get_record($host, DNS_AAAA);
+        if (is_array($aaaa)) {
+            foreach ($aaaa as $r) {
+                if (! empty($r['ipv6'])) {
+                    $allIps[] = $r['ipv6'];
+                }
+            }
+        }
+        foreach ($allIps as $ip) {
+            // Reject if not a *public* address per RFC ranges.
+            if (! filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+                throw new \RuntimeException("Blocked DNS-resolved private/reserved address: {$ip} (host: {$host})");
             }
         }
     }

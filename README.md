@@ -98,6 +98,7 @@ Stack auf dem Server:
 - `app/Events/` — `LeadStatusChanged`, `JobProgressUpdated` (Reverb)
 - `routes/web.php` — Auth-geschützte Volt-Routen + HMAC-Webhooks
 - `generator/` — Node-Service mit Fastify + Anthropic SDK
+- `generator/src/templates/` — **20 Branchen-Templates** (`LayoutKind` in `generator/src/types.ts`): standard, restaurant, friseur, handwerk, bauunternehmen, arzt, verein, verein_musik, verein_sport, verein_tradition, golfclub, kanzlei, hotel, fitness, einzelhandel, galerie, autohaus, energie, bestattung, tier
 
 ## Sicherheit
 

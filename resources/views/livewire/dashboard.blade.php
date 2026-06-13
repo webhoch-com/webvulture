@@ -343,6 +343,7 @@ new class extends Component {
         cursor: pointer;
         border: none;
         font-family: inherit;
+        min-height: 44px;
     }
     .dash-btn-primary {
         background: linear-gradient(135deg, #ec65ba, #7c3aed);
@@ -597,6 +598,7 @@ new class extends Component {
         background: #ffffff;
         color: #0a0a0a;
         cursor: pointer;
+        min-height: 44px;
     }
     .dash-period-select:focus { outline: 2px solid #ec65ba; outline-offset: 2px; }
     .dash-breakdown {
@@ -623,12 +625,13 @@ new class extends Component {
     .dash-bd-value {
         display: block;
         font-family: 'Fraunces', Georgia, serif;
-        font-size: 1.6rem;
+        font-size: clamp(1.3rem, 4vw, 1.6rem);
         font-weight: 500;
-        line-height: 1;
+        line-height: 1.1;
         color: #0a0a0a;
         margin: 0.55rem 0 0.35rem;
         letter-spacing: -0.01em;
+        word-break: break-word;
     }
     .dash-bd-hint {
         font-size: 0.78rem;

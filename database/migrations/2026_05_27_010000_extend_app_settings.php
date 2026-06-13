@@ -17,10 +17,40 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // Bisher war `key` primary. Wir brauchen aber `(group, key)` als
-        // composite-Unique. MySQL erlaubt das, aber wir müssen die primary
-        // erst droppen und durch eine id-Spalte ersetzen — sonst können
-        // wir AppSetting-Models nicht als Eloquent-First-Class behandeln.
+        // SQLite can't `dropPrimary` + add an `id()->first()` + add foreign
+        // constraints in successive ALTER TABLE statements. For the test DB
+        // (SQLite in-memory via phpunit) we recreate the table from scratch;
+        // the existing rows of `legacy` group are reinserted afterwards.
+        // MySQL takes the additive path (preserves real data on prod).
+        if (DB::connection()->getDriverName() === 'sqlite') {
+            $existing = DB::table('app_settings')->get();
+            Schema::drop('app_settings');
+            Schema::create('app_settings', function (Blueprint $table) {
+                $table->id();
+                $table->string('group', 64)->nullable()->index();
+                $table->string('key');
+                $table->text('value')->nullable();
+                $table->boolean('is_secret')->default(false);
+                $table->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete();
+                $table->timestamps();
+                $table->unique(['group', 'key']);
+            });
+            foreach ($existing as $row) {
+                DB::table('app_settings')->insert([
+                    'group' => 'legacy',
+                    'key' => $row->key,
+                    'value' => $row->value ?? null,
+                    'is_secret' => false,
+                    'updated_by' => null,
+                    'created_at' => $row->created_at ?? now(),
+                    'updated_at' => $row->updated_at ?? now(),
+                ]);
+            }
+
+            return;
+        }
+
+        // MySQL path — preserves data via additive ALTER TABLE.
         Schema::table('app_settings', function (Blueprint $table) {
             $table->dropPrimary(['key']);
         });
@@ -33,8 +63,6 @@ return new class extends Migration
                 ->constrained('users')->nullOnDelete();
         });
 
-        // value-Spalte vergrößern (Bsp. Anthropic API-Keys nach Encryption
-        // sind ~400 chars, text reicht aber).
         // Composite-Unique über group+key — ein Setting ist (group, key).
         Schema::table('app_settings', function (Blueprint $table) {
             $table->unique(['group', 'key']);

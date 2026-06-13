@@ -45,8 +45,9 @@ class CleanupLeadStorageJob implements ShouldQueue
                 $storage->deletePrototypeFiles($this->prototypeVersionIds);
             }
 
-            Log::info("CleanupLeadStorageJob: cleaned lead {$this->leadId} ({count} prototype versions).", [
-                'count' => count($this->prototypeVersionIds),
+            $count = count($this->prototypeVersionIds);
+            Log::info("CleanupLeadStorageJob: cleaned lead {$this->leadId} ({$count} prototype versions).", [
+                'count' => $count,
             ]);
         } finally {
             $lock->release();

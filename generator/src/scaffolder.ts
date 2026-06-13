@@ -1465,32 +1465,32 @@ ${renderLegalDemoBanner()}
 ${renderLegalNavBar()}
 
 <div class="warn" role="alert">
-  <div class="warn-head"><span class="ic">!</span>Wichtiger Hinweis · Frei erfundene Inhalte</div>
-  <p><strong>Diese Webseite ist eine reine Designvorschau.</strong> Sämtliche Inhalte — Firmenname, Anschrift, Telefonnummer, E-Mail-Adresse, Bilder, Texte, Preise und Leistungsbeschreibungen — sind <strong>frei erfunden bzw. Platzhalter</strong> und entsprechen <strong>NICHT</strong> den realen Daten eines tatsächlichen Unternehmens.</p>
-  <p>Es werden hier <strong>keinerlei rechtsverbindliche Angaben</strong> gemacht. Diese Seite dient ausschließlich der Demonstration eines möglichen Designs durch die <a href="https://webhoch.com" target="_blank" rel="noopener" style="color: var(--warn-ink); text-decoration: underline;">Webagentur Hochmeir e.U.</a></p>
+  <div class="warn-head"><span class="ic">!</span>Wichtiger Hinweis · Unverbindliche Designvorschau</div>
+  <p><strong>Diese Webseite ist eine unverbindliche Designvorschau</strong> auf Basis öffentlich verfügbarer Daten von ${escapeHtml(spec.business_name)}. Sämtliche Texte, Bilder, Preise und Leistungsbeschreibungen sind <strong>unverbindliche Gestaltungsvorschläge</strong> der Webagentur Hochmeir e.U. — <strong>kein Vertrags-, Beratungs- oder Werbeangebot</strong> von ${escapeHtml(spec.business_name)} und keine rechtsverbindlichen Angaben.</p>
+  <p>Sie wurden weder von ${escapeHtml(spec.business_name)} beauftragt noch freigegeben. Widerspruch und sofortige Löschung dieser Vorschau jederzeit formlos an <a href="mailto:office@webhoch.com" style="color: var(--warn-ink); text-decoration: underline;">office@webhoch.com</a>. Erstellt durch die <a href="https://webhoch.com" target="_blank" rel="noopener" style="color: var(--warn-ink); text-decoration: underline;">Webagentur Hochmeir e.U.</a></p>
 </div>
 
 <main>
-  <span class="lead-eyebrow">Demo · Platzhalter-Inhalte</span>
+  <span class="lead-eyebrow">Demo · Unverbindliche Vorschau</span>
   <h1>Impressum</h1>
-  <p class="lead-intro">Die nachfolgenden Angaben sind <strong>fiktiv und ausschließlich als Beispiel zu verstehen</strong>. Vor jeder Live-Schaltung muss dieser Bereich vom tatsächlichen Inhaber mit echten Daten ergänzt werden.</p>
+  <p class="lead-intro">Die nachfolgenden Angaben sind ein <strong>unverbindlicher Vorschlag auf Basis öffentlich verfügbarer Daten</strong>. Vor jeder Live-Schaltung müssen sie vom tatsächlichen Inhaber geprüft und mit den rechtsverbindlichen Daten ergänzt werden.</p>
 
   <article class="legal-card">
     <span class="label">Demo-Daten · Angaben gemäß § 5 ECG / § 25 MedienG</span>
-    <h2>Diensteanbieter (fiktiv)</h2>
+    <h2>Diensteanbieter (Vorschlag, vom Inhaber zu prüfen)</h2>
     <dl>
-      <dt>Bezeichnung:</dt><dd>${escapeHtml(spec.business_name)} (Beispielname)</dd>
-      <dt>Anschrift:</dt><dd>${spec.contact.address ? escapeHtml(spec.contact.address) + ' (Beispieladresse)' : 'Beispielstraße 1, 5020 Salzburg'}</dd>
-      ${spec.contact.phone ? `<dt>Telefon:</dt><dd>${escapeHtml(spec.contact.phone)} (Beispielnummer)</dd>` : ''}
-      ${spec.contact.email ? `<dt>E-Mail:</dt><dd>${escapeHtml(spec.contact.email)} (Beispieladresse)</dd>` : ''}${vertretungZeile}
+      <dt>Bezeichnung:</dt><dd>${escapeHtml(spec.business_name)}</dd>
+      <dt>Anschrift:</dt><dd>${spec.contact.address ? escapeHtml(spec.contact.address) : 'Beispielstraße 1, 5020 Salzburg (Platzhalter)'}</dd>
+      ${spec.contact.phone ? `<dt>Telefon:</dt><dd>${escapeHtml(spec.contact.phone)}</dd>` : ''}
+      ${spec.contact.email ? `<dt>E-Mail:</dt><dd>${escapeHtml(spec.contact.email)}</dd>` : ''}${vertretungZeile}
       <dt>Unternehmenszweck:</dt><dd>${escapeHtml(spec.tagline)}</dd>
     </dl>
   </article>
 
   <article class="legal-card">
     <h2>Haftungsausschluss für die Demo</h2>
-    <p>Diese Vorschau-Webseite wurde von der Webagentur Hochmeir e.U. erstellt. Sie dient ausschließlich Demonstrations- und Beratungszwecken. <strong>Es bestehen keine Geschäftsbeziehungen, keine vertraglichen Verbindlichkeiten und keine Haftungsansprüche</strong> aus den hier dargestellten Inhalten.</p>
-    <p>Allfällige Ähnlichkeiten mit real existierenden Unternehmen, Personen oder Marken sind zufällig. Sollten Sie sich oder Ihr Unternehmen in einer Vorschau wiedererkennen und Anpassungen oder Entfernung wünschen, kontaktieren Sie uns bitte unter <a href="mailto:office@webhoch.com">office@webhoch.com</a>.</p>
+    <p>Diese Vorschau-Webseite wurde von der Webagentur Hochmeir e.U. ohne Auftrag des genannten Unternehmens erstellt. Sie dient ausschließlich Demonstrations- und Akquisezwecken. <strong>Es bestehen keine Geschäftsbeziehungen, keine vertraglichen Verbindlichkeiten und keine Haftungsansprüche</strong> aus den hier dargestellten Inhalten.</p>
+    <p>Möchten Sie als genanntes Unternehmen Anpassungen oder die sofortige Entfernung dieser Vorschau, kontaktieren Sie uns bitte formlos unter <a href="mailto:office@webhoch.com">office@webhoch.com</a> — wir kommen dem unverzüglich nach.</p>
   </article>
 
   <article class="legal-card">
@@ -1535,9 +1535,9 @@ ${renderLegalDemoBanner()}
 ${renderLegalNavBar()}
 
 <div class="warn" role="alert">
-  <div class="warn-head"><span class="ic">!</span>Demo-Vorschau · keine echten Daten</div>
-  <p><strong>Diese Webseite ist eine Designvorschau und sammelt von sich aus keinerlei personenbezogene Daten.</strong> Es werden weder Cookies gesetzt, noch Tracking-Tools eingesetzt, noch Formulardaten erhoben. Sämtliche dargestellten Firmen-, Kontakt- und Personendaten sind <strong>frei erfunden</strong> bzw. dienen als Platzhalter.</p>
-  <p>Vor einer Live-Schaltung muss diese Datenschutzerklärung an die tatsächlich verwendeten Tools (Web-Analytics, Formular-Backends, Newsletter, Cookies) angepasst werden — wir helfen dabei.</p>
+  <div class="warn-head"><span class="ic">!</span>Demo-Vorschau · Hinweise zum Datenschutz</div>
+  <p><strong>Diese Webseite ist eine unverbindliche Designvorschau.</strong> Beim Aufruf speichert der Hosting-Server technische Zugriffsdaten (IP-Adresse, Zeitstempel, abgerufene URL, Referrer, User-Agent) für maximal 14 Tage zur Betriebssicherheit — Details im Abschnitt „Hosting der Demo-Vorschau“. Darüber hinaus setzt die Vorschau selbst <strong>keine Cookies, kein Tracking und keine Formular-Erfassung</strong> ein.</p>
+  <p>Die dargestellten Firmen- und Kontaktdaten stammen aus <strong>öffentlich verfügbaren Quellen</strong> und dienen als unverbindlicher Vorschlag. Vor einer Live-Schaltung muss diese Datenschutzerklärung an die tatsächlich verwendeten Tools (Web-Analytics, Formular-Backends, Newsletter, Cookies) angepasst werden — wir helfen dabei.</p>
 </div>
 
 <main>
@@ -1547,15 +1547,15 @@ ${renderLegalNavBar()}
 
   <article class="legal-card">
     <span class="label">Demo-Daten · Verantwortlicher</span>
-    <h2>Verantwortlicher (fiktiv)</h2>
-    <p>${escapeHtml(spec.business_name)} (Beispielname)${spec.contact.email ? `, E-Mail (Beispiel): <a href="mailto:${escapeHtml(spec.contact.email)}">${escapeHtml(spec.contact.email)}</a>` : ''}${spec.contact.address ? `, Anschrift (Beispiel): ${escapeHtml(spec.contact.address)}` : ''}.</p>
-    <p>Diese Angaben sind frei erfunden und dienen ausschließlich der Demonstration.</p>
+    <h2>Verantwortlicher (Vorschlag, vom Inhaber zu prüfen)</h2>
+    <p>${escapeHtml(spec.business_name)}${spec.contact.email ? `, E-Mail: <a href="mailto:${escapeHtml(spec.contact.email)}">${escapeHtml(spec.contact.email)}</a>` : ''}${spec.contact.address ? `, Anschrift: ${escapeHtml(spec.contact.address)}` : ''}.</p>
+    <p>Diese Angaben stammen aus öffentlich verfügbaren Quellen und sind im Live-Betrieb vom tatsächlichen Inhaber zu bestätigen.</p>
   </article>
 
   <article class="legal-card">
     <h2>Erhebung und Verarbeitung personenbezogener Daten</h2>
     <p>Diese Demo-Webseite erhebt <strong>keine personenbezogenen Daten</strong>. Es werden weder Cookies gesetzt, noch Web-Analytics-Tools (Google Analytics, Matomo, Plausible o. ä.) eingesetzt, noch werden Formulardaten erfasst.</p>
-    <p>Sollten Sie über die angezeigten Kontaktwege (E-Mail, Telefon) Kontakt zu der dargestellten — fiktiven — Person aufnehmen, gehen Ihre Daten nicht ein, weil keine Empfänger-Postfächer für die Demo existieren.</p>
+    <p>Die in der Vorschau angezeigten Kontaktwege (E-Mail, Telefon) sind unverbindliche Vorschläge und nicht für den Empfang von Nachrichten über diese Demo eingerichtet — es existieren keine zugehörigen Demo-Postfächer.</p>
   </article>
 
   <article class="legal-card">

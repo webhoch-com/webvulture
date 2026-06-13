@@ -490,8 +490,9 @@ new class extends Component {
         transition: all .2s;
         border: none;
         font-family: inherit;
+        min-height: 44px;
     }
-    .leads-btn-sm { padding: 0.55rem 1rem; font-size: 0.82rem; }
+    .leads-btn-sm { padding: 0.55rem 1rem; font-size: 0.82rem; min-height: 40px; }
     .leads-btn-primary {
         background: linear-gradient(135deg, #ec65ba, #7c3aed);
         color: #fff;
@@ -552,12 +553,14 @@ new class extends Component {
         cursor: pointer;
         transition: all .2s;
         font-family: inherit;
+        min-height: 44px;
     }
     .leads-bulk-toggle:hover { background: rgba(0,0,0,0.05); border-color: rgba(0,0,0,0.15); }
     .leads-mini-check {
         width: 16px; height: 16px;
         border-radius: 4px;
-        border: 1.5px solid rgba(255,255,255,0.25);
+        /* Was rgba(255,255,255,0.25) — invisible on the white card. */
+        border: 1.5px solid rgba(10,10,10,0.22);
         display: grid; place-items: center;
         transition: all .2s;
     }
@@ -587,7 +590,11 @@ new class extends Component {
     }
     .leads-bulk-actions {
         display: flex; gap: 0.4rem; flex-wrap: wrap;
-        margin-left: auto;
+    }
+    @media (min-width: 720px) {
+        /* Only push to the right when there's room — on mobile this would
+           force a vertical jump and look broken. */
+        .leads-bulk-actions { margin-left: auto; }
     }
 
     /* ─── Table card ────────────────────────────────────────── */

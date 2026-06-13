@@ -416,6 +416,7 @@ new class extends Component {
         transition: all .2s;
         border: none;
         font-family: inherit;
+        min-height: 44px;
     }
     .rev-btn-primary {
         background: linear-gradient(135deg, #ec65ba, #7c3aed);
@@ -472,11 +473,15 @@ new class extends Component {
     .rev-open-link:hover { gap: 0.55rem; }
 
     .rev-iframe-wrap {
-        height: 80vh; min-height: 600px;
+        height: 80vh;
+        min-height: 420px;
         border-radius: 10px;
         overflow: hidden;
         border: 1px solid rgba(0,0,0,0.08);
         background: #fff;
+    }
+    @media (min-width: 768px) {
+        .rev-iframe-wrap { min-height: 600px; }
     }
     .rev-iframe-wrap iframe { width: 100%; height: 100%; border: none; }
     .rev-screenshot {
@@ -486,7 +491,8 @@ new class extends Component {
     .rev-placeholder {
         aspect-ratio: 16/10;
         background: rgba(0,0,0,0.02);
-        border: 1px dashed rgba(255,255,255,0.1);
+        /* Was rgba(255,255,255,0.1) — invisible on the white card. */
+        border: 1px dashed rgba(10,10,10,0.12);
         border-radius: 10px;
         display: flex; flex-direction: column; align-items: center; justify-content: center;
         gap: 0.5rem;
@@ -537,6 +543,7 @@ new class extends Component {
         background: rgba(0,0,0,0.02);
         border: 1px solid rgba(0,0,0,0.05);
         border-radius: 8px;
+        flex-wrap: wrap;
     }
     .rev-version-num {
         font-family: 'JetBrains Mono', monospace;
@@ -625,6 +632,7 @@ new class extends Component {
     }
     .rev-revision-actions {
         display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+        flex-wrap: wrap;
     }
     .rev-revision-hint { color: rgba(10,10,10,.5); font-size: .82rem; }
 

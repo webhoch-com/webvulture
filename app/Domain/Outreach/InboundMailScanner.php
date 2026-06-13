@@ -79,57 +79,84 @@ class InboundMailScanner
         $matched = 0;
         $latestSeenDate = $sinceCarbon;
 
-        foreach ($messages as $message) {
-            $fromAddress = $message->getFrom()->first();
-            $fromEmail = strtolower(trim((string) ($fromAddress?->mail ?? '')));
-            if ($fromEmail === '') {
-                continue;
-            }
-
-            // Track latest message date for cursor
-            $messageDate = $message->getDate()?->first();
-            if ($messageDate) {
-                $msgCarbon = \Carbon\Carbon::parse($messageDate);
-                if ($msgCarbon->gt($latestSeenDate)) {
-                    $latestSeenDate = $msgCarbon;
-                }
-            }
-
-            // Try threading first (more accurate), then fall back to address match.
-            $inReplyTo = $this->headerValue($message, 'In-Reply-To');
-            $references = $this->headerValue($message, 'References');
-
-            $matchedHere = false;
-            if ($inReplyTo) {
-                $matchedHere = $this->markReplyForMessageId($inReplyTo, $messageDate);
-            }
-            if (! $matchedHere && $references) {
-                foreach (preg_split('/\s+/', trim($references)) as $ref) {
-                    if ($ref && $this->markReplyForMessageId($ref, $messageDate)) {
-                        $matchedHere = true;
-                        break;
-                    }
-                }
-            }
-            if (! $matchedHere && ! $this->isSystemSender($fromEmail)) {
-                $matchedHere = $this->markReplyForEmail($fromEmail, $messageDate);
-            }
-            if ($matchedHere) {
-                $matched++;
-            }
-
-            if ((bool) config('services.imap.mark_seen', false)) {
+        try {
+            foreach ($messages as $message) {
+                // Per-message try/catch: a single malformed/encoded message used to
+                // throw out of the loop, skipping both `setFlag('Seen')` AND the
+                // cursor write at the bottom — the cursor never advanced, so on
+                // the next run the same broken message was re-fetched first,
+                // permanently stalling reply detection.
                 try {
-                    $message->setFlag('Seen');
-                } catch (\Throwable) {
-                    // ignore
+                    $fromAddress = $message->getFrom()->first();
+                    $fromEmail = strtolower(trim((string) ($fromAddress?->mail ?? '')));
+                    if ($fromEmail === '') {
+                        continue;
+                    }
+
+                    // Track latest message date for cursor
+                    $messageDate = $message->getDate()?->first();
+                    if ($messageDate) {
+                        $msgCarbon = \Carbon\Carbon::parse($messageDate);
+                        if ($msgCarbon->gt($latestSeenDate)) {
+                            $latestSeenDate = $msgCarbon;
+                        }
+                    }
+
+                    // Try threading first (more accurate), then fall back to address match.
+                    $inReplyTo = $this->headerValue($message, 'In-Reply-To');
+                    $references = $this->headerValue($message, 'References');
+
+                    $matchedHere = false;
+                    if ($inReplyTo) {
+                        $matchedHere = $this->markReplyForMessageId($inReplyTo, $messageDate);
+                    }
+                    if (! $matchedHere && $references) {
+                        foreach (preg_split('/\s+/', trim($references)) as $ref) {
+                            if ($ref && $this->markReplyForMessageId($ref, $messageDate)) {
+                                $matchedHere = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (! $matchedHere && ! $this->isSystemSender($fromEmail)) {
+                        $matchedHere = $this->markReplyForEmail($fromEmail, $messageDate);
+                    }
+                    if ($matchedHere) {
+                        $matched++;
+                    }
+
+                    if ((bool) config('services.imap.mark_seen', false)) {
+                        try {
+                            $message->setFlag('Seen');
+                        } catch (\Throwable $e) {
+                            // Don't crash the loop, but DO log — silent setFlag
+                            // failures (IMAP timeout, auth revocation, quota
+                            // exceeded) used to leave messages unflagged forever
+                            // with no operator signal.
+                            Log::debug("InboundMailScanner: setFlag('Seen') failed", [
+                                'message_id' => $this->headerValue($message, 'Message-ID') ?? '?',
+                                'err' => $e->getMessage(),
+                            ]);
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning("InboundMailScanner: skipped one message", [
+                        'err' => $e->getMessage(),
+                    ]);
+                    continue;
                 }
+            }
+        } finally {
+            // Cursor write + disconnect happen regardless of which message
+            // threw — so the loop always advances past the messages we DID
+            // successfully look at.
+            AppSetting::set(self::CURSOR_KEY, $latestSeenDate->toIso8601String());
+            try {
+                $client->disconnect();
+            } catch (\Throwable $e) {
+                Log::debug("InboundMailScanner: disconnect failed", ['err' => $e->getMessage()]);
             }
         }
-
-        AppSetting::set(self::CURSOR_KEY, $latestSeenDate->toIso8601String());
-
-        $client->disconnect();
 
         Log::info("InboundMailScanner: scanned {$messages->count()} messages, matched {$matched} replies");
 

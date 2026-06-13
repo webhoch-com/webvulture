@@ -80,7 +80,7 @@ export function renderVereinSportPage(spec: SiteSpec, slug: string): string {
     ? `<link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
   <link href="https://fonts.bunny.net/css?family=barlow:400,500,600,700,800|zilla-slab:300,400,500,600,700&display=swap" rel="stylesheet">`
     : ((spec.brand?.font_imports && spec.brand.font_imports.length > 0)
-        ? spec.brand.font_imports.map(u => `<link rel="stylesheet" href="${u}" crossorigin>`).join('\n  ')
+        ? spec.brand.font_imports.map(u => `<link rel="stylesheet" href="${escapeHtml(u)}" crossorigin>`).join('\n  ')
         : `<link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
   <link href="https://fonts.bunny.net/css?family=barlow:400,500,600,700,800&display=swap" rel="stylesheet">`);
 
