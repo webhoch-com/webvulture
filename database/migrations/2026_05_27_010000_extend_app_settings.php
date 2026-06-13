@@ -75,6 +75,10 @@ return new class extends Migration
 
     public function down(): void
     {
+        // NOTE: This rollback targets MySQL (prod). SQLite does not support
+        // dropForeign/dropColumn via ALTER TABLE, so `migrate:rollback` is not
+        // supported on the test DB — tests use RefreshDatabase (migrate fresh),
+        // never rollback, so this path is never exercised there.
         Schema::table('app_settings', function (Blueprint $table) {
             $table->dropUnique(['group', 'key']);
             $table->dropForeign(['updated_by']);

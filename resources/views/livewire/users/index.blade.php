@@ -74,6 +74,14 @@ new class extends Component {
         if (! $u) {
             return;
         }
+        // Prevent an admin from demoting themselves out of admin — they would
+        // immediately lose access to this very screen and could lock the org
+        // out of user management.
+        if ($u->id === auth()->id() && $role !== 'admin') {
+            $this->error('Nicht möglich', 'Sie können sich nicht selbst die Administrator-Rolle entziehen.');
+
+            return;
+        }
         $u->update(['role' => $role]);
         $this->success('Aktualisiert', "Rolle: {$role}");
     }

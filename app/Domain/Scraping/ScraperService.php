@@ -257,6 +257,15 @@ class ScraperService
         // bypasses the v4 guard. AssetMirror/AssetDownloader do this correctly;
         // this used to lag behind them.
         $allIps = [];
+        // A literal-IP host (e.g. "203.0.113.5" or "[2001:db8::1]") produces no
+        // dns_get_record entries — add it directly so the public-range check
+        // below still runs. Without this, a reserved-range IP literal that the
+        // coarse regexes above don't cover (e.g. 192.0.2.0/24 TEST-NET,
+        // 100.64.0.0/10 CGNAT) would slip through.
+        $hostIpLiteral = trim($host, '[]');
+        if (filter_var($hostIpLiteral, FILTER_VALIDATE_IP)) {
+            $allIps[] = $hostIpLiteral;
+        }
         $a = @dns_get_record($host, DNS_A);
         if (is_array($a)) {
             foreach ($a as $r) {
@@ -273,12 +282,61 @@ class ScraperService
                 }
             }
         }
+        // Fail closed: a hostname that resolves to nothing (NXDOMAIN, SERVFAIL,
+        // timeout, or DNS blocked) cannot be proven to point at a public
+        // address. Refuse rather than handing an unverified host to the HTTP
+        // client, which would resolve it later without this guard.
+        if ($allIps === []) {
+            throw new \RuntimeException("Blocked: host did not resolve to a verifiable public address: {$host}");
+        }
         foreach ($allIps as $ip) {
             // Reject if not a *public* address per RFC ranges.
             if (! filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
                 throw new \RuntimeException("Blocked DNS-resolved private/reserved address: {$ip} (host: {$host})");
             }
+            // PHP's filter does NOT flag CGNAT (100.64.0.0/10) or the TEST-NET
+            // documentation ranges — block them explicitly. CGNAT can route to
+            // carrier-/cloud-internal infrastructure, and TEST-NET/benchmark
+            // ranges are never a legitimate scrape target.
+            if ($this->isExtraReservedIpv4($ip)) {
+                throw new \RuntimeException("Blocked reserved/private (CGNAT/TEST-NET) address: {$ip} (host: {$host})");
+            }
         }
+    }
+
+    /**
+     * Supplementary IPv4 reserved-range check for ranges PHP's
+     * FILTER_FLAG_NO_PRIV_RANGE|NO_RES_RANGE does not cover. IPv6 is handled
+     * by the filter flags above, so non-IPv4 input returns false here.
+     */
+    private function isExtraReservedIpv4(string $ip): bool
+    {
+        if (! filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+            return false;
+        }
+        $long = ip2long($ip);
+        if ($long === false) {
+            return false;
+        }
+        $long &= 0xFFFFFFFF;
+        // [network, prefix-bits]
+        $ranges = [
+            ['100.64.0.0', 10],   // CGNAT (RFC 6598)
+            ['192.0.2.0', 24],    // TEST-NET-1 (RFC 5737)
+            ['198.51.100.0', 24], // TEST-NET-2
+            ['203.0.113.0', 24],  // TEST-NET-3
+            ['198.18.0.0', 15],   // benchmarking (RFC 2544)
+            ['192.88.99.0', 24],  // 6to4 relay anycast (RFC 7526, deprecated)
+        ];
+        foreach ($ranges as [$net, $bits]) {
+            $mask = ($bits === 0) ? 0 : ((0xFFFFFFFF << (32 - $bits)) & 0xFFFFFFFF);
+            $netLong = ip2long($net) & 0xFFFFFFFF;
+            if (($long & $mask) === ($netLong & $mask)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

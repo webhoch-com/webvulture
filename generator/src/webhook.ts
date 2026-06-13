@@ -32,8 +32,11 @@ function isAllowedWebhookUrl(target: string): boolean {
 }
 
 export async function callWebhook(url: string, body: Record<string, unknown>): Promise<void> {
+  if (!ALLOWED_WEBHOOK_ORIGIN) {
+    throw new Error('callWebhook: refused — LARAVEL_APP_URL/APP_URL is not configured, so no outbound webhook target is allowed');
+  }
   if (!isAllowedWebhookUrl(url)) {
-    throw new Error(`callWebhook: refused — URL ${url} is not the configured LARAVEL_APP_URL origin`);
+    throw new Error(`callWebhook: refused — URL ${url} is not the configured LARAVEL_APP_URL origin (${ALLOWED_WEBHOOK_ORIGIN})`);
   }
   const timestamp = String(Math.floor(Date.now() / 1000));
   const rawBody = JSON.stringify(body);
