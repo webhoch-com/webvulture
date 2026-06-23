@@ -75,6 +75,15 @@ Deploy läuft via `webvulture-deploy` auf dem Server (`/usr/local/bin/webvulture
 
 Vom lokalen Mac aus: `ssh webvulture 'webvulture-deploy'` (SSH-Alias siehe `~/.ssh/config`).
 
+### Pflicht-Env des Generators (Node-Service)
+
+Der Generator-Prozess (`generator/`, via Supervisor) **muss** in seiner Umgebung haben:
+
+- `GENERATOR_SECRET` (oder `WV_SECRET`) — HMAC-Secret, identisch mit Laravels `services.generator.secret`.
+- `LARAVEL_APP_URL` (oder `APP_URL`) — **exakt der Origin von Laravels `APP_URL`** (z.B. `https://webvulture.webhoch.com`, Schema+Host, kein Pfad). Ziel der Webhook-Callbacks (`route('webhooks.generation.completed')` / `webhooks.build.completed`); die SSRF-Allowlist in `generator/src/webhook.ts` lässt nur diesen Origin zu.
+
+Fehlt eine davon, **bricht der Generator beim Start hart ab** (`assertWebhookEnv()` in `server.ts`) — er scaffoldet sonst still weiter, ruft aber Laravel nie zurück, sodass Builds nie starten und Demos auf `generating` hängen bleiben. Beim Setzen via Supervisor `environment=` danach `supervisorctl reread && update && restart webvulture-generator`.
+
 ## Bekannte Eigenheiten
 
 - `database/migrations/2026_*` — Datums-Prefix ist *zukünftig*, das ist Absicht (sortierte Reihenfolge).

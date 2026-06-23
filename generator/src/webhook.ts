@@ -16,6 +16,29 @@ if (!ALLOWED_WEBHOOK_ORIGIN) {
   console.warn('[webhook] LARAVEL_APP_URL/APP_URL is empty — callWebhook() will reject every URL');
 }
 
+/**
+ * Fail-fast startup guard. The generator is useless without an HMAC secret (to
+ * sign outbound webhooks) and a configured Laravel origin (the only allowed
+ * webhook target). Without them the service silently scaffolds but can NEVER
+ * call back to Laravel, so the build step never fires and demos hang at
+ * "generating" — exactly the prod incident this guards against. Call this at
+ * server startup so a misconfigured deploy crashes loudly instead of failing
+ * silently. NOT called at import time, so tests/tooling can import this module
+ * without these env vars set.
+ */
+export function assertWebhookEnv(): void {
+  const missing: string[] = [];
+  if (!secret) missing.push('GENERATOR_SECRET (or WV_SECRET)');
+  if (!ALLOWED_WEBHOOK_ORIGIN) missing.push('LARAVEL_APP_URL (or APP_URL)');
+  if (missing.length > 0) {
+    throw new Error(
+      `[webhook] FATAL: missing required env: ${missing.join(', ')}. ` +
+        'The generator scaffolds but can never call back to Laravel without these — ' +
+        "set them in the generator's environment (must match Laravel's APP_URL origin) and restart.",
+    );
+  }
+}
+
 function sign(timestamp: string, body: string): string {
   return createHmac('sha256', secret).update(`${timestamp}.${body}`).digest('hex');
 }
