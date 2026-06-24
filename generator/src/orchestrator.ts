@@ -846,6 +846,18 @@ export function scoreImage(src: string, alt: string): number {
   if ((HEADER_RE.test(lowerSrc) && !HEADER_OK_RE.test(lowerSrc)) ||
       (HEADER_RE.test(lowerAlt) && !HEADER_OK_RE.test(lowerAlt))) score -= 90;
 
+  // UI chrome whose camelCase / no-separator naming escapes the word-boundary
+  // set above — `printButton`, `emailButton`, `navIcon` lowercased to
+  // `printbutton` etc. have no `[\W_]` before the keyword, so the boundary
+  // regex never fires and they wrongly score ~115 (Musikverein Ungenach picked
+  // a print button as its hero). Substring match (these words never appear in
+  // a real photo filename) and demote hard so they leave hero AND gallery.
+  if (/(button|btn|sprite)/.test(lowerSrc)) score -= 110;
+  // Event flyers / posters are text-heavy graphics (e.g. "Einladung Tag der
+  // offenen Tür") — never a clean full-bleed hero. Matched on src and alt.
+  const FLYER_RE = /(?:^|[\W_])(einladung|flyer|plakat|poster|aushang)(?:[\W_]|$)/;
+  if (FLYER_RE.test(lowerSrc) || FLYER_RE.test(lowerAlt)) score -= 90;
+
   if (/(?:^|[\W_])(hero|banner|cover|header-image|main|gallery|photo|fotos|stories)(?:[\W_]|$)/.test(lowerSrc)) score += 40;
   if (/(?:^|[\W_])(team|portrait|projekt|referenz|werk|raum|interior|orchester|konzert)(?:[\W_]|$)/.test(lowerSrc)) score += 20;
   if (alt.length > 10) score += 10;
