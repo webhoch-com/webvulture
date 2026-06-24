@@ -25,7 +25,7 @@ export interface OrchestrationResult {
 export async function orchestrate(pkg: RebuildPackage): Promise<OrchestrationResult> {
   const layoutKind = (pkg.layout_kind ?? 'standard') as LayoutKind;
 
-  const businessName = pkg.business?.name?.trim() || 'Unbekannt';
+  const businessName = titleCaseIfAllLower(pkg.business?.name?.trim() || 'Unbekannt');
   const city = pkg.business?.city?.trim() || '';
   const category = pkg.business?.category?.trim() || '';
   const phone = pkg.business?.phone || pkg.extracted?.contact?.phone || '';
@@ -790,7 +790,33 @@ function pickMedia(pkg: RebuildPackage): SiteSpec['media'] {
   return { logo, favicon, hero_image: heroPick ? heroPick.src : undefined, gallery };
 }
 
-function scoreImage(src: string, alt: string): number {
+/**
+ * Title-case a business name ONLY when it is entirely lowercase (a scrape
+ * artifact, e.g. "musik verein ungenach"). Already-cased names, acronyms
+ * (which contain uppercase) and the 'Unbekannt' fallback are returned
+ * untouched — so the 9 correctly-cased real-lead previews stay byte-identical.
+ * Umlaut-safe (de-AT): only the FIRST letter of each segment is upper-cased,
+ * never the whole word (which would turn ß→SS). German connector particles
+ * stay lowercase unless they are the first word; hyphen/slash compounds are
+ * cased per segment ("sankt-georgen" → "Sankt-Georgen").
+ */
+export function titleCaseIfAllLower(name: string): string {
+  const lower = name.toLocaleLowerCase('de-AT');
+  const upper = name.toLocaleUpperCase('de-AT');
+  // Trigger only when the name has letters and NO uppercase anywhere.
+  if (!(name === lower && name !== upper)) return name;
+  const PARTICLES = new Set(['an', 'am', 'im', 'in', 'der', 'die', 'das', 'und', 'von', 'vom', 'zu', 'zur', 'zum', 'ob', 'bei', 'aus']);
+  const capSeg = (seg: string): string =>
+    seg ? seg.charAt(0).toLocaleUpperCase('de-AT') + seg.slice(1) : seg;
+  const capWord = (w: string): string =>
+    w.split(/([-/])/).map((s) => (s === '-' || s === '/' ? s : capSeg(s))).join('');
+  return name
+    .split(/\s+/)
+    .map((w, i) => (i > 0 && PARTICLES.has(w) ? w : capWord(w)))
+    .join(' ');
+}
+
+export function scoreImage(src: string, alt: string): number {
   let score = 100;
   const lowerSrc = src.toLowerCase();
   const lowerAlt = alt.toLowerCase();
@@ -804,6 +830,33 @@ function scoreImage(src: string, alt: string): number {
   if (/(?:^|[\W_])(thumb|small|tiny)(?:[\W_]|$)/.test(lowerSrc)) score -= 20;
   if (SPONSOR_RE.test(lowerSrc) || SPONSOR_RE.test(lowerAlt)) score -= 90;
   if (/(\b16x16|\b32x32|\b48x48|\b64x64)/.test(lowerSrc)) score -= 50;
+
+  // Site-chrome / header design-graphics: the OLD site's <header> banner with
+  // the club name + slogan baked into the pixels (e.g. Musikverein Ungenach:
+  // screendesign_v2.jpg, alt "MVU_Header_v2"). As a full-bleed hero these
+  // collide with the template's own overlaid headline → duplicated text. They
+  // routinely outscore real photos, so demote them below SCORE_THRESHOLD; the
+  // verein templates then fall back to their clean decorative-wordmark hero.
+  // Matched on BOTH src and alt (the signal is often only in one). Real hero
+  // filenames `header-image/-photo/-foto/-bg/-hero` are explicitly spared.
+  const SITE_CHROME_RE = /(?:^|[\W_])(screendesign|webdesign|seitenkopf|kopfgrafik|headergrafik|webheader)(?:[\W_]|$)/;
+  const HEADER_RE = /(?:^|[\W_])header(?:[\W_]|$)/;
+  const HEADER_OK_RE = /header[-_](image|photo|foto|bg|hero)/;
+  if (SITE_CHROME_RE.test(lowerSrc) || SITE_CHROME_RE.test(lowerAlt)) score -= 90;
+  if ((HEADER_RE.test(lowerSrc) && !HEADER_OK_RE.test(lowerSrc)) ||
+      (HEADER_RE.test(lowerAlt) && !HEADER_OK_RE.test(lowerAlt))) score -= 90;
+
+  // UI chrome whose camelCase / no-separator naming escapes the word-boundary
+  // set above — `printButton`, `emailButton`, `navIcon` lowercased to
+  // `printbutton` etc. have no `[\W_]` before the keyword, so the boundary
+  // regex never fires and they wrongly score ~115 (Musikverein Ungenach picked
+  // a print button as its hero). Substring match (these words never appear in
+  // a real photo filename) and demote hard so they leave hero AND gallery.
+  if (/(button|btn|sprite)/.test(lowerSrc)) score -= 110;
+  // Event flyers / posters are text-heavy graphics (e.g. "Einladung Tag der
+  // offenen Tür") — never a clean full-bleed hero. Matched on src and alt.
+  const FLYER_RE = /(?:^|[\W_])(einladung|flyer|plakat|poster|aushang)(?:[\W_]|$)/;
+  if (FLYER_RE.test(lowerSrc) || FLYER_RE.test(lowerAlt)) score -= 90;
 
   if (/(?:^|[\W_])(hero|banner|cover|header-image|main|gallery|photo|fotos|stories)(?:[\W_]|$)/.test(lowerSrc)) score += 40;
   if (/(?:^|[\W_])(team|portrait|projekt|referenz|werk|raum|interior|orchester|konzert)(?:[\W_]|$)/.test(lowerSrc)) score += 20;
