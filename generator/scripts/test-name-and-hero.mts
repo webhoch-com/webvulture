@@ -47,6 +47,11 @@ console.log('scoreImage — site-header/screendesign demotion:');
 ok(scoreImage('https://www.musikverein-ungenach.at/images/screendesign_v2.jpg', 'MVU_Header_v2') < THRESHOLD, 'screendesign + Header banner demoted below threshold');
 ok(scoreImage('https://x/header.jpg', '') < THRESHOLD, 'bare header.jpg demoted');
 ok(scoreImage('https://x/webheader-2024.png', 'Seitenkopf') < THRESHOLD, 'webheader/Seitenkopf demoted');
+// camelCase UI buttons (Ungenach picked a print button as hero — the
+// word-boundary penalty missed them) + event flyers:
+ok(scoreImage('https://www.musikverein-ungenach.at/media/system/images/printButton.png', 'Drucken') < THRESHOLD, 'camelCase printButton demoted');
+ok(scoreImage('https://www.musikverein-ungenach.at/media/system/images/emailButton.png', 'E-Mail') < THRESHOLD, 'camelCase emailButton demoted');
+ok(scoreImage('https://x/2024_10_05_Einladung Tag der offenen Tuer.JPG', '') < THRESHOLD, 'event flyer (Einladung) demoted');
 
 console.log('scoreImage — real photos / clean heroes stay eligible (>= threshold):');
 // The 7 clean demos' actual winning heroes must NOT be demoted:
