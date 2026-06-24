@@ -5,7 +5,7 @@ import { mkdirSync } from 'node:fs';
 import { orchestrate } from './orchestrator.js';
 import { scaffoldAstroProject } from './scaffolder.js';
 import { buildAstroProject } from './build.js';
-import { callWebhook, verifyIncoming } from './webhook.js';
+import { callWebhook, verifyIncoming, assertWebhookEnv } from './webhook.js';
 import type { GenerateRequest, BuildRequest } from './types.js';
 
 declare module 'fastify' {
@@ -181,6 +181,16 @@ app.post<{ Body: BuildRequest }>('/build', async (req, reply) => {
       }
   }));
 });
+
+// Fail fast on misconfiguration: a generator that can't reach Laravel
+// silently breaks demo generation (scaffolds but never builds). Refuse to
+// start instead — supervisor will surface the crash with a clear reason.
+try {
+  assertWebhookEnv();
+} catch (err) {
+  app.log.error(err instanceof Error ? err.message : String(err));
+  process.exit(1);
+}
 
 const port = Number(process.env.PORT ?? 4000);
 const host = process.env.HOST ?? '127.0.0.1';
